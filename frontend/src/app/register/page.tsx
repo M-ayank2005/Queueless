@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import api from "@/lib/api";
@@ -29,7 +29,7 @@ function SimpleTabs({ defaultValue, children, onValueChange }: any) {
     );
 }
 
-export default function RegisterPage() {
+function RegisterContent() {
     const searchParams = useSearchParams();
     const defaultRole = searchParams.get("role") === "business" ? "business" : "customer";
     const [role, setRole] = useState(defaultRole);
@@ -126,5 +126,13 @@ export default function RegisterPage() {
                 </Card>
             </motion.div>
         </div>
+    );
+}
+
+export default function RegisterPage() {
+    return (
+        <Suspense fallback={<div className="min-h-screen flex items-center justify-center bg-black p-4 text-white">Loading...</div>}>
+            <RegisterContent />
+        </Suspense>
     );
 }
