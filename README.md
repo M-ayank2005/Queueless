@@ -32,6 +32,13 @@ We empower businesses to operate more efficiently and give customers back their 
 -   **UI Components**: [Shadcn UI](https://ui.shadcn.com/) / Radix UI
 -   **Icons**: [Lucide React](https://lucide.dev/)
 
+### Mobile Client
+-   **Framework**: [React Native](https://reactnative.dev/) with [Expo](https://expo.dev/)
+-   **Navigation**: React Navigation (Stack + Bottom Tabs)
+-   **State & Storage**: React Context + AsyncStorage
+-   **Networking**: Axios (same backend API routes as web)
+-   **Device Features**: Expo Camera for QR scanning
+
 ### Backend
 -   **Runtime**: [Node.js](https://nodejs.org/)
 -   **Framework**: [Express.js](https://expressjs.com/)
@@ -90,6 +97,30 @@ Start the frontend application:
 npm run dev
 # App runs on http://localhost:3000
 ```
+
+### 4. Mobile App Setup (React Native)
+Open a new terminal, navigate to the mobile folder, and install dependencies:
+```bash
+cd mobile
+npm install
+```
+
+Create a `.env` file in the `mobile` directory:
+```env
+EXPO_PUBLIC_API_URL=http://localhost:5000/api
+```
+
+Start the Expo app:
+```bash
+npm run start
+```
+
+Then run on a target:
+- Press `a` for Android emulator
+- Press `i` for iOS simulator (macOS only)
+- Or scan the Expo QR code using Expo Go on a physical device
+
+Note for physical devices: replace `localhost` with your computer's LAN IP in `EXPO_PUBLIC_API_URL`.
 
 ## 📖 Usage Guide
 

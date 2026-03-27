@@ -35,6 +35,9 @@ yarn-error.log*
 # Vercel
 .vercel
 
+# Expo
+.expo/
+
 # IDEs
 .vscode
 .idea
