@@ -6,7 +6,7 @@ export type AuthStackParamList = {
 
 export type CustomerTabParamList = {
   Home: undefined;
-  ScanJoin: undefined;
+  ScanJoin: { qrCode?: string } | undefined;
   Profile: undefined;
 };
 

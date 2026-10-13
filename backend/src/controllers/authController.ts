@@ -27,8 +27,8 @@ export const register = async (req: Request, res: Response) => {
         uniqueQrCode: uuidv4(),
         services: [],
         workingHours: {
-            openTime: "09:00",
-            closeTime: "17:00",
+            openTime: "00:00",
+            closeTime: "23:59",
             closedDays: []
         }
       };

@@ -39,8 +39,8 @@ const BusinessProfileSchema = new Schema<IBusinessProfile>({
   uniqueQrCode: { type: String, unique: true, sparse: true },
   services: [ServiceSchema],
   workingHours: {
-      openTime: { type: String, default: "09:00" }, // 24h format HH:mm
-      closeTime: { type: String, default: "17:00" },
+      openTime: { type: String, default: "00:00" }, // 24h format HH:mm
+      closeTime: { type: String, default: "23:59" },
       closedDays: { type: [Number], default: [] } // 0=Sunday, 1=Monday...
   }
 });

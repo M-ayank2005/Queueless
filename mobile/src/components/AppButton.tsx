@@ -1,5 +1,6 @@
 import React from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { colors } from "../theme/colors";
 
 type Props = {
@@ -7,7 +8,8 @@ type Props = {
   onPress: () => void;
   disabled?: boolean;
   loading?: boolean;
-  variant?: "primary" | "secondary" | "ghost" | "danger";
+  variant?: "primary" | "secondary" | "ghost" | "danger" | "success";
+  icon?: keyof typeof Ionicons.glyphMap;
 };
 
 export default function AppButton({
@@ -16,6 +18,7 @@ export default function AppButton({
   disabled = false,
   loading = false,
   variant = "primary",
+  icon,
 }: Props) {
   return (
     <Pressable
@@ -29,9 +32,32 @@ export default function AppButton({
       ]}
     >
       {loading ? (
-        <ActivityIndicator color={colors.text} />
+        <ActivityIndicator color={variant === "secondary" || variant === "ghost" ? colors.primary : "#FFFFFF"} />
       ) : (
-        <Text style={[styles.label, variant === "ghost" && styles.ghostLabel]}>{title}</Text>
+        <View style={styles.contentRow}>
+          {icon ? (
+            <Ionicons
+              name={icon}
+              size={18}
+              color={
+                variant === "ghost"
+                  ? colors.muted
+                  : variant === "secondary"
+                  ? colors.text
+                  : "#FFFFFF"
+              }
+            />
+          ) : null}
+          <Text
+            style={[
+              styles.label,
+              variant === "ghost" && styles.ghostLabel,
+              variant === "secondary" && styles.secondaryLabel,
+            ]}
+          >
+            {title}
+          </Text>
+        </View>
       )}
     </Pressable>
   );
@@ -39,12 +65,18 @@ export default function AppButton({
 
 const styles = StyleSheet.create({
   base: {
-    minHeight: 48,
+    minHeight: 50,
     borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
     borderWidth: 1,
+  },
+  contentRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
   },
   primary: {
     backgroundColor: colors.primaryStrong,
@@ -62,18 +94,28 @@ const styles = StyleSheet.create({
     backgroundColor: "#3B1018",
     borderColor: colors.danger,
   },
+  success: {
+    backgroundColor: "#064E3B",
+    borderColor: colors.success,
+  },
   label: {
-    color: colors.text,
-    fontSize: 16,
+    color: "#FFFFFF",
+    fontSize: 15,
     fontWeight: "700",
+    letterSpacing: 0.2,
   },
   ghostLabel: {
     color: colors.muted,
+    fontWeight: "600",
+  },
+  secondaryLabel: {
+    color: colors.text,
   },
   disabled: {
-    opacity: 0.6,
+    opacity: 0.5,
   },
   pressed: {
-    transform: [{ scale: 0.99 }],
+    transform: [{ scale: 0.985 }],
+    opacity: 0.9,
   },
 });

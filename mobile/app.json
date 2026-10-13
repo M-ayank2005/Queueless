@@ -20,12 +20,15 @@
         "backgroundColor": "#050B18"
       },
       "permissions": [
-        "CAMERA"
-      ]
+        "CAMERA",
+        "RECORD_AUDIO"
+      ],
+      "package": "com.anonymous.queuelessmobile"
     },
     "plugins": [
       "expo-camera",
-      "expo-asset"
+      "expo-asset",
+      "expo-font"
     ],
     "extra": {
       "apiUrl": "http://localhost:5000/api"

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { StyleSheet, Text, TextInput, View } from "react-native";
 import { colors } from "../theme/colors";
 
@@ -21,6 +21,8 @@ export default function AppInput({
   keyboardType = "default",
   autoCapitalize = "sentences",
 }: Props) {
+  const [isFocused, setIsFocused] = useState(false);
+
   return (
     <View style={styles.wrapper}>
       <Text style={styles.label}>{label}</Text>
@@ -29,7 +31,9 @@ export default function AppInput({
         onChangeText={onChangeText}
         placeholder={placeholder}
         placeholderTextColor={colors.muted}
-        style={styles.input}
+        style={[styles.input, isFocused && styles.inputFocused]}
+        onFocus={() => setIsFocused(true)}
+        onBlur={() => setIsFocused(false)}
         secureTextEntry={secureTextEntry}
         keyboardType={keyboardType}
         autoCapitalize={autoCapitalize}
@@ -40,21 +44,28 @@ export default function AppInput({
 
 const styles = StyleSheet.create({
   wrapper: {
-    gap: 8,
+    gap: 7,
+    width: "100%",
   },
   label: {
     color: colors.muted,
     fontSize: 13,
     fontWeight: "600",
+    letterSpacing: 0.1,
   },
   input: {
-    backgroundColor: colors.card,
+    backgroundColor: colors.cardSoft,
     borderColor: colors.border,
     borderWidth: 1,
     borderRadius: 12,
     color: colors.text,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 13,
     fontSize: 15,
+    minHeight: 48,
+  },
+  inputFocused: {
+    borderColor: colors.primary,
+    backgroundColor: colors.card,
   },
 });

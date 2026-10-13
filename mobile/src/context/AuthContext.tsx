@@ -65,6 +65,20 @@ export function AuthProvider({ children }: PropsWithChildren) {
     setApiToken(nextToken);
     setUser(nextUser);
     await saveAuthSession(nextToken, nextUser);
+
+    if (payload.role === "business") {
+      try {
+        await api.put("/business/settings", {
+          workingHours: {
+            openTime: "00:00",
+            closeTime: "23:59",
+            closedDays: [],
+          },
+        });
+      } catch {
+        // non-blocking
+      }
+    }
   };
 
   const logout = async () => {

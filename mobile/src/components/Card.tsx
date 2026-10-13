@@ -3,7 +3,7 @@ import { StyleSheet, View, ViewStyle } from "react-native";
 import { colors } from "../theme/colors";
 
 type Props = PropsWithChildren<{
-  style?: ViewStyle;
+  style?: ViewStyle | ViewStyle[];
 }>;
 
 export default function Card({ children, style }: Props) {
@@ -16,7 +16,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     borderRadius: 16,
-    padding: 16,
-    gap: 10,
+    padding: 18,
+    gap: 12,
   },
 });
