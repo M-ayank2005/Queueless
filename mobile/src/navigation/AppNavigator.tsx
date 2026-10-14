@@ -22,11 +22,14 @@ import QueueStatusScreen from "../screens/shared/QueueStatusScreen";
 import { colors } from "../theme/colors";
 import AppLoader from "../components/AppLoader";
 
+// Native Stack uses native navigation primitives (UINavigationController on iOS / Fragment on Android)
+// for optimal performance and 60 FPS transitions
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
 const RootStack = createNativeStackNavigator<RootStackParamList>();
 const CustomerTabs = createBottomTabNavigator<CustomerTabParamList>();
 const BusinessTabs = createBottomTabNavigator<BusinessTabParamList>();
 
+// 1. Authentication Navigator: Shown when user is not logged in
 function AuthNavigator() {
   return (
     <AuthStack.Navigator screenOptions={{ headerShown: false }}>
@@ -37,6 +40,7 @@ function AuthNavigator() {
   );
 }
 
+// 2. Customer Bottom Tabs: Main navigation experience for customer role
 function CustomerTabsNavigator() {
   return (
     <CustomerTabs.Navigator
@@ -78,6 +82,7 @@ function CustomerTabsNavigator() {
   );
 }
 
+// 3. Business Bottom Tabs: Dedicated workflow for shop owners
 function BusinessTabsNavigator() {
   return (
     <BusinessTabs.Navigator
@@ -112,9 +117,11 @@ function BusinessTabsNavigator() {
   );
 }
 
+// 4. Conditional Root Navigator: Role-based routing + auth gate
 function AppNavigatorInner() {
   const { loading, user } = useAuth();
 
+  // Shows branded loader while AsyncStorage hydrates saved session
   if (loading) {
     return (
       <AppLoader
@@ -125,10 +132,12 @@ function AppNavigatorInner() {
     );
   }
 
+  // Unauthenticated user -> routes to Welcome/Login/Register
   if (!user) {
     return <AuthNavigator />;
   }
 
+  // Authenticated user -> dynamic role segregation (Customer vs Business)
   return (
     <RootStack.Navigator screenOptions={{ headerShown: false }}>
       {user.role === "business" ? (
@@ -136,11 +145,13 @@ function AppNavigatorInner() {
       ) : (
         <RootStack.Screen name="CustomerTabs" component={CustomerTabsNavigator} />
       )}
+      {/* Shared modal/detail screen accessible across tabs */}
       <RootStack.Screen name="QueueStatus" component={QueueStatusScreen} />
     </RootStack.Navigator>
   );
 }
 
+// Global Dark Theme tokens extending React Navigation's DarkTheme
 const navTheme = {
   ...DarkTheme,
   colors: {
@@ -181,3 +192,4 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
 });
+

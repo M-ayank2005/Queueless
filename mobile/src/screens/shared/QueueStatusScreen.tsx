@@ -13,11 +13,20 @@ import { colors } from "../../theme/colors";
 
 type Props = NativeStackScreenProps<RootStackParamList, "QueueStatus">;
 
+/**
+ * QueueStatusScreen
+ * Displays real-time ticket information, queue position, estimated wait time,
+ * and service breakdown.
+ */
 export default function QueueStatusScreen({ route, navigation }: Props) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [entry, setEntry] = useState<QueueEntry | null>(null);
 
+  /**
+   * Fetches the latest queue status for the active ticket.
+   * @param isManual - When true, triggers the button spinner without resetting the full-screen loader.
+   */
   const load = async (isManual = false) => {
     try {
       if (isManual) setRefreshing(true);
@@ -33,6 +42,12 @@ export default function QueueStatusScreen({ route, navigation }: Props) {
     }
   };
 
+  /**
+   * INTERVIEW TALKING POINT: Polling & Memory Leak Prevention
+   * - Polls every 15s to keep wait times and "people ahead" in sync without WebSockets.
+   * - The cleanup function `clearInterval(interval)` is critical: it cancels the background
+   *   timer when the user navigates away, preventing memory leaks and zombie requests.
+   */
   useEffect(() => {
     load();
     const interval = setInterval(() => load(false), 15000);
@@ -68,6 +83,7 @@ export default function QueueStatusScreen({ route, navigation }: Props) {
     );
   }
 
+  // Derive view metrics with defensive defaults for undefined/null API properties
   const wait = entry.currentEstimatedWait ?? 0;
   const ahead = entry.peopleAhead ?? 0;
   const isCompleted = entry.status === "completed";
@@ -84,6 +100,7 @@ export default function QueueStatusScreen({ route, navigation }: Props) {
     entry.businessId?.address ||
     "";
 
+  // Calculate aggregate invoice sum across selected services
   const totalCost = (entry.selectedServices || []).reduce(
     (acc, s) => acc + (Number(s.cost) || 0),
     0

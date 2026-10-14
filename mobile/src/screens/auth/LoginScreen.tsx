@@ -12,6 +12,13 @@ import { colors } from "../../theme/colors";
 
 type Props = NativeStackScreenProps<AuthStackParamList, "Login">;
 
+/**
+ * LoginScreen
+ * Handles user authentication with:
+ * - Client-side validation
+ * - Global session state updates via AuthContext
+ * - Cross-platform error alerts (web & native)
+ */
 export default function LoginScreen({ navigation }: Props) {
   const { login } = useAuth();
   const [email, setEmail] = useState("");
@@ -19,6 +26,10 @@ export default function LoginScreen({ navigation }: Props) {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
+  /**
+   * Validates form inputs, executes login through AuthContext,
+   * and handles backend error responses gracefully.
+   */
   const submit = async () => {
     setErrorMsg("");
     if (!email || !password) {

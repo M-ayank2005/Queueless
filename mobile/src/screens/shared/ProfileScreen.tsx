@@ -22,6 +22,13 @@ import { RootStackParamList } from "../../navigation/types";
 import { QueueEntry } from "../../types";
 import { colors } from "../../theme/colors";
 
+/**
+ * ProfileScreen
+ * Shared profile view for both Customers and Business owners:
+ * - Shows authenticated user details
+ * - Role-conditional history/settings (Queue history for customers, Store settings for businesses)
+ * - Cross-platform logout confirmation
+ */
 export default function ProfileScreen() {
   const { user, logout } = useAuth();
   const rootNavigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -32,6 +39,10 @@ export default function ProfileScreen() {
 
   const isBusiness = user?.role === "business" || Boolean(user?.businessProfile);
 
+  /**
+   * Cross-platform alert handling:
+   * Uses window.confirm on web and native Alert.alert with destructive styling on iOS/Android.
+   */
   const confirmLogout = () => {
     if (Platform.OS === "web") {
       if (window.confirm("Are you sure you want to sign out?")) {
@@ -71,6 +82,11 @@ export default function ProfileScreen() {
     }
   };
 
+  /**
+   * Role-based data loading:
+   * Dynamically loads store management info for business accounts
+   * or ticket history for regular customer accounts.
+   */
   useEffect(() => {
     (async () => {
       setLoadingData(true);

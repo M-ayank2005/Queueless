@@ -44,6 +44,8 @@ const DEMO_STORES = [
 
 export default function ScanJoinScreen({ navigation, route }: Props) {
   const rootNavigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  
+  // Hardware camera permissions hook from expo-camera
   const [permission, requestPermission] = useCameraPermissions();
   const [scannerOpen, setScannerOpen] = useState(false);
   const [qrCode, setQrCode] = useState(route.params?.qrCode || "");
@@ -53,6 +55,7 @@ export default function ScanJoinScreen({ navigation, route }: Props) {
   const [joining, setJoining] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
+  // Cross-platform alert utility (handles both web window.alert and native Alert.alert)
   const showAlert = (title: string, msg: string) => {
     if (Platform.OS === "web") {
       window.alert(`${title}: ${msg}`);
@@ -61,6 +64,7 @@ export default function ScanJoinScreen({ navigation, route }: Props) {
     }
   };
 
+  // Queries store information and available service menu by QR code UUID
   const fetchStore = async (code: string) => {
     if (!code) {
       setErrorMessage("Please enter a valid store QR code.");
@@ -82,6 +86,7 @@ export default function ScanJoinScreen({ navigation, route }: Props) {
     }
   };
 
+  // Automatically loads store if navigated with route params from nearby store shortcuts
   React.useEffect(() => {
     if (route.params?.qrCode) {
       setQrCode(route.params.qrCode);
@@ -89,6 +94,7 @@ export default function ScanJoinScreen({ navigation, route }: Props) {
     }
   }, [route.params?.qrCode]);
 
+  // Request camera hardware access dynamically before opening scanner
   const onScanPress = async () => {
     if (!permission?.granted) {
       const result = await requestPermission();
@@ -100,6 +106,7 @@ export default function ScanJoinScreen({ navigation, route }: Props) {
     setScannerOpen(true);
   };
 
+  // Parses QR code text: extracts raw code even if full URL (e.g. /store/<uuid>) was encoded
   const handleBarcodeScanned = ({ data }: { data: string }) => {
     setScannerOpen(false);
     const cleaned = data.includes("/store/") ? data.split("/store/").pop() || "" : data;
@@ -115,11 +122,13 @@ export default function ScanJoinScreen({ navigation, route }: Props) {
     );
   };
 
+  // Maps selected index array to concrete service objects
   const selectedServices = useMemo(() => {
     const services = store?.businessProfile?.services || [];
     return selected.map((idx) => services[idx]).filter(Boolean);
   }, [selected, store]);
 
+  // useMemo computes total estimated wait time and cost in real-time as services are toggled
   const totals = useMemo(() => {
     return selectedServices.reduce(
       (acc, s) => ({
@@ -130,6 +139,7 @@ export default function ScanJoinScreen({ navigation, route }: Props) {
     );
   }, [selectedServices]);
 
+  // Enters user into digital queue and navigates to the live tracking screen with the ticket ID
   const joinQueue = async () => {
     if (!store?._id) return;
     setErrorMessage("");
@@ -152,6 +162,7 @@ export default function ScanJoinScreen({ navigation, route }: Props) {
       setJoining(false);
     }
   };
+
 
   return (
     <AppScreen>

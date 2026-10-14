@@ -29,6 +29,13 @@ type BusinessProfileResponse = {
 
 type Props = BottomTabScreenProps<BusinessTabParamList, "Dashboard">;
 
+/**
+ * BusinessDashboardScreen
+ * Command center for business owners:
+ * - Displays store details and QR code for in-store scanning
+ * - Real-time queue management (mark completed / cancel)
+ * - Service catalog management (CRUD operations on services)
+ */
 export default function BusinessDashboardScreen(_: Props) {
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<BusinessProfileResponse | null>(null);
@@ -39,6 +46,7 @@ export default function BusinessDashboardScreen(_: Props) {
   const [copied, setCopied] = useState(false);
   const [addingService, setAddingService] = useState(false);
 
+  // Platform-adaptive clipboard copy for store QR identifier (web vs native)
   const copyToClipboard = async () => {
     if (!profile?.uniqueQrCode) return;
     try {
@@ -52,6 +60,10 @@ export default function BusinessDashboardScreen(_: Props) {
     }
   };
 
+  /**
+   * Parallel network requests via Promise.all:
+   * Fetches business profile and live queue concurrently to reduce time-to-interactive.
+   */
   const load = async () => {
     try {
       setLoading(true);
@@ -70,11 +82,18 @@ export default function BusinessDashboardScreen(_: Props) {
     load();
   }, []);
 
+  /**
+   * Memoized active queue list:
+   * Prevents recalculating the filtered queue on unrelated re-renders (e.g. typing in form inputs).
+   */
   const activeQueue = useMemo(
     () => queue.filter((item) => item.status === "waiting" || item.status === "in_progress"),
     [queue]
   );
 
+  /**
+   * Adds a new service to the store catalog using immutable array expansion.
+   */
   const addService = async () => {
     if (!profile || !serviceName || !durationMin || !cost) {
       const msg = "Please enter service name, duration in minutes, and cost.";
@@ -104,6 +123,10 @@ export default function BusinessDashboardScreen(_: Props) {
     }
   };
 
+  /**
+   * Deletes a service by index using an immutable copy of the array
+   * and synchronizes with the backend database.
+   */
   const removeService = async (index: number) => {
     if (!profile) return;
     const updated = [...profile.services];
@@ -119,6 +142,10 @@ export default function BusinessDashboardScreen(_: Props) {
     }
   };
 
+  /**
+   * Transitions a customer's queue ticket to 'completed' or 'cancelled',
+   * then re-fetches the active queue state.
+   */
   const updateStatus = async (id: string, status: "completed" | "cancelled") => {
     try {
       await api.put(`/business/queue/${id}/status`, { status });

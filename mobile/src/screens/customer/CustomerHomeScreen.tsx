@@ -139,6 +139,7 @@ export default function CustomerHomeScreen({ navigation }: Props) {
   const [history, setHistory] = useState<QueueEntry[]>([]);
   const [selectedCategory, setSelectedCategory] = useState("All");
 
+  // Parallel data fetching via Promise.all to fetch active queues and history concurrently
   const fetchData = async () => {
     try {
       const [activeRes, historyRes] = await Promise.all([
@@ -152,6 +153,7 @@ export default function CustomerHomeScreen({ navigation }: Props) {
     }
   };
 
+  // Initial screen mount data loader
   const load = async () => {
     try {
       setLoading(true);
@@ -165,6 +167,8 @@ export default function CustomerHomeScreen({ navigation }: Props) {
     load();
   }, []);
 
+  // React Navigation lifecycle hook: useFocusEffect re-fetches queues whenever the tab comes into focus
+  // (Crucial because bottom tabs remain mounted in memory, so standard useEffect wouldn't fire on return)
   useFocusEffect(
     useCallback(() => {
       fetchData();
@@ -175,10 +179,12 @@ export default function CustomerHomeScreen({ navigation }: Props) {
     navigation.navigate("ScanJoin", { qrCode });
   };
 
+  // useMemo caches filtered array to avoid recalculations on unrelated state changes
   const filteredStores = useMemo(() => {
     if (selectedCategory === "All") return NEARBY_STORES;
     return NEARBY_STORES.filter((s) => s.category === selectedCategory);
   }, [selectedCategory]);
+
 
   if (loading) {
     return (

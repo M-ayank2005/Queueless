@@ -3,6 +3,7 @@ import { api, setApiToken } from "../lib/api";
 import { clearAuthSession, readAuthSession, saveAuthSession } from "../lib/storage";
 import { User, UserRole } from "../types";
 
+// Payload interface for registering a customer or business account
 type RegisterPayload = {
   name: string;
   email: string;
@@ -13,6 +14,7 @@ type RegisterPayload = {
   address?: string;
 };
 
+// Global authentication context contract
 type AuthContextValue = {
   loading: boolean;
   user: User | null;
@@ -30,6 +32,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
 
+  // Session Hydration: Restores saved JWT token & user profile from AsyncStorage on app startup
   useEffect(() => {
     (async () => {
       try {
@@ -42,11 +45,12 @@ export function AuthProvider({ children }: PropsWithChildren) {
           setUser(session.user);
         }
       } finally {
-        setLoading(false);
+        setLoading(false); // Prevents flash of unauthenticated screens
       }
     })();
   }, []);
 
+  // Handles user login: sets state, updates Axios interceptor, and persists to AsyncStorage
   const login = async (email: string, password: string) => {
     const response = await api.post("/auth/login", { email, password });
     const nextToken: string = response.data.token;
@@ -57,6 +61,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     await saveAuthSession(nextToken, nextUser);
   };
 
+  // Handles user registration and initializes default business operating hours if role is business
   const register = async (payload: RegisterPayload) => {
     const response = await api.post("/auth/register", payload);
     const nextToken: string = response.data.token;
@@ -76,11 +81,12 @@ export function AuthProvider({ children }: PropsWithChildren) {
           },
         });
       } catch {
-        // non-blocking
+        // non-blocking fallback
       }
     }
   };
 
+  // Clears active user state and removes credentials from persistent device storage
   const logout = async () => {
     setToken(null);
     setUser(null);
@@ -88,6 +94,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     await clearAuthSession();
   };
 
+  // Updates user profile info and synchronizes with storage & Axios headers if token refreshed
   const updateProfile = async (payload: { name: string; phone: string; password?: string }) => {
     const response = await api.put("/auth/profile", payload);
     const nextUser = response.data as User & { token?: string };
@@ -112,6 +119,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
     await saveAuthSession(nextToken || "", normalized);
   };
 
+  // useMemo prevents unnecessary re-renders of consumer components when internal state hasn't changed
   const value = useMemo(
     () => ({
       loading,
@@ -128,6 +136,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
+// Custom hook with runtime validation: ensures components consuming auth are wrapped in AuthProvider
 export function useAuth() {
   const context = useContext(AuthContext);
   if (!context) {
@@ -135,3 +144,4 @@ export function useAuth() {
   }
   return context;
 }
+
