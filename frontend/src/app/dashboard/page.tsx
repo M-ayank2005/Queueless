@@ -896,13 +896,13 @@ export default function Dashboard() {
               aria-hidden="true"
             />
 
-            {/* Centered Modal Window with spring popup animation */}
+            {/* Centered Modal Window with spring popup animation - Landscape Layout on Web */}
             <motion.div
-              initial={{ opacity: 0, scale: 0.85, y: 20 }}
+              initial={{ opacity: 0, scale: 0.88, y: 16 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.85, y: 20 }}
-              transition={{ type: "spring", damping: 25, stiffness: 320 }}
-              className="relative z-50 w-full max-w-md rounded-2xl border border-[#203052] bg-[#101A32] p-6 sm:p-8 shadow-2xl flex flex-col items-center text-center"
+              exit={{ opacity: 0, scale: 0.88, y: 16 }}
+              transition={{ type: "spring", damping: 26, stiffness: 320 }}
+              className="relative z-50 w-full max-w-3xl lg:max-w-4xl rounded-3xl border border-[#203052] bg-[#101A32] p-6 sm:p-8 shadow-2xl"
               role="dialog"
               aria-modal="true"
               aria-labelledby="enlarged-qr-title"
@@ -910,58 +910,88 @@ export default function Dashboard() {
               {/* Cross / Close button to minimize/close */}
               <button
                 onClick={() => setIsQrModalOpen(false)}
-                className="absolute top-4 right-4 p-2 rounded-xl text-[#889DC2] hover:text-[#ECF2FF] hover:bg-[#152243] border border-transparent hover:border-[#203052] transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="absolute top-4 right-4 z-10 p-2 rounded-xl text-[#889DC2] hover:text-[#ECF2FF] hover:bg-[#152243] border border-[#203052] transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
                 aria-label="Close enlarged QR modal"
               >
                 <X className="w-5 h-5" />
               </button>
 
-              {/* Modal Header */}
-              <div className="w-12 h-12 rounded-2xl bg-blue-500/10 border border-blue-500/25 flex items-center justify-center text-blue-400 mb-3">
-                <QrCode className="w-6 h-6" />
-              </div>
-              <h2 id="enlarged-qr-title" className="text-xl font-bold text-[#ECF2FF]">
-                {businessProfile?.shopName || "Storefront QR Code"}
-              </h2>
-              <p className="text-xs text-[#889DC2] mt-1 max-w-xs leading-relaxed">
-                Customers can scan this QR code with any smartphone camera to view live wait times and join your digital queue.
-              </p>
+              {/* Landscape 2-Column Content Layout */}
+              <div className="flex flex-col md:flex-row items-center md:items-stretch gap-6 sm:gap-8">
+                {/* Left Column: QR Code Display Frame */}
+                <div className="w-full md:w-auto flex flex-col items-center justify-center p-6 sm:p-8 bg-[#0A1329] border border-[#203052] rounded-2xl shrink-0">
+                  <div className="bg-white p-4 sm:p-5 rounded-2xl shadow-2xl border-4 border-blue-500/25">
+                    <QRCode
+                      id="enlarged-store-qr-code-svg"
+                      value={storeUrl}
+                      size={240}
+                      level="H"
+                    />
+                  </div>
+                  <div className="mt-3.5 flex items-center gap-1.5 text-xs text-[#889DC2] font-medium">
+                    <Sparkles className="w-3.5 h-3.5 text-blue-400" />
+                    <span>Scan with any smartphone camera</span>
+                  </div>
+                </div>
 
-              {/* Enlarged QR Code Container */}
-              <div className="bg-white p-5 rounded-2xl shadow-2xl my-6 border-4 border-blue-500/20">
-                <QRCode
-                  id="enlarged-store-qr-code-svg"
-                  value={storeUrl}
-                  size={240}
-                  level="H"
-                />
-              </div>
+                {/* Right Column: Store Info, Code & Actions */}
+                <div className="flex-1 flex flex-col justify-between text-left w-full py-1">
+                  <div>
+                    <div className="flex items-center gap-2 mb-2.5">
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-blue-500/10 border border-blue-500/25 text-blue-400">
+                        <QrCode className="w-3 h-3" />
+                        Storefront Counter Poster
+                      </span>
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                        Active
+                      </span>
+                    </div>
 
-              {/* Store Identifier Pill */}
-              <div className="w-full bg-[#0A1329] border border-[#203052] px-4 py-2.5 rounded-xl mb-6 text-left">
-                <span className="text-[10px] text-[#889DC2] uppercase tracking-wider font-semibold block">Store Identifier</span>
-                <span className="text-xs font-mono text-blue-400 select-all truncate block mt-0.5">
-                  {businessProfile?.uniqueQrCode || "..."}
-                </span>
-              </div>
+                    <h2 id="enlarged-qr-title" className="text-2xl sm:text-3xl font-extrabold text-[#ECF2FF]">
+                      {businessProfile?.shopName || "Storefront QR Code"}
+                    </h2>
 
-              {/* Modal Actions */}
-              <div className="grid grid-cols-2 gap-3 w-full">
-                <Button
-                  onClick={handleCopyStoreLink}
-                  variant="outline"
-                  className="border-[#203052] bg-[#0A1329] hover:bg-[#152243] text-xs text-[#ECF2FF] flex items-center justify-center gap-2 py-2.5"
-                >
-                  <Copy className="w-4 h-4 text-blue-400" />
-                  Copy Link
-                </Button>
-                <Button
-                  onClick={handlePrintQR}
-                  className="bg-blue-600 hover:bg-blue-500 text-xs text-white font-medium flex items-center justify-center gap-2 py-2.5 shadow-[0_0_16px_rgba(59,130,246,0.25)]"
-                >
-                  <Printer className="w-4 h-4" />
-                  Print Sign
-                </Button>
+                    <p className="text-xs text-[#889DC2] flex items-center gap-1.5 mt-1.5">
+                      <MapPin className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                      {businessProfile?.address || "Address not provided"}
+                    </p>
+
+                    <p className="text-xs sm:text-sm text-[#C5D5F5] mt-3.5 leading-relaxed">
+                      Display this code at your counter, entrance, or waiting lounge. Visitors scan to view wait times, browse services, and hold their spot in the digital queue without downloading any app.
+                    </p>
+
+                    {/* Store Identifier Pill with Copy Helper */}
+                    <div className="w-full bg-[#0A1329] border border-[#203052] p-3.5 rounded-xl mt-4">
+                      <div className="flex items-center justify-between text-[11px] font-semibold text-[#889DC2]">
+                        <span>STORE CODE IDENTIFIER</span>
+                        <span className="text-[10px] text-blue-400">Direct booking</span>
+                      </div>
+                      <p className="text-xs font-mono text-[#ECF2FF] select-all truncate mt-1">
+                        {businessProfile?.uniqueQrCode || "..."}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Landscape Modal Actions */}
+                  <div className="flex flex-col sm:flex-row items-center gap-3 mt-6 pt-4 border-t border-[#203052]/60">
+                    <Button
+                      onClick={handlePrintQR}
+                      className="w-full sm:flex-1 bg-blue-600 hover:bg-blue-500 text-xs sm:text-sm text-white font-semibold flex items-center justify-center gap-2 py-2.5 shadow-[0_0_16px_rgba(59,130,246,0.3)]"
+                    >
+                      <Printer className="w-4 h-4" />
+                      Print Sign / Poster
+                    </Button>
+                    <Button
+                      onClick={handleCopyStoreLink}
+                      variant="outline"
+                      className="w-full sm:flex-1 border-[#203052] bg-[#0A1329] hover:bg-[#152243] text-xs sm:text-sm text-[#ECF2FF] flex items-center justify-center gap-2 py-2.5"
+                    >
+                      <Copy className="w-4 h-4 text-blue-400" />
+                      Copy Direct Link
+                    </Button>
+                  </div>
+                </div>
               </div>
             </motion.div>
           </div>
