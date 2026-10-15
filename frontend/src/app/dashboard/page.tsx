@@ -26,7 +26,8 @@ import {
   Play,
   X,
   Sparkles,
-  ExternalLink
+  ExternalLink,
+  Maximize2
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { QRCodeSVG as QRCode } from "qrcode.react";
@@ -81,8 +82,9 @@ export default function Dashboard() {
   const router = useRouter();
   const { toast } = useToast();
 
-  // Settings Modal State
+  // Settings & QR Modal States
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isQrModalOpen, setIsQrModalOpen] = useState(false);
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const [settingsForm, setSettingsForm] = useState({
     shopName: "",
@@ -93,6 +95,20 @@ export default function Dashboard() {
   });
 
   const socketRef = useRef<Socket | null>(null);
+
+  // Close modals on Escape key press
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setIsQrModalOpen(false);
+        setIsSettingsOpen(false);
+      }
+    };
+    if (isQrModalOpen || isSettingsOpen) {
+      window.addEventListener("keydown", handleKeyDown);
+    }
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isQrModalOpen, isSettingsOpen]);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -284,7 +300,7 @@ export default function Dashboard() {
 
   const handlePrintQR = () => {
     if (!businessProfile?.uniqueQrCode) return;
-    const qrSvgElement = document.getElementById("store-qr-code-svg");
+    const qrSvgElement = document.getElementById("enlarged-store-qr-code-svg") || document.getElementById("store-qr-code-svg");
     if (!qrSvgElement) {
       toast.error("QR Code graphic not found");
       return;
@@ -388,7 +404,7 @@ export default function Dashboard() {
     <div className="min-h-screen bg-[#050B18] text-[#ECF2FF] pb-20">
       <Navbar />
 
-      <main className="container mx-auto max-w-7xl px-4 pt-24">
+      <main className="w-full max-w-[1536px] mx-auto px-4 sm:px-6 lg:px-8 pt-24">
         {/* Dashboard Top Header */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8 pb-6 border-b border-[#203052]">
           <div>
@@ -565,9 +581,78 @@ export default function Dashboard() {
             </Card>
           </div>
 
-          {/* Right Column: Services & Store QR (5 cols on lg) */}
+          {/* Right Column: Store QR (TOP) & Services (5 cols on lg) */}
           <div className="lg:col-span-5 space-y-6">
-            {/* Services Management Card */}
+            {/* Store QR Display Card - Prominently at Top */}
+            <Card className="bg-[#101A32] border border-[#203052] shadow-xl text-center">
+              <CardHeader className="pb-3 border-b border-[#203052]/60">
+                <CardTitle className="text-base font-bold text-[#ECF2FF] flex items-center justify-center gap-2">
+                  <QrCode className="w-4 h-4 text-blue-400" />
+                  Storefront QR Code
+                </CardTitle>
+                <CardDescription className="text-xs text-[#889DC2]">
+                  Customers scan this to open your store menu and book tickets.
+                </CardDescription>
+              </CardHeader>
+
+              <CardContent className="pt-4 flex flex-col items-center">
+                {/* Clickable QR Code Container with designated ID and zoom hover hint */}
+                <button
+                  type="button"
+                  onClick={() => setIsQrModalOpen(true)}
+                  className="group relative bg-white p-3.5 rounded-2xl shadow-xl inline-block mb-2 cursor-pointer hover:scale-105 active:scale-95 transition-all duration-200 border-2 border-transparent hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  title="Click to view enlarged QR code"
+                >
+                  {businessProfile?.uniqueQrCode ? (
+                    <QRCode
+                      id="store-qr-code-svg"
+                      value={storeUrl}
+                      size={150}
+                      level="H"
+                    />
+                  ) : (
+                    <div className="w-[150px] h-[150px] flex items-center justify-center text-xs text-black font-semibold">
+                      Generating...
+                    </div>
+                  )}
+                  <div className="absolute inset-0 bg-black/55 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white font-semibold text-xs gap-1 backdrop-blur-[1px]">
+                    <Maximize2 className="w-5 h-5 text-blue-400" />
+                    <span>Enlarge QR</span>
+                  </div>
+                </button>
+
+                <p className="text-[11px] text-[#889DC2] flex items-center justify-center gap-1 mb-3">
+                  <Maximize2 className="w-3 h-3 text-blue-400" />
+                  <span>Click QR code to view enlarged</span>
+                </p>
+
+                <div className="w-full max-w-xs space-y-2 mb-4">
+                  <p className="text-xs font-mono text-[#889DC2] bg-[#0A1329] px-3 py-1.5 rounded-lg border border-[#203052] truncate">
+                    Code: {businessProfile?.uniqueQrCode || "..."}
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 w-full">
+                  <Button
+                    onClick={handleCopyStoreLink}
+                    variant="outline"
+                    className="border-[#203052] hover:bg-[#152243] text-xs text-[#ECF2FF] flex items-center justify-center gap-1.5"
+                  >
+                    <Copy className="w-3.5 h-3.5 text-blue-400" />
+                    Copy Link
+                  </Button>
+                  <Button
+                    onClick={handlePrintQR}
+                    className="bg-blue-600 hover:bg-blue-500 text-xs text-white font-medium flex items-center justify-center gap-1.5"
+                  >
+                    <Printer className="w-3.5 h-3.5" />
+                    Print Sign
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Services Management Card - Located below QR */}
             <Card className="bg-[#101A32] border-[#203052] shadow-xl">
               <CardHeader className="pb-3 border-b border-[#203052]/60">
                 <CardTitle className="text-base font-bold text-[#ECF2FF] flex items-center gap-2">
@@ -652,61 +737,6 @@ export default function Dashboard() {
                     {isAddingService ? "Adding Service..." : "Add Service"}
                   </Button>
                 </form>
-              </CardContent>
-            </Card>
-
-            {/* Store QR Display Card */}
-            <Card className="bg-[#101A32] border border-[#203052] shadow-xl text-center">
-              <CardHeader className="pb-3 border-b border-[#203052]/60">
-                <CardTitle className="text-base font-bold text-[#ECF2FF] flex items-center justify-center gap-2">
-                  <QrCode className="w-4 h-4 text-blue-400" />
-                  Storefront QR Code
-                </CardTitle>
-                <CardDescription className="text-xs text-[#889DC2]">
-                  Customers scan this to open your store menu and book tickets.
-                </CardDescription>
-              </CardHeader>
-
-              <CardContent className="pt-4 flex flex-col items-center">
-                {/* QR Code Container with designated ID for reliable print capture */}
-                <div className="bg-white p-3.5 rounded-2xl shadow-xl inline-block mb-3">
-                  {businessProfile?.uniqueQrCode ? (
-                    <QRCode
-                      id="store-qr-code-svg"
-                      value={storeUrl}
-                      size={140}
-                      level="H"
-                    />
-                  ) : (
-                    <div className="w-[140px] h-[140px] flex items-center justify-center text-xs text-black font-semibold">
-                      Generating...
-                    </div>
-                  )}
-                </div>
-
-                <div className="w-full max-w-xs space-y-2 mb-4">
-                  <p className="text-xs font-mono text-[#889DC2] bg-[#0A1329] px-3 py-1.5 rounded-lg border border-[#203052] truncate">
-                    Code: {businessProfile?.uniqueQrCode || "..."}
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2 w-full">
-                  <Button
-                    onClick={handleCopyStoreLink}
-                    variant="outline"
-                    className="border-[#203052] hover:bg-[#152243] text-xs text-[#ECF2FF] flex items-center justify-center gap-1.5"
-                  >
-                    <Copy className="w-3.5 h-3.5 text-blue-400" />
-                    Copy Link
-                  </Button>
-                  <Button
-                    onClick={handlePrintQR}
-                    className="bg-blue-600 hover:bg-blue-500 text-xs text-white font-medium flex items-center justify-center gap-1.5"
-                  >
-                    <Printer className="w-3.5 h-3.5" />
-                    Print Sign
-                  </Button>
-                </div>
               </CardContent>
             </Card>
           </div>
@@ -846,6 +876,93 @@ export default function Dashboard() {
                   </Button>
                 </div>
               </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Enlarged QR Code Centered Modal */}
+      <AnimatePresence>
+        {isQrModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            {/* Dimmed backdrop with fade animation */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              onClick={() => setIsQrModalOpen(false)}
+              className="fixed inset-0 bg-black/85 backdrop-blur-md"
+              aria-hidden="true"
+            />
+
+            {/* Centered Modal Window with spring popup animation */}
+            <motion.div
+              initial={{ opacity: 0, scale: 0.85, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.85, y: 20 }}
+              transition={{ type: "spring", damping: 25, stiffness: 320 }}
+              className="relative z-50 w-full max-w-md rounded-2xl border border-[#203052] bg-[#101A32] p-6 sm:p-8 shadow-2xl flex flex-col items-center text-center"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="enlarged-qr-title"
+            >
+              {/* Cross / Close button to minimize/close */}
+              <button
+                onClick={() => setIsQrModalOpen(false)}
+                className="absolute top-4 right-4 p-2 rounded-xl text-[#889DC2] hover:text-[#ECF2FF] hover:bg-[#152243] border border-transparent hover:border-[#203052] transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+                aria-label="Close enlarged QR modal"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              {/* Modal Header */}
+              <div className="w-12 h-12 rounded-2xl bg-blue-500/10 border border-blue-500/25 flex items-center justify-center text-blue-400 mb-3">
+                <QrCode className="w-6 h-6" />
+              </div>
+              <h2 id="enlarged-qr-title" className="text-xl font-bold text-[#ECF2FF]">
+                {businessProfile?.shopName || "Storefront QR Code"}
+              </h2>
+              <p className="text-xs text-[#889DC2] mt-1 max-w-xs leading-relaxed">
+                Customers can scan this QR code with any smartphone camera to view live wait times and join your digital queue.
+              </p>
+
+              {/* Enlarged QR Code Container */}
+              <div className="bg-white p-5 rounded-2xl shadow-2xl my-6 border-4 border-blue-500/20">
+                <QRCode
+                  id="enlarged-store-qr-code-svg"
+                  value={storeUrl}
+                  size={240}
+                  level="H"
+                />
+              </div>
+
+              {/* Store Identifier Pill */}
+              <div className="w-full bg-[#0A1329] border border-[#203052] px-4 py-2.5 rounded-xl mb-6 text-left">
+                <span className="text-[10px] text-[#889DC2] uppercase tracking-wider font-semibold block">Store Identifier</span>
+                <span className="text-xs font-mono text-blue-400 select-all truncate block mt-0.5">
+                  {businessProfile?.uniqueQrCode || "..."}
+                </span>
+              </div>
+
+              {/* Modal Actions */}
+              <div className="grid grid-cols-2 gap-3 w-full">
+                <Button
+                  onClick={handleCopyStoreLink}
+                  variant="outline"
+                  className="border-[#203052] bg-[#0A1329] hover:bg-[#152243] text-xs text-[#ECF2FF] flex items-center justify-center gap-2 py-2.5"
+                >
+                  <Copy className="w-4 h-4 text-blue-400" />
+                  Copy Link
+                </Button>
+                <Button
+                  onClick={handlePrintQR}
+                  className="bg-blue-600 hover:bg-blue-500 text-xs text-white font-medium flex items-center justify-center gap-2 py-2.5 shadow-[0_0_16px_rgba(59,130,246,0.25)]"
+                >
+                  <Printer className="w-4 h-4" />
+                  Print Sign
+                </Button>
+              </div>
             </motion.div>
           </div>
         )}
