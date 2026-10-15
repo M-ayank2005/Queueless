@@ -1,5 +1,9 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
+  Alert,
+  Animated,
+  Modal,
+  Platform,
   Pressable,
   RefreshControl,
   StyleSheet,
@@ -10,6 +14,8 @@ import {
 import { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 import { useFocusEffect, useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { CameraView, useCameraPermissions } from "expo-camera";
 import { Ionicons } from "@expo/vector-icons";
 import AppButton from "../../components/AppButton";
 import AppScreen from "../../components/AppScreen";
@@ -30,6 +36,11 @@ type Props = BottomTabScreenProps<CustomerTabParamList, "Home">;
 export default function CustomerHomeScreen({ navigation }: Props) {
   const { user } = useAuth();
   const rootNavigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const insets = useSafeAreaInsets();
+  const [permission, requestPermission] = useCameraPermissions();
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [torchOn, setTorchOn] = useState(false);
+  const laserAnim = useRef(new Animated.Value(0)).current;
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [tab, setTab] = useState<"active" | "history">("active");
@@ -73,6 +84,51 @@ export default function CustomerHomeScreen({ navigation }: Props) {
       fetchData();
     }, [])
   );
+
+  useEffect(() => {
+    if (scannerOpen) {
+      const loop = Animated.loop(
+        Animated.sequence([
+          Animated.timing(laserAnim, {
+            toValue: 1,
+            duration: 1600,
+            useNativeDriver: true,
+          }),
+          Animated.timing(laserAnim, {
+            toValue: 0,
+            duration: 1600,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+      loop.start();
+      return () => loop.stop();
+    }
+  }, [scannerOpen]);
+
+  const handleOpenScanner = async () => {
+    if (!permission?.granted) {
+      const result = await requestPermission();
+      if (!result.granted) {
+        if (Platform.OS === "web") {
+          window.alert("Please grant camera permission to scan merchant counter codes.");
+        } else {
+          Alert.alert("Camera access needed", "Please grant camera permission to scan merchant counter codes.");
+        }
+        return;
+      }
+    }
+    setTorchOn(false);
+    setScannerOpen(true);
+  };
+
+  const handleBarcodeScanned = ({ data }: { data: string }) => {
+    setScannerOpen(false);
+    const cleaned = data.includes("/store/") ? data.split("/store/").pop() || "" : data;
+    if (cleaned) {
+      navigation.navigate("ScanJoin", { qrCode: cleaned });
+    }
+  };
 
   const initial = user?.name ? user.name.charAt(0).toUpperCase() : "C";
   const entries = tab === "active" ? activeQueues : history;
@@ -122,7 +178,7 @@ export default function CustomerHomeScreen({ navigation }: Props) {
 
         <TouchableOpacity
           style={styles.scanActionBtn}
-          onPress={() => navigation.navigate("ScanJoin")}
+          onPress={handleOpenScanner}
           activeOpacity={0.8}
         >
           <Ionicons name="qr-code-outline" size={16} color="#FFF" />
@@ -173,7 +229,7 @@ export default function CustomerHomeScreen({ navigation }: Props) {
                 : "Completed or cancelled bookings will automatically appear here."
             }
             actionTitle={tab === "active" ? "Scan Store Code" : undefined}
-            onActionPress={tab === "active" ? () => navigation.navigate("ScanJoin") : undefined}
+            onActionPress={tab === "active" ? handleOpenScanner : undefined}
             actionIcon="qr-code-outline"
           />
         ) : (
@@ -246,11 +302,113 @@ export default function CustomerHomeScreen({ navigation }: Props) {
 
         <AppButton
           title="Open Camera Scanner"
-          onPress={() => navigation.navigate("ScanJoin")}
+          onPress={handleOpenScanner}
           icon="camera-outline"
           size="md"
         />
       </Card>
+
+      {/* Direct Full-Screen QR Scanner Modal */}
+      <Modal
+        visible={scannerOpen}
+        animationType="slide"
+        transparent={false}
+        onRequestClose={() => setScannerOpen(false)}
+        statusBarTranslucent
+      >
+        <View
+          style={[
+            styles.scannerModalRoot,
+            {
+              paddingTop: insets.top + spacing.sm,
+              paddingBottom: insets.bottom + spacing.md,
+            },
+          ]}
+        >
+          {/* Modal Header Bar */}
+          <View style={styles.scannerModalHeader}>
+            <View style={styles.scannerModalTitleRow}>
+              <View style={styles.liveIndicatorDot} />
+              <Text style={styles.scannerModalTitle}>Scan Counter QR Code</Text>
+            </View>
+            <View style={styles.scannerModalControls}>
+              <TouchableOpacity
+                style={[
+                  styles.scannerControlBtn,
+                  torchOn && styles.scannerControlBtnActive,
+                ]}
+                onPress={() => setTorchOn((prev) => !prev)}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name={torchOn ? "flash" : "flash-outline"}
+                  size={18}
+                  color={torchOn ? colors.warning : colors.text}
+                />
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.scannerControlBtn}
+                onPress={() => setScannerOpen(false)}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="close" size={20} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Camera Viewfinder Frame */}
+          <View style={styles.scannerViewfinderWrap}>
+            <CameraView
+              onBarcodeScanned={handleBarcodeScanned}
+              barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
+              enableTorch={torchOn}
+              style={styles.scannerCameraView}
+            />
+            <View style={styles.scannerOverlayMask} pointerEvents="none">
+              <View style={styles.scannerFocusTarget}>
+                <View style={[styles.scannerCorner, styles.cornerTopLeft]} />
+                <View style={[styles.scannerCorner, styles.cornerTopRight]} />
+                <View style={[styles.scannerCorner, styles.cornerBottomLeft]} />
+                <View style={[styles.scannerCorner, styles.cornerBottomRight]} />
+
+                <Animated.View
+                  style={[
+                    styles.scannerLaserLine,
+                    {
+                      transform: [
+                        {
+                          translateY: laserAnim.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: [0, 210],
+                          }),
+                        },
+                      ],
+                    },
+                  ]}
+                />
+              </View>
+            </View>
+          </View>
+
+          {/* Guide & Manual Fallback Button */}
+          <View style={styles.scannerModalFooter}>
+            <Text style={styles.scannerInstructionText}>
+              Align the merchant counter QR code within the frame to join the live line.
+            </Text>
+            <TouchableOpacity
+              style={styles.manualFallbackBtn}
+              onPress={() => {
+                setScannerOpen(false);
+                navigation.navigate("ScanJoin");
+              }}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="keypad-outline" size={16} color={colors.primary} />
+              <Text style={styles.manualFallbackText}>Or enter store code manually</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </AppScreen>
   );
 }
@@ -454,5 +612,150 @@ const styles = StyleSheet.create({
     color: colors.muted,
     lineHeight: 18,
     flexWrap: "wrap",
+  },
+  scannerModalRoot: {
+    flex: 1,
+    backgroundColor: colors.bg,
+    paddingHorizontal: spacing.lg,
+    justifyContent: "space-between",
+  },
+  scannerModalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: spacing.sm,
+  },
+  scannerModalTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  liveIndicatorDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.success,
+  },
+  scannerModalTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: colors.text,
+  },
+  scannerModalControls: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  scannerControlBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: colors.cardElevated,
+    borderColor: colors.border,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  scannerControlBtnActive: {
+    backgroundColor: colors.primarySubtle,
+    borderColor: colors.warning,
+  },
+  scannerViewfinderWrap: {
+    flex: 1,
+    maxHeight: 460,
+    borderRadius: radii.xl,
+    overflow: "hidden",
+    position: "relative",
+    borderColor: colors.border,
+    borderWidth: 1,
+    marginVertical: spacing.md,
+  },
+  scannerCameraView: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: "100%",
+    height: "100%",
+  },
+  scannerOverlayMask: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(5, 11, 24, 0.45)",
+  },
+  scannerFocusTarget: {
+    width: 220,
+    height: 220,
+    position: "relative",
+  },
+  scannerCorner: {
+    position: "absolute",
+    width: 28,
+    height: 28,
+    borderColor: colors.primary,
+  },
+  cornerTopLeft: {
+    top: 0,
+    left: 0,
+    borderTopWidth: 3,
+    borderLeftWidth: 3,
+  },
+  cornerTopRight: {
+    top: 0,
+    right: 0,
+    borderTopWidth: 3,
+    borderRightWidth: 3,
+  },
+  cornerBottomLeft: {
+    bottom: 0,
+    left: 0,
+    borderBottomWidth: 3,
+    borderLeftWidth: 3,
+  },
+  cornerBottomRight: {
+    bottom: 0,
+    right: 0,
+    borderBottomWidth: 3,
+    borderRightWidth: 3,
+  },
+  scannerLaserLine: {
+    width: "100%",
+    height: 2,
+    backgroundColor: colors.primary,
+    ...shadows.glow,
+  },
+  scannerModalFooter: {
+    gap: spacing.md,
+    alignItems: "center",
+    paddingBottom: spacing.sm,
+  },
+  scannerInstructionText: {
+    fontSize: 13,
+    color: colors.muted,
+    textAlign: "center",
+    lineHeight: 18,
+    maxWidth: 300,
+  },
+  manualFallbackBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radii.md,
+    backgroundColor: colors.card,
+    borderColor: colors.border,
+    borderWidth: 1,
+  },
+  manualFallbackText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: colors.primary,
   },
 });
