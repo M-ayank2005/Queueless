@@ -437,13 +437,6 @@ export default function Dashboard() {
               <Settings className="w-4 h-4 text-blue-400" />
               Store Settings
             </Button>
-            <Button
-              onClick={handleCopyStoreLink}
-              className="bg-blue-600 hover:bg-blue-500 text-white flex items-center gap-2 shadow-[0_0_16px_rgba(59,130,246,0.3)]"
-            >
-              <Copy className="w-4 h-4" />
-              Copy Store Link
-            </Button>
           </div>
         </div>
 
