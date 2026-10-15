@@ -1,305 +1,855 @@
 "use client";
-import React, { useState, useEffect } from "react";
+
+import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import api from "@/lib/api";
 import Navbar from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Plus, Trash2, CheckCircle, XCircle, QrCode } from "lucide-react";
-import { motion } from "framer-motion";
+import { StatusBadge } from "@/components/ui/StatusBadge";
+import { useToast } from "@/components/ui/Toast";
+import { 
+  Plus, 
+  Trash2, 
+  CheckCircle2, 
+  XCircle, 
+  QrCode, 
+  Settings, 
+  Store, 
+  Clock, 
+  MapPin, 
+  Users, 
+  Phone, 
+  Printer, 
+  Copy, 
+  Play,
+  X,
+  Sparkles,
+  ExternalLink
+} from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import { QRCodeSVG as QRCode } from "qrcode.react";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
-import { io } from "socket.io-client";
+import { io, Socket } from "socket.io-client";
 
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-const socket = io(process.env.NEXT_PUBLIC_API_URL?.replace("/api", "") || "http://localhost:5000");
+
+interface BusinessProfile {
+  _id?: string;
+  shopName?: string;
+  address?: string;
+  uniqueQrCode?: string;
+  services?: Array<{
+    _id?: string;
+    name: string;
+    durationMin: number;
+    cost: number;
+  }>;
+  workingHours?: {
+    openTime: string;
+    closeTime: string;
+    closedDays: number[];
+  };
+}
+
+interface QueueItem {
+  _id: string;
+  customerName?: string;
+  status: "waiting" | "in_progress" | "completed" | "cancelled" | string;
+  joinedAt?: string;
+  selectedServices: Array<{
+    name: string;
+    durationMin?: number;
+    cost?: number;
+  }>;
+  customerId?: {
+    _id?: string;
+    name?: string;
+    phone?: string;
+    email?: string;
+  };
+}
 
 export default function Dashboard() {
-    const [services, setServices] = useState<any[]>([]);
-    const [queue, setQueue] = useState<any[]>([]);
-    const [businessProfile, setBusinessProfile] = useState<any>(null);
-    const [newService, setNewService] = useState({ name: "", durationMin: "", cost: "" });
-    const router = useRouter();
+  const [services, setServices] = useState<any[]>([]);
+  const [queue, setQueue] = useState<QueueItem[]>([]);
+  const [businessProfile, setBusinessProfile] = useState<BusinessProfile | null>(null);
+  const [newService, setNewService] = useState({ name: "", durationMin: "", cost: "" });
+  const [isAddingService, setIsAddingService] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const router = useRouter();
+  const { toast } = useToast();
 
-    // Settings State
-    const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-    const [settingsForm, setSettingsForm] = useState({
-        shopName: "",
-        address: "",
-        openTime: "09:00",
-        closeTime: "17:00",
-        closedDays: [] as number[]
+  // Settings Modal State
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
+  const [settingsForm, setSettingsForm] = useState({
+    shopName: "",
+    address: "",
+    openTime: "09:00",
+    closeTime: "17:00",
+    closedDays: [] as number[]
+  });
+
+  const socketRef = useRef<Socket | null>(null);
+
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    const storedUser = localStorage.getItem("user");
+    if (!token || !storedUser) {
+      router.push("/login");
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(storedUser);
+      if (parsed.role !== "business") {
+        router.push("/");
+        return;
+      }
+    } catch {
+      router.push("/login");
+      return;
+    }
+
+    fetchDashboardData();
+
+    // Setup Socket connection
+    const socketUrl = process.env.NEXT_PUBLIC_API_URL?.replace("/api", "") || "http://localhost:5000";
+    const socketInstance = io(socketUrl, {
+      transports: ["websocket", "polling"]
+    });
+    socketRef.current = socketInstance;
+
+    socketInstance.on("connect", () => {
+      console.log("Connected to real-time counter socket");
     });
 
-    useEffect(() => {
-        fetchData();
-        
-        // Socket listeners
-        socket.on("connect", () => {
-            console.log("Connected to socket");
+    socketInstance.on("queue_updated", () => {
+      fetchQueueOnly();
+    });
+
+    return () => {
+      socketInstance.disconnect();
+    };
+  }, [router]);
+
+  // Join business room for live real-time sync
+  useEffect(() => {
+    if (businessProfile?._id && socketRef.current) {
+      socketRef.current.emit("join_business", businessProfile._id);
+    }
+  }, [businessProfile]);
+
+  const fetchDashboardData = async () => {
+    try {
+      const [profileRes, queueRes] = await Promise.all([
+        api.get("/business/me"),
+        api.get("/business/queue")
+      ]);
+
+      const profile = profileRes.data;
+      setBusinessProfile(profile);
+      setServices(profile.services || []);
+      setQueue(queueRes.data || []);
+
+      if (profile) {
+        setSettingsForm({
+          shopName: profile.shopName || "",
+          address: profile.address || "",
+          openTime: profile.workingHours?.openTime || "09:00",
+          closeTime: profile.workingHours?.closeTime || "17:00",
+          closedDays: profile.workingHours?.closedDays || []
         });
+      }
+    } catch (error: any) {
+      if (error?.response?.status === 401) {
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+        router.push("/login");
+      } else {
+        toast.error("Could not load dashboard information");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
-        socket.on("queue_updated", (data: any) => {
-            console.log("Queue Update Received:", data);
-            fetchData(); // Simplest strategy: refetch data on event
-        });
+  const fetchQueueOnly = async () => {
+    try {
+      const queueRes = await api.get("/business/queue");
+      setQueue(queueRes.data || []);
+    } catch {
+      // Background sync error - non blocking
+    }
+  };
 
-        return () => {
-            socket.off("connect");
-            socket.off("queue_updated");
-        };
-    }, []);
+  const handleAddService = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newService.name.trim() || !newService.durationMin || !newService.cost) {
+      toast.error("Please fill in service name, duration, and price");
+      return;
+    }
 
-    // Join room when profile is loaded
-    useEffect(() => {
-        if (businessProfile?._id) {
-             socket.emit("join_business", businessProfile._id);
+    setIsAddingService(true);
+    const updatedServices = [
+      ...services,
+      {
+        name: newService.name.trim(),
+        durationMin: Math.max(1, Number(newService.durationMin)),
+        cost: Math.max(0, Number(newService.cost))
+      }
+    ];
+
+    try {
+      const res = await api.put("/business/services", { services: updatedServices });
+      setServices(res.data.services || updatedServices);
+      setNewService({ name: "", durationMin: "", cost: "" });
+      toast.success("New service added successfully!");
+    } catch {
+      toast.error("Failed to add service");
+    } finally {
+      setIsAddingService(false);
+    }
+  };
+
+  const handleRemoveService = async (index: number) => {
+    const updatedServices = services.filter((_, idx) => idx !== index);
+    try {
+      const res = await api.put("/business/services", { services: updatedServices });
+      setServices(res.data.services || updatedServices);
+      toast.info("Service removed");
+    } catch {
+      toast.error("Failed to delete service");
+    }
+  };
+
+  const handleUpdateStatus = async (id: string, newStatus: string) => {
+    try {
+      await api.put(`/business/queue/${id}/status`, { status: newStatus });
+      await fetchQueueOnly();
+      if (newStatus === "in_progress") toast.info("Customer called to counter");
+      if (newStatus === "completed") toast.success("Service marked as completed!");
+      if (newStatus === "cancelled") toast.info("Ticket cancelled");
+    } catch {
+      toast.error("Failed to update queue ticket");
+    }
+  };
+
+  const handleSaveSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingSettings(true);
+    try {
+      const payload = {
+        shopName: settingsForm.shopName.trim(),
+        address: settingsForm.address.trim(),
+        workingHours: {
+          openTime: settingsForm.openTime,
+          closeTime: settingsForm.closeTime,
+          closedDays: settingsForm.closedDays
         }
-    }, [businessProfile]);
+      };
 
-    const fetchData = async () => {
-        try {
-            const profileRes = await api.get("/business/me");
-            setBusinessProfile(profileRes.data);
-            setServices(profileRes.data.services || []);
-            
-            // Populating settings form
-            if (profileRes.data) {
-                 setSettingsForm({
-                    shopName: profileRes.data.shopName || "",
-                    address: profileRes.data.address || "",
-                    openTime: profileRes.data.workingHours?.openTime || "09:00",
-                    closeTime: profileRes.data.workingHours?.closeTime || "17:00",
-                    closedDays: profileRes.data.workingHours?.closedDays || []
-                 });
+      const res = await api.put("/business/settings", payload);
+      setBusinessProfile(prev => ({ ...prev, ...res.data }));
+      setIsSettingsOpen(false);
+      toast.success("Store settings updated successfully!");
+    } catch {
+      toast.error("Failed to update store settings");
+    } finally {
+      setIsSavingSettings(false);
+    }
+  };
+
+  const toggleClosedDay = (dayIndex: number) => {
+    setSettingsForm(prev => {
+      const exists = prev.closedDays.includes(dayIndex);
+      return {
+        ...prev,
+        closedDays: exists
+          ? prev.closedDays.filter(d => d !== dayIndex)
+          : [...prev.closedDays, dayIndex]
+      };
+    });
+  };
+
+  const handleCopyStoreLink = () => {
+    if (!businessProfile?.uniqueQrCode) return;
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    const storeUrl = `${origin}/store/${businessProfile.uniqueQrCode}`;
+    navigator.clipboard.writeText(storeUrl);
+    toast.success("Store URL copied to clipboard!");
+  };
+
+  const handlePrintQR = () => {
+    if (!businessProfile?.uniqueQrCode) return;
+    const qrSvgElement = document.getElementById("store-qr-code-svg");
+    if (!qrSvgElement) {
+      toast.error("QR Code graphic not found");
+      return;
+    }
+
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) {
+      toast.error("Could not open print window. Please allow popups.");
+      return;
+    }
+
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Scan to Join Queue - ${businessProfile.shopName || "QueueLess"}</title>
+          <style>
+            body {
+              font-family: system-ui, -apple-system, sans-serif;
+              text-align: center;
+              padding: 40px;
+              background: #fff;
+              color: #111;
             }
-
-            const queueRes = await api.get("/business/queue");
-            setQueue(queueRes.data);
-        } catch (error) {
-            console.error("Failed to fetch dashboard data", error);
-            // router.push("/login"); // Redirect if unauthorized
-        }
-    };
-
-    const addService = async () => {
-        if (!newService.name || !newService.durationMin || !newService.cost) return;
-        const updatedServices = [...services, {
-            name: newService.name,
-            durationMin: Number(newService.durationMin),
-            cost: Number(newService.cost)
-        }];
-        
-        try {
-            const res = await api.put("/business/services", { services: updatedServices });
-            setServices(res.data.services);
-            setNewService({ name: "", durationMin: "", cost: "" });
-        } catch (error) {
-            alert("Failed to update services");
-        }
-    };
-
-    const removeService = async (index: number) => {
-        const updatedServices = [...services];
-        updatedServices.splice(index, 1);
-        try {
-            const res = await api.put("/business/services", { services: updatedServices });
-            setServices(res.data.services);
-        } catch (error) {
-            alert("Failed to remove service");
-        }
-    };
-
-    const updateStatus = async (id: string, status: string) => {
-        try {
-            await api.put(`/business/queue/${id}/status`, { status });
-            fetchData();
-        } catch (error) {
-            console.error("Update failed");
-        }
-    };
-
-    if (!businessProfile && services.length === 0) return <div className="p-10 text-center text-white">Loading Dashboard...</div>;
-
-    return (
-        <div className="min-h-screen bg-black text-white p-6 pt-24">
-            <Navbar />
-            
-            <div className="container mx-auto max-w-6xl">
-                <h1 className="text-3xl font-bold mb-8">Business Dashboard: {businessProfile?.shopName}</h1>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    {/* Left Column: Queue Management */}
-                    <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }}>
-                        <Card className="bg-zinc-900 border-zinc-800 h-full">
-                            <CardHeader>
-                                <CardTitle className="flex justify-between items-center text-white">
-                                    Current Queue
-                                    <span className="text-sm font-normal text-gray-400 bg-zinc-800 px-3 py-1 rounded-full">
-                                        {queue.filter(q => q.status === 'waiting' || q.status === 'in_progress').length} Active
-                                    </span>
-                                </CardTitle>
-                                <CardDescription>Manage your active customers here.</CardDescription>
-                            </CardHeader>
-                            <CardContent className="space-y-4">
-                                {queue.length === 0 ? (
-                                    <p className="text-gray-500 text-center py-10">No customers in queue.</p>
-                                ) : (
-                                    queue.map((item) => (
-                                        <div key={item._id} className={`flex items-start justify-between p-4 rounded-lg border border-zinc-800 ${item.status === 'completed' ? 'bg-zinc-900/50 opacity-50' : 'bg-zinc-950'}`}>
-                                            <div className="space-y-1">
-                                                <div className="flex items-center gap-2">
-                                                    <span className="text-xl font-bold font-mono text-blue-400">
-                                                        #{item._id.slice(-4).toUpperCase()}
-                                                    </span>
-                                                    <h3 className="font-semibold text-lg">{item.customerId?.name || item.customerName}</h3>
-                                                </div>
-                                                <p className="text-xs text-gray-400 flex items-center gap-1">
-                                                    📞 {item.customerId?.phone || "No phone"}
-                                                </p>
-                                                <p className="text-sm text-gray-300">
-                                                    {item.selectedServices.map((s: any) => s.name).join(", ")}
-                                                </p>
-                                                <span className={`text-xs uppercase px-2 py-0.5 rounded-full inline-block mt-2 ${item.status === 'waiting' ? 'bg-yellow-900/30 text-yellow-500' : 'bg-green-900/30 text-green-500'}`}>
-                                                    {item.status}
-                                                </span>
-                                            </div>
-                                            {item.status !== 'completed' && item.status !== 'cancelled' && (
-                                                <div className="flex gap-2">
-                                                    <Button size="icon" variant="ghost" onClick={() => updateStatus(item._id, "completed")} className="text-green-500 hover:text-green-400 hover:bg-green-900/20">
-                                                        <CheckCircle className="w-5 h-5" />
-                                                    </Button>
-                                                    <Button size="icon" variant="ghost" onClick={() => updateStatus(item._id, "cancelled")} className="text-red-500 hover:text-red-400 hover:bg-red-900/20">
-                                                        <XCircle className="w-5 h-5" />
-                                                    </Button>
-                                                </div>
-                                            )}
-                                        </div>
-                                    ))
-                                )}
-                            </CardContent>
-                        </Card>
-                    </motion.div>
-
-                    {/* Right Column: Service Management & QR */}
-                    <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="space-y-8">
-                        
-                        {/* Services */}
-                        <Card className="bg-zinc-900 border-zinc-800">
-                            <CardHeader>
-                                <CardTitle className="text-white">Services</CardTitle>
-                                <CardDescription>Manage what you offer.</CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="space-y-4 mb-6">
-                                    {services.map((service, idx) => (
-                                        <div key={idx} className="flex items-center justify-between bg-zinc-950 p-3 rounded border border-zinc-800">
-                                            <div>
-                                                <p className="font-medium text-white">{service.name}</p>
-                                                <p className="text-xs text-gray-400">{service.durationMin} min • ${service.cost}</p>
-                                            </div>
-                                            <Button variant="ghost" size="icon" onClick={() => removeService(idx)} className="text-red-400 hover:bg-zinc-900">
-                                                <Trash2 className="w-4 h-4" />
-                                            </Button>
-                                        </div>
-                                    ))}
-                                </div>
-                                
-                                <div className="grid grid-cols-3 gap-2 mb-2">
-                                    <Input 
-                                        placeholder="Name" 
-                                        className="bg-zinc-950 border-zinc-800 col-span-3 text-white" 
-                                        value={newService.name}
-                                        onChange={(e) => setNewService({...newService, name: e.target.value})}
-                                    />
-                                    <Input 
-                                        type="number" 
-                                        placeholder="Mins" 
-                                        className="bg-zinc-950 border-zinc-800 text-white" 
-                                        value={newService.durationMin}
-                                        onChange={(e) => setNewService({...newService, durationMin: e.target.value})}
-                                    />
-                                    <Input 
-                                        type="number" 
-                                        placeholder="Cost" 
-                                        className="bg-zinc-950 border-zinc-800 text-white" 
-                                        value={newService.cost}
-                                        onChange={(e) => setNewService({...newService, cost: e.target.value})}
-                                    />
-                                    <Button onClick={addService} className="bg-blue-600 hover:bg-blue-700 w-full" variant="secondary">
-                                        <Plus className="w-4 h-4" />
-                                    </Button>
-                                </div>
-                            </CardContent>
-                        </Card>
-
-                        {/* Store QR */}
-                        <Card className="bg-gradient-to-br from-blue-900/20 to-zinc-900 border-blue-500/30">
-                            <CardHeader>
-                                <CardTitle className="flex items-center gap-2 text-white">
-                                    <QrCode className="text-blue-400" /> Your Store QR
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent className="text-center">
-                                <div className="bg-white p-4 inline-block rounded-lg mb-4">
-                                    {businessProfile?.uniqueQrCode ? (
-                                       <QRCode 
-                                            value={`${typeof window !== 'undefined' ? window.location.origin : ''}/store/${businessProfile.uniqueQrCode}`}
-                                            size={128}
-                                        />
-                                    ) : (
-                                        <div className="w-32 h-32 bg-gray-200 flex items-center justify-center text-black font-bold">
-                                            Loading...
-                                        </div>
-                                    )}
-                                </div>
-                                <p className="text-sm text-gray-400 mb-4">Scan to join queue</p>
-                                <div className="text-xs text-gray-500 break-all mb-4">
-                                    {typeof window !== 'undefined' ? `${window.location.origin}/store/${businessProfile?.uniqueQrCode}` : ''}
-                                </div>
-                                <Button className="w-full bg-blue-600 hover:bg-blue-700" onClick={() => {
-                                    const qrValue = `${typeof window !== 'undefined' ? window.location.origin : ''}/store/${businessProfile.uniqueQrCode}`;
-                                    const printWindow = window.open('', '_blank');
-                                    if(printWindow) {
-                                        printWindow.document.write(`
-                                            <html>
-                                                <head>
-                                                    <title>Scan to Join Queue - ${businessProfile.shopName}</title>
-                                                    <style>
-                                                        body { font-family: sans-serif; text-align: center; padding: 40px; }
-                                                        .container { border: 2px solid #000; padding: 40px; border-radius: 20px; display: inline-block; }
-                                                        h1 { font-size: 32px; margin-bottom: 10px; }
-                                                        p { font-size: 18px; color: #555; }
-                                                        .qr { margin: 20px 0; }
-                                                    </style>
-                                                </head>
-                                                <body>
-                                                    <div class="container">
-                                                        <h1>QueueLess at ${businessProfile.shopName}</h1>
-                                                        <p>Scan this code to join the queue instantly!</p>
-                                                        <div class="qr">
-                                                            ${document.querySelector('svg')?.outerHTML || 'QR Code Error'}
-                                                        </div>
-                                                        <p>No app download required.</p>
-                                                    </div>
-                                                    <script>
-                                                        setTimeout(() => { window.print(); window.close(); }, 500);
-                                                    </script>
-                                                </body>
-                                            </html>
-                                        `);
-                                        printWindow.document.close();
-                                    }
-                                }}>Download / Print</Button>
-                            </CardContent>
-                        </Card>
-
-                    </motion.div>
-                </div>
+            .card {
+              border: 3px solid #111;
+              padding: 40px;
+              border-radius: 24px;
+              display: inline-block;
+              max-width: 420px;
+              margin: 0 auto;
+            }
+            h1 {
+              font-size: 28px;
+              margin: 0 0 8px 0;
+            }
+            .subtitle {
+              font-size: 16px;
+              color: #555;
+              margin-bottom: 24px;
+            }
+            .qr-wrapper {
+              margin: 24px 0;
+              display: flex;
+              justify-content: center;
+            }
+            .qr-wrapper svg {
+              width: 220px;
+              height: 220px;
+            }
+            .instruction {
+              font-size: 15px;
+              font-weight: 600;
+              color: #2563eb;
+              margin-bottom: 8px;
+            }
+            .subtext {
+              font-size: 13px;
+              color: #666;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="card">
+            <h1>${businessProfile.shopName || "QueueLess Store"}</h1>
+            <div class="subtitle">${businessProfile.address || "Digital Queue Counter"}</div>
+            <div class="qr-wrapper">
+              ${qrSvgElement.outerHTML}
             </div>
+            <div class="instruction">Scan with any smartphone camera</div>
+            <div class="subtext">No app install required • View live wait time & join line</div>
+          </div>
+          <script>
+            setTimeout(() => {
+              window.print();
+              window.close();
+            }, 400);
+          </script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#050B18] text-[#ECF2FF] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+          <p className="text-sm text-[#889DC2]">Loading Business Dashboard...</p>
         </div>
+      </div>
     );
+  }
+
+  const activeQueueCount = queue.filter(q => q.status === "waiting" || q.status === "in_progress").length;
+  const storeOrigin = typeof window !== "undefined" ? window.location.origin : "";
+  const storeUrl = `${storeOrigin}/store/${businessProfile?.uniqueQrCode || ""}`;
+
+  return (
+    <div className="min-h-screen bg-[#050B18] text-[#ECF2FF] pb-20">
+      <Navbar />
+
+      <main className="container mx-auto max-w-7xl px-4 pt-24">
+        {/* Dashboard Top Header */}
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8 pb-6 border-b border-[#203052]">
+          <div>
+            <div className="flex items-center gap-3 flex-wrap">
+              <h1 className="text-2xl sm:text-3xl font-extrabold text-[#ECF2FF]">
+                {businessProfile?.shopName || "Store Dashboard"}
+              </h1>
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                Store Live
+              </span>
+            </div>
+            <p className="text-xs sm:text-sm text-[#889DC2] flex items-center gap-1.5 mt-1.5">
+              <MapPin className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+              {businessProfile?.address || "Address not provided"}
+              <span className="text-[#203052] mx-1">•</span>
+              <Clock className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+              {businessProfile?.workingHours?.openTime && businessProfile?.workingHours?.closeTime
+                ? `${businessProfile.workingHours.openTime} - ${businessProfile.workingHours.closeTime}`
+                : "24/7 Service"}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <Button
+              onClick={() => setIsSettingsOpen(true)}
+              variant="outline"
+              className="border-[#203052] bg-[#101A32] hover:bg-[#152243] text-[#ECF2FF] flex items-center gap-2"
+            >
+              <Settings className="w-4 h-4 text-blue-400" />
+              Store Settings
+            </Button>
+            <Button
+              onClick={handleCopyStoreLink}
+              className="bg-blue-600 hover:bg-blue-500 text-white flex items-center gap-2 shadow-[0_0_16px_rgba(59,130,246,0.3)]"
+            >
+              <Copy className="w-4 h-4" />
+              Copy Store Link
+            </Button>
+          </div>
+        </div>
+
+        {/* Dashboard Responsive Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          {/* Left Column: Live Queue (7 cols on lg) */}
+          <div className="lg:col-span-7 space-y-6">
+            <Card className="bg-[#101A32] border-[#203052] shadow-xl">
+              <CardHeader className="pb-4 border-b border-[#203052]/60">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-blue-500/10 border border-blue-500/25 flex items-center justify-center text-blue-400">
+                      <Users className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-lg font-bold text-[#ECF2FF]">
+                        Current Customer Queue
+                      </CardTitle>
+                      <CardDescription className="text-xs text-[#889DC2]">
+                        Real-time visitor flow and counter caller.
+                      </CardDescription>
+                    </div>
+                  </div>
+                  <span className="text-xs font-bold font-mono px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-400">
+                    {activeQueueCount} In Line
+                  </span>
+                </div>
+              </CardHeader>
+
+              <CardContent className="pt-5 space-y-3">
+                {queue.length === 0 ? (
+                  <div className="text-center py-16 px-4 border border-dashed border-[#203052] rounded-xl bg-[#0A1329]/50">
+                    <Users className="w-10 h-10 text-[#889DC2]/60 mx-auto mb-3" />
+                    <h3 className="text-base font-semibold text-[#ECF2FF] mb-1">
+                      No Customers in Line
+                    </h3>
+                    <p className="text-xs text-[#889DC2] max-w-sm mx-auto">
+                      Your queue is currently clear. Display your storefront QR code for walk-ins to scan and join.
+                    </p>
+                  </div>
+                ) : (
+                  queue.map((item) => {
+                    const customerName = item.customerId?.name || item.customerName || "Customer";
+                    const customerPhone = item.customerId?.phone;
+                    const ticketNumber = item._id.slice(-4).toUpperCase();
+                    const servicesString = item.selectedServices?.map(s => s.name).join(", ");
+                    const isCompleted = item.status === "completed";
+                    const isCancelled = item.status === "cancelled";
+                    const isWaiting = item.status === "waiting";
+                    const isInProgress = item.status === "in_progress";
+
+                    return (
+                      <motion.div
+                        key={item._id}
+                        layout
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className={`p-4 rounded-xl border transition-all ${
+                          isCompleted || isCancelled
+                            ? "bg-[#0A1329]/40 border-[#203052]/40 opacity-60"
+                            : isInProgress
+                            ? "bg-[#152243] border-blue-500/50 shadow-[0_0_16px_rgba(59,130,246,0.15)]"
+                            : "bg-[#0A1329] border-[#203052]"
+                        }`}
+                      >
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-blue-500/15 border border-blue-500/30 text-blue-400">
+                                #{ticketNumber}
+                              </span>
+                              <h3 className="font-bold text-base text-[#ECF2FF]">
+                                {customerName}
+                              </h3>
+                              <StatusBadge status={item.status} />
+                            </div>
+
+                            {customerPhone && (
+                              <p className="text-xs text-[#889DC2] flex items-center gap-1">
+                                <Phone className="w-3 h-3 text-blue-400" />
+                                {customerPhone}
+                              </p>
+                            )}
+
+                            {servicesString && (
+                              <p className="text-xs text-[#C5D5F5] pt-0.5">
+                                <span className="text-[#889DC2]">Services:</span> {servicesString}
+                              </p>
+                            )}
+                          </div>
+
+                          {/* Action Buttons for active tickets */}
+                          {!isCompleted && !isCancelled && (
+                            <div className="flex items-center gap-2 shrink-0 border-t sm:border-t-0 pt-2 sm:pt-0 border-[#203052]">
+                              {isWaiting && (
+                                <Button
+                                  size="sm"
+                                  onClick={() => handleUpdateStatus(item._id, "in_progress")}
+                                  className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow-sm"
+                                >
+                                  <Play className="w-3.5 h-3.5 fill-current" />
+                                  Call Customer
+                                </Button>
+                              )}
+
+                              {isInProgress && (
+                                <Button
+                                  size="sm"
+                                  onClick={() => handleUpdateStatus(item._id, "completed")}
+                                  className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow-sm"
+                                >
+                                  <CheckCircle2 className="w-3.5 h-3.5" />
+                                  Complete
+                                </Button>
+                              )}
+
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleUpdateStatus(item._id, "cancelled")}
+                                className="border-red-500/30 hover:bg-red-500/10 text-red-400 text-xs flex items-center gap-1"
+                                title="Cancel Ticket"
+                              >
+                                <XCircle className="w-3.5 h-3.5" />
+                                Cancel
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      </motion.div>
+                    );
+                  })
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Right Column: Services & Store QR (5 cols on lg) */}
+          <div className="lg:col-span-5 space-y-6">
+            {/* Services Management Card */}
+            <Card className="bg-[#101A32] border-[#203052] shadow-xl">
+              <CardHeader className="pb-3 border-b border-[#203052]/60">
+                <CardTitle className="text-base font-bold text-[#ECF2FF] flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-blue-400" />
+                  Offered Services
+                </CardTitle>
+                <CardDescription className="text-xs text-[#889DC2]">
+                  Customers select from these when scanning your QR.
+                </CardDescription>
+              </CardHeader>
+
+              <CardContent className="pt-4 space-y-4">
+                {/* Services List */}
+                <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                  {services.length === 0 ? (
+                    <p className="text-xs text-[#889DC2] text-center py-4">
+                      No services added yet. Add at least one below.
+                    </p>
+                  ) : (
+                    services.map((service, idx) => (
+                      <div
+                        key={idx}
+                        className="flex items-center justify-between p-3 rounded-xl bg-[#0A1329] border border-[#203052] text-sm"
+                      >
+                        <div>
+                          <div className="font-semibold text-[#ECF2FF] text-xs sm:text-sm">
+                            {service.name}
+                          </div>
+                          <div className="text-[11px] text-[#889DC2] mt-0.5">
+                            {service.durationMin} mins • ${service.cost}
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => handleRemoveService(idx)}
+                          className="p-1.5 rounded-lg text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 transition-colors"
+                          aria-label={`Remove service ${service.name}`}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                {/* Add Service Inline Form */}
+                <form onSubmit={handleAddService} className="pt-3 border-t border-[#203052] space-y-2">
+                  <Input
+                    placeholder="Service Name (e.g. Haircut)"
+                    value={newService.name}
+                    onChange={(e) => setNewService({ ...newService, name: e.target.value })}
+                    className="bg-[#0A1329] border-[#203052] text-xs text-[#ECF2FF]"
+                    required
+                  />
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <Input
+                      type="number"
+                      placeholder="Duration (mins)"
+                      value={newService.durationMin}
+                      onChange={(e) => setNewService({ ...newService, durationMin: e.target.value })}
+                      className="bg-[#0A1329] border-[#203052] text-xs text-[#ECF2FF]"
+                      min="1"
+                      required
+                    />
+                    <Input
+                      type="number"
+                      placeholder="Price ($)"
+                      value={newService.cost}
+                      onChange={(e) => setNewService({ ...newService, cost: e.target.value })}
+                      className="bg-[#0A1329] border-[#203052] text-xs text-[#ECF2FF]"
+                      min="0"
+                      required
+                    />
+                  </div>
+
+                  <Button
+                    type="submit"
+                    disabled={isAddingService}
+                    className="w-full bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center justify-center gap-1.5"
+                  >
+                    <Plus className="w-4 h-4" />
+                    {isAddingService ? "Adding Service..." : "Add Service"}
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+
+            {/* Store QR Display Card */}
+            <Card className="bg-[#101A32] border border-[#203052] shadow-xl text-center">
+              <CardHeader className="pb-3 border-b border-[#203052]/60">
+                <CardTitle className="text-base font-bold text-[#ECF2FF] flex items-center justify-center gap-2">
+                  <QrCode className="w-4 h-4 text-blue-400" />
+                  Storefront QR Code
+                </CardTitle>
+                <CardDescription className="text-xs text-[#889DC2]">
+                  Customers scan this to open your store menu and book tickets.
+                </CardDescription>
+              </CardHeader>
+
+              <CardContent className="pt-4 flex flex-col items-center">
+                {/* QR Code Container with designated ID for reliable print capture */}
+                <div className="bg-white p-3.5 rounded-2xl shadow-xl inline-block mb-3">
+                  {businessProfile?.uniqueQrCode ? (
+                    <QRCode
+                      id="store-qr-code-svg"
+                      value={storeUrl}
+                      size={140}
+                      level="H"
+                    />
+                  ) : (
+                    <div className="w-[140px] h-[140px] flex items-center justify-center text-xs text-black font-semibold">
+                      Generating...
+                    </div>
+                  )}
+                </div>
+
+                <div className="w-full max-w-xs space-y-2 mb-4">
+                  <p className="text-xs font-mono text-[#889DC2] bg-[#0A1329] px-3 py-1.5 rounded-lg border border-[#203052] truncate">
+                    Code: {businessProfile?.uniqueQrCode || "..."}
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 w-full">
+                  <Button
+                    onClick={handleCopyStoreLink}
+                    variant="outline"
+                    className="border-[#203052] hover:bg-[#152243] text-xs text-[#ECF2FF] flex items-center justify-center gap-1.5"
+                  >
+                    <Copy className="w-3.5 h-3.5 text-blue-400" />
+                    Copy Link
+                  </Button>
+                  <Button
+                    onClick={handlePrintQR}
+                    className="bg-blue-600 hover:bg-blue-500 text-xs text-white font-medium flex items-center justify-center gap-1.5"
+                  >
+                    <Printer className="w-3.5 h-3.5" />
+                    Print Sign
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </main>
+
+      {/* Store Settings Modal */}
+      <AnimatePresence>
+        {isSettingsOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsSettingsOpen(false)}
+              className="fixed inset-0 bg-black/80 backdrop-blur-sm"
+              aria-hidden="true"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 16 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 16 }}
+              className="relative z-50 w-full max-w-lg rounded-2xl border border-[#203052] bg-[#101A32] p-6 shadow-2xl"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="settings-dialog-title"
+            >
+              <div className="flex items-center justify-between pb-4 border-b border-[#203052]">
+                <h2 id="settings-dialog-title" className="text-lg font-bold text-[#ECF2FF] flex items-center gap-2">
+                  <Settings className="w-4 h-4 text-blue-400" />
+                  Store Configuration
+                </h2>
+                <button
+                  onClick={() => setIsSettingsOpen(false)}
+                  className="p-1 rounded-lg text-[#889DC2] hover:text-[#ECF2FF] hover:bg-[#152243]"
+                  aria-label="Close dialog"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleSaveSettings} className="space-y-4 pt-4">
+                <div className="space-y-1.5">
+                  <Label htmlFor="shop-name" className="text-xs text-[#C5D5F5] font-medium">
+                    Store / Shop Name *
+                  </Label>
+                  <Input
+                    id="shop-name"
+                    value={settingsForm.shopName}
+                    onChange={(e) => setSettingsForm({ ...settingsForm, shopName: e.target.value })}
+                    className="bg-[#0A1329] border-[#203052] text-[#ECF2FF]"
+                    placeholder="e.g. Modern Barber & Spa"
+                    required
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="shop-address" className="text-xs text-[#C5D5F5] font-medium">
+                    Store Address / Location
+                  </Label>
+                  <Input
+                    id="shop-address"
+                    value={settingsForm.address}
+                    onChange={(e) => setSettingsForm({ ...settingsForm, address: e.target.value })}
+                    className="bg-[#0A1329] border-[#203052] text-[#ECF2FF]"
+                    placeholder="e.g. 124 Market Street, Suite 400"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="open-time" className="text-xs text-[#C5D5F5] font-medium">
+                      Opening Time
+                    </Label>
+                    <Input
+                      id="open-time"
+                      type="time"
+                      value={settingsForm.openTime}
+                      onChange={(e) => setSettingsForm({ ...settingsForm, openTime: e.target.value })}
+                      className="bg-[#0A1329] border-[#203052] text-[#ECF2FF]"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor="close-time" className="text-xs text-[#C5D5F5] font-medium">
+                      Closing Time
+                    </Label>
+                    <Input
+                      id="close-time"
+                      type="time"
+                      value={settingsForm.closeTime}
+                      onChange={(e) => setSettingsForm({ ...settingsForm, closeTime: e.target.value })}
+                      className="bg-[#0A1329] border-[#203052] text-[#ECF2FF]"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2 pt-1">
+                  <Label className="text-xs text-[#C5D5F5] font-medium">
+                    Closed Days (Check days when store is closed)
+                  </Label>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {DAYS.map((dayName, idx) => {
+                      const isChecked = settingsForm.closedDays.includes(idx);
+                      return (
+                        <button
+                          key={dayName}
+                          type="button"
+                          onClick={() => toggleClosedDay(idx)}
+                          className={`px-2.5 py-1.5 rounded-lg text-xs font-medium border text-center transition-colors ${
+                            isChecked
+                              ? "bg-rose-500/15 border-rose-500/40 text-rose-300"
+                              : "bg-[#0A1329] border-[#203052] text-[#889DC2] hover:text-[#ECF2FF]"
+                          }`}
+                        >
+                          {dayName.slice(0, 3)} {isChecked ? "✗" : ""}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end gap-3 pt-4 border-t border-[#203052]">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setIsSettingsOpen(false)}
+                    className="border-[#203052] hover:bg-[#152243] text-[#ECF2FF]"
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="submit"
+                    disabled={isSavingSettings}
+                    className="bg-blue-600 hover:bg-blue-500 text-white min-w-[120px]"
+                  >
+                    {isSavingSettings ? "Saving..." : "Save Settings"}
+                  </Button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
 }

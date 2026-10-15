@@ -1,32 +1,32 @@
 import React, { useEffect, useState } from "react";
-import { ActivityIndicator, Alert, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import {
+  Alert,
+  Platform,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Ionicons } from "@expo/vector-icons";
 import AppButton from "../../components/AppButton";
 import AppLoader from "../../components/AppLoader";
 import AppScreen from "../../components/AppScreen";
 import Card from "../../components/Card";
+import StatusBadge from "../../components/StatusBadge";
 import { api } from "../../lib/api";
 import { RootStackParamList } from "../../navigation/types";
 import { QueueEntry } from "../../types";
 import { colors } from "../../theme/colors";
+import { radii, shadows, spacing, typography } from "../../theme/theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "QueueStatus">;
 
-/**
- * QueueStatusScreen
- * Displays real-time ticket information, queue position, estimated wait time,
- * and service breakdown.
- */
 export default function QueueStatusScreen({ route, navigation }: Props) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [entry, setEntry] = useState<QueueEntry | null>(null);
 
-  /**
-   * Fetches the latest queue status for the active ticket.
-   * @param isManual - When true, triggers the button spinner without resetting the full-screen loader.
-   */
   const load = async (isManual = false) => {
     try {
       if (isManual) setRefreshing(true);
@@ -34,7 +34,11 @@ export default function QueueStatusScreen({ route, navigation }: Props) {
       setEntry(response.data);
     } catch {
       if (isManual) {
-        Alert.alert("Unable to load status", "Please try again shortly.");
+        if (Platform.OS === "web") {
+          window.alert("Unable to load latest status. Please try again shortly.");
+        } else {
+          Alert.alert("Unable to load status", "Please try again shortly.");
+        }
       }
     } finally {
       setLoading(false);
@@ -42,12 +46,6 @@ export default function QueueStatusScreen({ route, navigation }: Props) {
     }
   };
 
-  /**
-   * INTERVIEW TALKING POINT: Polling & Memory Leak Prevention
-   * - Polls every 15s to keep wait times and "people ahead" in sync without WebSockets.
-   * - The cleanup function `clearInterval(interval)` is critical: it cancels the background
-   *   timer when the user navigates away, preventing memory leaks and zombie requests.
-   */
   useEffect(() => {
     load();
     const interval = setInterval(() => load(false), 15000);
@@ -58,8 +56,8 @@ export default function QueueStatusScreen({ route, navigation }: Props) {
     return (
       <AppScreen scroll={false}>
         <AppLoader
-          message="Fetching live queue status..."
-          submessage="Checking your position and wait time"
+          message="Tracking live queue status..."
+          submessage="Checking your position and estimated wait time"
         />
       </AppScreen>
     );
@@ -68,22 +66,25 @@ export default function QueueStatusScreen({ route, navigation }: Props) {
   if (!entry) {
     return (
       <AppScreen>
-        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={20} color={colors.text} />
+        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.7}>
+          <View style={styles.backIconCircle}>
+            <Ionicons name="arrow-back" size={18} color={colors.text} />
+          </View>
           <Text style={styles.backText}>Back</Text>
         </TouchableOpacity>
 
-        <Card style={styles.errorCard}>
-          <Ionicons name="alert-circle-outline" size={36} color="#EF4444" />
-          <Text style={styles.title}>Queue Ticket Not Found</Text>
-          <Text style={styles.muted}>This ticket may have expired or been removed.</Text>
-          <AppButton title="Go Back" variant="secondary" onPress={() => navigation.goBack()} />
+        <Card variant="elevated" style={styles.errorCard}>
+          <View style={styles.errorIconCircle}>
+            <Ionicons name="alert-circle-outline" size={36} color={colors.danger} />
+          </View>
+          <Text style={styles.errorTitle}>Queue Ticket Not Found</Text>
+          <Text style={styles.errorMuted}>This ticket may have expired or was removed by the merchant.</Text>
+          <AppButton title="Return to Dashboard" variant="secondary" onPress={() => navigation.goBack()} />
         </Card>
       </AppScreen>
     );
   }
 
-  // Derive view metrics with defensive defaults for undefined/null API properties
   const wait = entry.currentEstimatedWait ?? 0;
   const ahead = entry.peopleAhead ?? 0;
   const isCompleted = entry.status === "completed";
@@ -98,24 +99,30 @@ export default function QueueStatusScreen({ route, navigation }: Props) {
   const shopAddress =
     entry.businessId?.businessProfile?.address ||
     entry.businessId?.address ||
-    "";
+    "Store Location";
 
-  // Calculate aggregate invoice sum across selected services
   const totalCost = (entry.selectedServices || []).reduce(
     (acc, s) => acc + (Number(s.cost) || 0),
     0
   );
 
+  const ticketCode = `#${entry._id.slice(-6).toUpperCase()}`;
+
+  // Timeline step calculation
+  const currentStep = isCancelled ? 0 : isCompleted ? 3 : isInProgress ? 2 : 1;
+
   return (
     <AppScreen>
-      {/* Top Header Row */}
+      {/* Top Header Row with Back and Live Sync Indicator */}
       <View style={styles.topRow}>
         <TouchableOpacity
           style={styles.backBtn}
           onPress={() => navigation.goBack()}
           activeOpacity={0.7}
         >
-          <Ionicons name="arrow-back" size={20} color={colors.text} />
+          <View style={styles.backIconCircle}>
+            <Ionicons name="arrow-back" size={18} color={colors.text} />
+          </View>
           <Text style={styles.backText}>Back</Text>
         </TouchableOpacity>
 
@@ -125,74 +132,96 @@ export default function QueueStatusScreen({ route, navigation }: Props) {
         </View>
       </View>
 
-      {/* Hero Boarding Pass Card */}
-      <Card style={styles.ticketCard}>
+      {/* Hero Boarding Pass Ticket Card */}
+      <Card variant="glow" style={styles.ticketCard}>
+        {/* Ticket Header */}
         <View style={styles.ticketHeader}>
           <View style={styles.storeCol}>
-            <Text style={styles.shopNameText}>{shopName}</Text>
-            {shopAddress ? <Text style={styles.shopAddressText}>{shopAddress}</Text> : null}
+            <Text style={styles.shopNameText} numberOfLines={1}>{shopName}</Text>
+            <Text style={styles.shopAddressText} numberOfLines={1}>📍 {shopAddress}</Text>
           </View>
-
-          <View
-            style={[
-              styles.statusPill,
-              isCompleted && styles.statusCompleted,
-              isCancelled && styles.statusCancelled,
-              isInProgress && styles.statusProgress,
-            ]}
-          >
-            <View
-              style={[
-                styles.statusDot,
-                isCompleted && { backgroundColor: "#10B981" },
-                isCancelled && { backgroundColor: "#EF4444" },
-                isInProgress && { backgroundColor: colors.primary },
-              ]}
-            />
-            <Text
-              style={[
-                styles.statusPillText,
-                isCompleted && { color: "#10B981" },
-                isCancelled && { color: "#EF4444" },
-                isInProgress && { color: colors.primary },
-              ]}
-            >
-              {entry.status.replace("_", " ").toUpperCase()}
-            </Text>
-          </View>
+          <StatusBadge status={entry.status} />
         </View>
 
+        {/* Big Ticket Number Banner */}
         <View style={styles.ticketNumberSection}>
           <Text style={styles.ticketLabel}>YOUR TICKET NUMBER</Text>
-          <Text style={styles.ticketBigNumber}>
-            #{entry._id.slice(-6).toUpperCase()}
-          </Text>
+          <Text style={styles.ticketBigNumber}>{ticketCode}</Text>
+        </View>
+
+        {/* Progress Step Timeline */}
+        <View style={styles.timelineWrap}>
+          <View style={styles.stepItem}>
+            <View style={[styles.stepCircle, currentStep >= 1 && styles.stepCircleActive]}>
+              <Ionicons name="checkmark" size={12} color="#FFF" />
+            </View>
+            <Text style={[styles.stepLabel, currentStep >= 1 && styles.stepLabelActive]}>Booked</Text>
+          </View>
+
+          <View style={[styles.stepLine, currentStep >= 2 && styles.stepLineActive]} />
+
+          <View style={styles.stepItem}>
+            <View style={[styles.stepCircle, currentStep >= 1 && !isCompleted && !isCancelled && styles.stepCirclePulse, currentStep >= 2 && styles.stepCircleActive]}>
+              {currentStep >= 2 ? (
+                <Ionicons name="checkmark" size={12} color="#FFF" />
+              ) : (
+                <View style={styles.innerDot} />
+              )}
+            </View>
+            <Text style={[styles.stepLabel, currentStep >= 1 && styles.stepLabelActive]}>Waiting</Text>
+          </View>
+
+          <View style={[styles.stepLine, currentStep >= 3 && styles.stepLineActive]} />
+
+          <View style={styles.stepItem}>
+            <View style={[styles.stepCircle, currentStep >= 2 && styles.stepCircleActive]}>
+              {currentStep >= 3 ? (
+                <Ionicons name="checkmark" size={12} color="#FFF" />
+              ) : (
+                <View style={styles.innerDot} />
+              )}
+            </View>
+            <Text style={[styles.stepLabel, currentStep >= 2 && styles.stepLabelActive]}>Serving</Text>
+          </View>
+
+          <View style={[styles.stepLine, currentStep === 3 && styles.stepLineActive]} />
+
+          <View style={styles.stepItem}>
+            <View style={[styles.stepCircle, currentStep === 3 && styles.stepCircleSuccess]}>
+              {currentStep === 3 ? (
+                <Ionicons name="checkmark" size={12} color="#FFF" />
+              ) : (
+                <View style={styles.innerDot} />
+              )}
+            </View>
+            <Text style={[styles.stepLabel, currentStep === 3 && styles.stepLabelActive]}>Done</Text>
+          </View>
         </View>
       </Card>
 
-      {/* Two Column Metric Cards */}
+      {/* Two Key Metrics Cards */}
       <View style={styles.metricRow}>
-        <Card style={styles.metricCard}>
-          <View style={styles.metricIconWrap}>
-            <Ionicons name="people-outline" size={22} color={colors.primary} />
+        <Card variant="elevated" style={styles.metricCard}>
+          <View style={[styles.metricIconWrap, { backgroundColor: colors.primarySubtle }]}>
+            <Ionicons name="people" size={20} color={colors.primary} />
           </View>
           <Text style={styles.metricBigVal}>{ahead}</Text>
           <Text style={styles.metricLabelText}>People Ahead</Text>
         </Card>
 
-        <Card style={styles.metricCard}>
-          <View style={[styles.metricIconWrap, { backgroundColor: "rgba(245, 158, 11, 0.12)" }]}>
-            <Ionicons name="hourglass-outline" size={22} color="#F59E0B" />
+        <Card variant="elevated" style={styles.metricCard}>
+          <View style={[styles.metricIconWrap, { backgroundColor: colors.warningSubtle }]}>
+            <Ionicons name="hourglass" size={20} color={colors.warning} />
           </View>
-          <Text style={[styles.metricBigVal, { color: "#F59E0B" }]}>~{wait}m</Text>
+          <Text style={[styles.metricBigVal, { color: colors.warning }]}>~{wait}m</Text>
           <Text style={styles.metricLabelText}>Estimated Wait</Text>
         </Card>
       </View>
 
-      {/* Selected Services Breakdown */}
-      <Card style={styles.servicesCard}>
+      {/* Selected Services Breakdown Card */}
+      <Card variant="default" style={styles.servicesCard}>
         <View style={styles.serviceHeaderRow}>
-          <Ionicons name="list-outline" size={18} color={colors.primary} />
+          <Ionicons name="list" size={18} color={colors.primary} />
           <Text style={styles.sectionHeading}>Selected Services</Text>
         </View>
 
@@ -217,7 +246,7 @@ export default function QueueStatusScreen({ route, navigation }: Props) {
             </View>
           </View>
         ) : (
-          <Text style={styles.muted}>Standard queue entry with no extra services.</Text>
+          <Text style={styles.mutedText}>Standard general counter ticket.</Text>
         )}
       </Card>
 
@@ -225,12 +254,14 @@ export default function QueueStatusScreen({ route, navigation }: Props) {
       <View style={styles.actionsWrap}>
         <AppButton
           title={refreshing ? "Refreshing..." : "Refresh Status"}
+          size="lg"
           onPress={() => load(true)}
           loading={refreshing}
           icon="refresh-outline"
         />
         <AppButton
           title="Return to Home"
+          size="md"
           variant="secondary"
           onPress={() => navigation.goBack()}
           icon="home-outline"
@@ -241,239 +272,287 @@ export default function QueueStatusScreen({ route, navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
-  center: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    gap: 12,
-  },
   topRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingTop: 6,
+    paddingBottom: spacing.xs,
   },
   backBtn: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    paddingVertical: 6,
+    gap: spacing.sm,
+  },
+  backIconCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: colors.cardSoft,
+    borderColor: colors.border,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
   },
   backText: {
-    color: colors.text,
+    color: colors.textSecondary,
     fontSize: 14,
     fontWeight: "600",
   },
   liveSyncBadge: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
-    backgroundColor: "rgba(16, 185, 129, 0.12)",
-    borderColor: "rgba(16, 185, 129, 0.3)",
+    gap: 6,
+    backgroundColor: colors.successSubtle,
+    borderColor: colors.successBorder,
     borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    borderRadius: radii.full,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
   },
   syncDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: "#10B981",
+    backgroundColor: colors.success,
   },
   syncText: {
-    color: "#34D399",
+    color: colors.successLight,
     fontSize: 10,
     fontWeight: "800",
     letterSpacing: 0.6,
   },
   ticketCard: {
-    paddingVertical: 20,
-    paddingHorizontal: 18,
-    gap: 18,
-    borderWidth: 1.5,
-    borderColor: "rgba(59, 130, 246, 0.35)",
+    padding: spacing.xl,
+    gap: spacing.lg,
   },
   ticketHeader: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "flex-start",
+    justifyContent: "space-between",
   },
   storeCol: {
     flex: 1,
+    minWidth: 0,
     gap: 2,
+    marginRight: spacing.sm,
   },
   shopNameText: {
-    color: colors.text,
     fontSize: 18,
     fontWeight: "800",
+    color: colors.text,
+    flexWrap: "wrap",
   },
   shopAddressText: {
+    fontSize: 13,
     color: colors.muted,
-    fontSize: 12,
-  },
-  statusPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    backgroundColor: "rgba(245, 158, 11, 0.15)",
-    borderColor: "rgba(245, 158, 11, 0.35)",
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  statusCompleted: {
-    backgroundColor: "rgba(16, 185, 129, 0.15)",
-    borderColor: "rgba(16, 185, 129, 0.35)",
-  },
-  statusCancelled: {
-    backgroundColor: "rgba(239, 68, 68, 0.15)",
-    borderColor: "rgba(239, 68, 68, 0.35)",
-  },
-  statusProgress: {
-    backgroundColor: "rgba(59, 130, 246, 0.15)",
-    borderColor: "rgba(59, 130, 246, 0.35)",
-  },
-  statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: "#F59E0B",
-  },
-  statusPillText: {
-    color: "#FBBF24",
-    fontSize: 10,
-    fontWeight: "800",
-    letterSpacing: 0.5,
   },
   ticketNumberSection: {
     alignItems: "center",
-    paddingVertical: 12,
-    backgroundColor: "rgba(59, 130, 246, 0.08)",
-    borderRadius: 14,
+    backgroundColor: colors.bgSecondary,
+    borderColor: colors.borderLight,
     borderWidth: 1,
-    borderColor: "rgba(59, 130, 246, 0.2)",
+    borderRadius: radii.lg,
+    paddingVertical: spacing.lg,
     gap: 4,
   },
   ticketLabel: {
-    color: colors.muted,
     fontSize: 11,
-    fontWeight: "700",
+    fontWeight: "800",
+    color: colors.muted,
     letterSpacing: 1,
   },
   ticketBigNumber: {
-    color: colors.primary,
     fontSize: 34,
     fontWeight: "900",
+    color: colors.primary,
     letterSpacing: 1.5,
+  },
+  timelineWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingTop: spacing.xs,
+    paddingHorizontal: spacing.sm,
+  },
+  stepItem: {
+    alignItems: "center",
+    gap: 5,
+  },
+  stepCircle: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: colors.cardSoft,
+    borderColor: colors.border,
+    borderWidth: 1.5,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  stepCircleActive: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  stepCirclePulse: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primarySubtle,
+  },
+  stepCircleSuccess: {
+    backgroundColor: colors.success,
+    borderColor: colors.success,
+  },
+  innerDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: colors.muted,
+  },
+  stepLine: {
+    flex: 1,
+    height: 2,
+    backgroundColor: colors.border,
+    marginBottom: 16,
+    marginHorizontal: 4,
+  },
+  stepLineActive: {
+    backgroundColor: colors.primary,
+  },
+  stepLabel: {
+    fontSize: 10,
+    fontWeight: "600",
+    color: colors.muted,
+  },
+  stepLabelActive: {
+    color: colors.text,
+    fontWeight: "700",
   },
   metricRow: {
     flexDirection: "row",
-    gap: 12,
+    gap: spacing.md,
   },
   metricCard: {
     flex: 1,
-    alignItems: "center",
-    paddingVertical: 16,
-    gap: 6,
-  },
-  metricIconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: "rgba(59, 130, 246, 0.12)",
+    minWidth: 0,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 2,
+    paddingVertical: spacing.xl,
+    paddingHorizontal: spacing.md,
+    gap: 4,
+  },
+  metricIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 4,
   },
   metricBigVal: {
-    color: colors.text,
-    fontSize: 26,
+    fontSize: 28,
     fontWeight: "900",
+    color: colors.primary,
+    letterSpacing: -0.5,
   },
   metricLabelText: {
-    color: colors.muted,
     fontSize: 12,
-    fontWeight: "600",
+    fontWeight: "700",
+    color: colors.muted,
   },
   servicesCard: {
-    paddingVertical: 18,
-    gap: 14,
+    padding: spacing.xl,
+    gap: spacing.md,
   },
   serviceHeaderRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: spacing.sm,
   },
   sectionHeading: {
+    fontSize: 15,
+    fontWeight: "700",
     color: colors.text,
-    fontSize: 16,
-    fontWeight: "800",
   },
   servicesList: {
-    gap: 10,
+    gap: spacing.md,
   },
   serviceItemRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
+    justifyContent: "space-between",
   },
   serviceLeftCol: {
+    flex: 1,
+    minWidth: 0,
     gap: 2,
+    marginRight: spacing.sm,
   },
   serviceNameText: {
-    color: colors.text,
     fontSize: 14,
     fontWeight: "600",
+    color: colors.text,
+    flexWrap: "wrap",
   },
   serviceDurationText: {
+    fontSize: 12,
     color: colors.muted,
-    fontSize: 11,
   },
   serviceCostText: {
-    color: colors.text,
     fontSize: 14,
-    fontWeight: "700",
+    fontWeight: "800",
+    color: colors.text,
+    flexShrink: 0,
   },
   totalDivider: {
     height: 1,
     backgroundColor: colors.border,
-    marginTop: 4,
+    marginVertical: spacing.xs,
   },
   totalRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingTop: 4,
   },
   totalLabel: {
-    color: colors.muted,
-    fontSize: 13,
-    fontWeight: "600",
+    fontSize: 14,
+    fontWeight: "700",
+    color: colors.textSecondary,
   },
   totalValue: {
-    color: colors.primary,
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: "900",
+    color: colors.successLight,
+  },
+  mutedText: {
+    color: colors.muted,
+    fontSize: 13,
+    fontStyle: "italic",
   },
   actionsWrap: {
-    gap: 12,
-    marginTop: 6,
-    marginBottom: 20,
+    gap: spacing.md,
+    paddingTop: spacing.xs,
   },
   errorCard: {
     alignItems: "center",
-    paddingVertical: 32,
-    gap: 12,
+    padding: spacing.xxl,
+    gap: spacing.md,
+    marginTop: spacing.xl,
   },
-  title: {
-    color: colors.text,
-    fontSize: 20,
+  errorIconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: colors.dangerSubtle,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  errorTitle: {
+    fontSize: 18,
     fontWeight: "800",
+    color: colors.text,
   },
-  muted: {
+  errorMuted: {
+    fontSize: 13,
     color: colors.muted,
-    fontSize: 14,
+    textAlign: "center",
+    lineHeight: 18,
   },
 });

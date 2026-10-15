@@ -3,6 +3,7 @@ import {
   Alert,
   Image,
   Platform,
+  RefreshControl,
   StyleSheet,
   Text,
   TextInput,
@@ -12,13 +13,18 @@ import {
 import { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
 import AppButton from "../../components/AppButton";
+import AppInput from "../../components/AppInput";
 import AppLoader from "../../components/AppLoader";
 import AppScreen from "../../components/AppScreen";
 import Card from "../../components/Card";
+import EmptyState from "../../components/EmptyState";
+import SectionHeader from "../../components/SectionHeader";
+import StatusBadge from "../../components/StatusBadge";
 import { api } from "../../lib/api";
 import { BusinessTabParamList } from "../../navigation/types";
 import { QueueEntry, ServiceItem } from "../../types";
 import { colors } from "../../theme/colors";
+import { radii, shadows, spacing, typography } from "../../theme/theme";
 
 type BusinessProfileResponse = {
   shopName: string;
@@ -29,15 +35,9 @@ type BusinessProfileResponse = {
 
 type Props = BottomTabScreenProps<BusinessTabParamList, "Dashboard">;
 
-/**
- * BusinessDashboardScreen
- * Command center for business owners:
- * - Displays store details and QR code for in-store scanning
- * - Real-time queue management (mark completed / cancel)
- * - Service catalog management (CRUD operations on services)
- */
 export default function BusinessDashboardScreen(_: Props) {
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [profile, setProfile] = useState<BusinessProfileResponse | null>(null);
   const [queue, setQueue] = useState<QueueEntry[]>([]);
   const [serviceName, setServiceName] = useState("");
@@ -46,7 +46,6 @@ export default function BusinessDashboardScreen(_: Props) {
   const [copied, setCopied] = useState(false);
   const [addingService, setAddingService] = useState(false);
 
-  // Platform-adaptive clipboard copy for store QR identifier (web vs native)
   const copyToClipboard = async () => {
     if (!profile?.uniqueQrCode) return;
     try {
@@ -60,10 +59,6 @@ export default function BusinessDashboardScreen(_: Props) {
     }
   };
 
-  /**
-   * Parallel network requests via Promise.all:
-   * Fetches business profile and live queue concurrently to reduce time-to-interactive.
-   */
   const load = async () => {
     try {
       setLoading(true);
@@ -78,22 +73,29 @@ export default function BusinessDashboardScreen(_: Props) {
     }
   };
 
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      const [profileRes, queueRes] = await Promise.all([
+        api.get("/business/me"),
+        api.get("/business/queue"),
+      ]);
+      setProfile(profileRes.data);
+      setQueue(queueRes.data || []);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   useEffect(() => {
     load();
   }, []);
 
-  /**
-   * Memoized active queue list:
-   * Prevents recalculating the filtered queue on unrelated re-renders (e.g. typing in form inputs).
-   */
   const activeQueue = useMemo(
     () => queue.filter((item) => item.status === "waiting" || item.status === "in_progress"),
     [queue]
   );
 
-  /**
-   * Adds a new service to the store catalog using immutable array expansion.
-   */
   const addService = async () => {
     if (!profile || !serviceName || !durationMin || !cost) {
       const msg = "Please enter service name, duration in minutes, and cost.";
@@ -123,10 +125,23 @@ export default function BusinessDashboardScreen(_: Props) {
     }
   };
 
-  /**
-   * Deletes a service by index using an immutable copy of the array
-   * and synchronizes with the backend database.
-   */
+  const confirmRemoveService = (index: number, name: string) => {
+    if (Platform.OS === "web") {
+      if (window.confirm(`Are you sure you want to remove "${name}"?`)) {
+        removeService(index);
+      }
+    } else {
+      Alert.alert(
+        "Remove Service",
+        `Are you sure you want to delete "${name}" from your service catalog?`,
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Remove", style: "destructive", onPress: () => removeService(index) },
+        ]
+      );
+    }
+  };
+
   const removeService = async (index: number) => {
     if (!profile) return;
     const updated = [...profile.services];
@@ -142,11 +157,7 @@ export default function BusinessDashboardScreen(_: Props) {
     }
   };
 
-  /**
-   * Transitions a customer's queue ticket to 'completed' or 'cancelled',
-   * then re-fetches the active queue state.
-   */
-  const updateStatus = async (id: string, status: "completed" | "cancelled") => {
+  const updateStatus = async (id: string, status: "completed" | "cancelled" | "in_progress") => {
     try {
       await api.put(`/business/queue/${id}/status`, { status });
       await load();
@@ -162,38 +173,52 @@ export default function BusinessDashboardScreen(_: Props) {
       <AppScreen scroll={false}>
         <AppLoader
           message="Loading store dashboard..."
-          submessage="Retrieving active queue and store catalog"
+          submessage="Retrieving live queue and catalog"
         />
       </AppScreen>
     );
   }
 
   return (
-    <AppScreen>
-      {/* Store Header */}
+    <AppScreen
+      hasTabBar
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          tintColor={colors.primary}
+          colors={[colors.primary]}
+        />
+      }
+    >
+      {/* Store Header Row */}
       <View style={styles.header}>
         <View style={styles.headerTitleRow}>
           <View style={styles.storeIconWrap}>
-            <Ionicons name="storefront" size={20} color={colors.primary} />
+            <Ionicons name="storefront" size={22} color={colors.primary} />
           </View>
           <View style={styles.flex1}>
-            <Text style={styles.title}>{profile?.shopName || "Business Dashboard"}</Text>
-            <Text style={styles.subtitle}>{profile?.address || "Store location"}</Text>
+            <View style={styles.shopNameRow}>
+              <Text style={styles.title} numberOfLines={1}>
+                {profile?.shopName || "Business Dashboard"}
+              </Text>
+              <StatusBadge status="open" size="sm" />
+            </View>
+            <Text style={styles.subtitle} numberOfLines={1}>
+              📍 {profile?.address || "Store location"}
+            </Text>
           </View>
         </View>
       </View>
 
-      {/* Store QR Code Card */}
-      <Card style={styles.qrCard}>
+      {/* Store QR Code Check-in Card */}
+      <Card variant="elevated" style={styles.qrCard}>
         <View style={styles.cardHeaderRow}>
           <View style={styles.cardTitleWrap}>
             <Ionicons name="qr-code-outline" size={18} color={colors.primary} />
             <Text style={styles.sectionTitle}>Store Check-In QR</Text>
           </View>
-          <View style={styles.activePill}>
-            <View style={styles.liveDot} />
-            <Text style={styles.activePillText}>SCAN READY</Text>
-          </View>
+          <StatusBadge status="open" label="SCAN READY" pulse size="sm" />
         </View>
 
         {profile?.uniqueQrCode ? (
@@ -225,444 +250,387 @@ export default function BusinessDashboardScreen(_: Props) {
                 <Ionicons
                   name={copied ? "checkmark-circle" : "copy-outline"}
                   size={15}
-                  color={copied ? "#10B981" : colors.primary}
+                  color={copied ? colors.success : colors.primary}
                 />
                 <Text style={[styles.copyBtnText, copied && styles.copiedText]}>
-                  {copied ? "Copied" : "Copy"}
+                  {copied ? "Copied!" : "Copy"}
                 </Text>
               </TouchableOpacity>
             </View>
 
             <Text style={styles.qrHelpText}>
-              Display this QR code at your store desk or entrance. Customers scan it with their phone to take a live queue ticket.
+              Display this QR code at your checkout desk. Customers scan it with their phone to join line without crowding.
             </Text>
           </View>
-        ) : (
-          <Text style={styles.meta}>No QR Code generated yet.</Text>
-        )}
+        ) : null}
       </Card>
 
-      {/* Live Queue Management Card */}
-      <Card style={styles.queueCard}>
-        <View style={styles.cardHeaderRow}>
-          <View style={styles.cardTitleWrap}>
-            <Ionicons name="people-outline" size={18} color={colors.primary} />
-            <Text style={styles.sectionTitle}>Live Queue ({activeQueue.length})</Text>
-          </View>
-          <TouchableOpacity onPress={load} activeOpacity={0.7} style={styles.refreshBtn}>
-            <Ionicons name="refresh-outline" size={16} color={colors.muted} />
-            <Text style={styles.refreshText}>Refresh</Text>
-          </TouchableOpacity>
-        </View>
+      {/* Live Queue Section */}
+      <View style={styles.sectionWrap}>
+        <SectionHeader
+          title="Live Queue"
+          subtitle="Customers currently waiting or being served"
+          icon="people-outline"
+          count={activeQueue.length}
+          actionIcon="refresh-outline"
+          actionText="Refresh"
+          onActionPress={onRefresh}
+          actionLoading={refreshing}
+        />
 
         {activeQueue.length === 0 ? (
-          <View style={styles.emptyQueueBox}>
-            <Ionicons name="checkmark-done-circle-outline" size={32} color="#10B981" />
-            <Text style={styles.emptyQueueTitle}>All Caught Up!</Text>
-            <Text style={styles.emptyQueueText}>
-              There are no customers currently waiting in line.
-            </Text>
-          </View>
+          <EmptyState
+            icon="checkmark-circle-outline"
+            iconColor={colors.success}
+            title="All Caught Up!"
+            description="There are no customers currently waiting in line. New check-ins will appear here immediately."
+          />
         ) : (
-          activeQueue.map((item) => (
-            <View key={item._id} style={styles.queueItemCard}>
-              <View style={styles.queueItemTop}>
-                <View style={styles.flex1}>
-                  <Text style={styles.customerName}>
-                    {item.customerId?.name || item.customerId || "Customer"}
-                  </Text>
-                  <Text style={styles.ticketPill}>
-                    Ticket #{item._id.slice(-4).toUpperCase()}
-                  </Text>
-                </View>
-                <View style={styles.statusBadge}>
-                  <View style={styles.statusDot} />
-                  <Text style={styles.statusBadgeText}>WAITING</Text>
-                </View>
-              </View>
+          <View style={styles.queueList}>
+            {activeQueue.map((item, index) => {
+              const wait = item.currentEstimatedWait ?? 0;
+              const isServing = item.status === "in_progress";
 
-              {item.selectedServices?.length ? (
-                <View style={styles.servicesTagRow}>
-                  {item.selectedServices.map((service, sIdx) => (
-                    <View key={sIdx} style={styles.serviceTag}>
-                      <Text style={styles.serviceTagText}>
-                        {service.name} (${service.cost})
+              return (
+                <Card key={item._id} variant="elevated" style={styles.queueItemCard}>
+                  <View style={styles.queueItemHeader}>
+                    <View style={styles.positionBadge}>
+                      <Text style={styles.positionText}>#{index + 1}</Text>
+                    </View>
+
+                    <View style={styles.queueItemInfo}>
+                      <Text style={styles.customerName} numberOfLines={1}>
+                        {item.customerId?.name || "Customer Ticket"}
+                      </Text>
+                      <Text style={styles.ticketPill}>
+                        Ticket #{item._id.slice(-4).toUpperCase()}
                       </Text>
                     </View>
-                  ))}
-                </View>
-              ) : null}
 
-              <View style={styles.itemActionRow}>
-                <TouchableOpacity
-                  style={styles.doneBtn}
-                  onPress={() => updateStatus(item._id, "completed")}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons name="checkmark-circle-outline" size={16} color="#10B981" />
-                  <Text style={styles.doneBtnText}>Serve / Done</Text>
-                </TouchableOpacity>
+                    <StatusBadge status={item.status} size="sm" />
+                  </View>
 
-                <TouchableOpacity
-                  style={styles.cancelBtn}
-                  onPress={() => updateStatus(item._id, "cancelled")}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons name="close-circle-outline" size={16} color="#EF4444" />
-                  <Text style={styles.cancelBtnText}>Cancel</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          ))
-        )}
-      </Card>
+                  {/* Services summary */}
+                  {item.selectedServices?.length ? (
+                    <View style={styles.itemServicesRow}>
+                      {item.selectedServices.map((s, idx) => (
+                        <View key={`${s.name}_${idx}`} style={styles.serviceChip}>
+                          <Text style={styles.serviceChipText}>
+                            {s.name} (${s.cost})
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  ) : null}
 
-      {/* Services Catalog & Creation Card */}
-      <Card style={styles.serviceCatalogCard}>
-        <View style={styles.cardHeaderRow}>
-          <View style={styles.cardTitleWrap}>
-            <Ionicons name="pricetags-outline" size={18} color={colors.primary} />
-            <Text style={styles.sectionTitle}>
-              Store Services ({profile?.services?.length || 0})
-            </Text>
+                  {/* Action buttons row */}
+                  <View style={styles.itemActionRow}>
+                    <TouchableOpacity
+                      style={styles.doneBtn}
+                      onPress={() => updateStatus(item._id, "completed")}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="checkmark-done" size={15} color="#FFF" />
+                      <Text style={styles.doneBtnText}>Mark Completed</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.cancelBtn}
+                      onPress={() => updateStatus(item._id, "cancelled")}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="close" size={15} color={colors.danger} />
+                      <Text style={styles.cancelBtnText}>Cancel</Text>
+                    </TouchableOpacity>
+                  </View>
+                </Card>
+              );
+            })}
           </View>
-        </View>
+        )}
+      </View>
 
-        {(profile?.services || []).length === 0 ? (
-          <Text style={styles.meta}>No services configured yet. Add your first service below.</Text>
-        ) : (
-          (profile?.services || []).map((service, index) => (
-            <View key={`${service.name}_${index}`} style={styles.serviceRow}>
-              <View style={styles.flex1}>
+      {/* Store Services Catalog Section */}
+      <View style={styles.sectionWrap}>
+        <SectionHeader
+          title="Store Services"
+          subtitle="Configure services and prices available for queue booking"
+          icon="pricetag-outline"
+          count={profile?.services?.length || 0}
+        />
+
+        {/* Services List */}
+        <View style={styles.servicesGrid}>
+          {profile?.services?.map((service, index) => (
+            <Card key={`${service.name}_${index}`} variant="subtle" style={styles.serviceCard}>
+              <View style={styles.serviceCardLeft}>
                 <Text style={styles.serviceName}>{service.name}</Text>
-                <Text style={styles.serviceMeta}>
-                  ⏱ {service.durationMin} mins • ${service.cost}
-                </Text>
+                <View style={styles.serviceMetaRow}>
+                  <Text style={styles.serviceDuration}>⏱ {service.durationMin} mins</Text>
+                  <Text style={styles.dotSeparator}>•</Text>
+                  <Text style={styles.serviceCost}>${service.cost}</Text>
+                </View>
               </View>
+
               <TouchableOpacity
-                onPress={() => removeService(index)}
-                style={styles.deleteIconBtn}
+                onPress={() => confirmRemoveService(index, service.name)}
+                style={styles.trashBtn}
                 activeOpacity={0.7}
               >
-                <Ionicons name="trash-outline" size={18} color="#EF4444" />
+                <Ionicons name="trash-outline" size={18} color={colors.danger} />
               </TouchableOpacity>
-            </View>
-          ))
-        )}
+            </Card>
+          ))}
+        </View>
 
-        {/* Add Service Section with Clean Inputs */}
-        <View style={styles.addServiceContainer}>
+        {/* Add New Service Form Card */}
+        <Card variant="elevated" style={styles.addServiceCard}>
           <Text style={styles.addServiceTitle}>Add New Service</Text>
 
-          <View style={styles.inputGroup}>
-            <Text style={styles.inputLabel}>Service Name</Text>
-            <TextInput
-              style={styles.textInputField}
-              placeholder="e.g. Haircut & Wash, Screen Replacement"
-              placeholderTextColor={colors.muted}
-              value={serviceName}
-              onChangeText={setServiceName}
-            />
-          </View>
+          <AppInput
+            label="Service Name"
+            value={serviceName}
+            onChangeText={setServiceName}
+            placeholder="e.g. Haircut & Wash, Screen Replacement"
+            icon="create-outline"
+          />
 
-          <View style={styles.twoColInputs}>
+          <View style={styles.inputTwoCol}>
             <View style={styles.flex1}>
-              <Text style={styles.inputLabel}>Duration (mins)</Text>
-              <TextInput
-                style={styles.textInputField}
-                placeholder="e.g. 25"
-                placeholderTextColor={colors.muted}
+              <AppInput
+                label="Duration (mins)"
                 value={durationMin}
                 onChangeText={setDurationMin}
-                keyboardType="number-pad"
+                keyboardType="numeric"
+                placeholder="e.g. 25"
+                icon="time-outline"
               />
             </View>
             <View style={styles.flex1}>
-              <Text style={styles.inputLabel}>Cost ($)</Text>
-              <TextInput
-                style={styles.textInputField}
-                placeholder="e.g. 20"
-                placeholderTextColor={colors.muted}
+              <AppInput
+                label="Cost ($)"
                 value={cost}
                 onChangeText={setCost}
-                keyboardType="number-pad"
+                keyboardType="numeric"
+                placeholder="e.g. 20"
+                icon="cash-outline"
               />
             </View>
           </View>
 
-          <View style={styles.addBtnWrap}>
-            <AppButton
-              title="Add Service"
-              onPress={addService}
-              loading={addingService}
-              icon="add-circle-outline"
-            />
-          </View>
-        </View>
-      </Card>
+          <AppButton
+            title="Add Service to Catalog"
+            onPress={addService}
+            loading={addingService}
+            icon="add-circle-outline"
+            style={{ marginTop: spacing.xs }}
+          />
+        </Card>
+      </View>
     </AppScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  center: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  loading: {
-    color: colors.muted,
-    fontSize: 15,
-  },
   header: {
-    paddingTop: 6,
-    gap: 4,
+    paddingBottom: spacing.xs,
   },
   headerTitleRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
+    gap: spacing.md,
   },
   storeIconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    backgroundColor: "rgba(59, 130, 246, 0.12)",
-    borderWidth: 1,
-    borderColor: "rgba(59, 130, 246, 0.25)",
+    width: 46,
+    height: 46,
+    borderRadius: radii.md,
+    backgroundColor: colors.primarySubtle,
     alignItems: "center",
     justifyContent: "center",
+    flexShrink: 0,
   },
-  flex1: {
-    flex: 1,
+  shopNameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: spacing.xs,
   },
   title: {
+    fontSize: 20,
+    fontWeight: "800",
     color: colors.text,
-    fontSize: 24,
-    fontWeight: "900",
-    letterSpacing: -0.4,
+    letterSpacing: -0.3,
+    flex: 1,
+    minWidth: 0,
+    marginRight: spacing.xs,
   },
   subtitle: {
-    color: colors.muted,
     fontSize: 13,
+    color: colors.muted,
     marginTop: 2,
+  },
+  qrCard: {
+    gap: spacing.lg,
+    padding: spacing.xl,
   },
   cardHeaderRow: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
+    justifyContent: "space-between",
   },
   cardTitleWrap: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: spacing.sm,
   },
   sectionTitle: {
+    fontSize: 16,
+    fontWeight: "700",
     color: colors.text,
-    fontWeight: "800",
-    fontSize: 17,
-  },
-  activePill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    backgroundColor: "rgba(16, 185, 129, 0.12)",
-    borderColor: "rgba(16, 185, 129, 0.3)",
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  liveDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: "#10B981",
-  },
-  activePillText: {
-    color: "#34D399",
-    fontSize: 10,
-    fontWeight: "800",
-  },
-  qrCard: {
-    gap: 16,
-    paddingVertical: 18,
   },
   qrCenterWrap: {
     alignItems: "center",
-    gap: 14,
+    gap: spacing.md,
   },
   qrWhiteBox: {
-    width: 220,
-    height: 220,
     backgroundColor: "#FFFFFF",
-    borderRadius: 18,
     padding: 12,
-    alignItems: "center",
-    justifyContent: "center",
+    borderRadius: radii.lg,
+    ...shadows.card,
   },
   qrImage: {
-    width: "100%",
-    height: "100%",
+    width: 220,
+    height: 220,
   },
   codeSnippetBox: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
     backgroundColor: colors.cardSoft,
-    borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    borderWidth: 1,
+    borderRadius: radii.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
     width: "100%",
-    gap: 8,
   },
   codeTextCol: {
     flex: 1,
+    gap: 2,
+    marginRight: spacing.sm,
   },
   codeLabel: {
-    color: colors.muted,
     fontSize: 10,
     fontWeight: "800",
+    color: colors.muted,
     letterSpacing: 0.8,
   },
   codeString: {
-    color: colors.primary,
     fontSize: 13,
     fontWeight: "700",
-    marginTop: 2,
+    color: colors.primary,
   },
   copyBtn: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
-    backgroundColor: "rgba(59, 130, 246, 0.14)",
-    borderColor: "rgba(59, 130, 246, 0.3)",
+    gap: 4,
+    backgroundColor: colors.cardElevated,
+    borderColor: colors.borderLight,
     borderWidth: 1,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: radii.sm,
+    flexShrink: 0,
   },
   copyBtnActive: {
-    backgroundColor: "rgba(16, 185, 129, 0.14)",
-    borderColor: "rgba(16, 185, 129, 0.3)",
+    backgroundColor: colors.successSubtle,
+    borderColor: colors.successBorder,
   },
   copyBtnText: {
-    color: colors.primary,
     fontSize: 12,
     fontWeight: "700",
+    color: colors.primary,
   },
   copiedText: {
-    color: "#10B981",
+    color: colors.success,
   },
   qrHelpText: {
-    color: colors.muted,
     fontSize: 12,
+    color: colors.muted,
     textAlign: "center",
     lineHeight: 18,
-    paddingHorizontal: 8,
+    paddingHorizontal: spacing.md,
   },
-  meta: {
-    color: colors.muted,
-    fontSize: 13,
+  sectionWrap: {
+    gap: spacing.md,
   },
-  queueCard: {
-    gap: 14,
-    paddingVertical: 18,
-  },
-  refreshBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-  },
-  refreshText: {
-    color: colors.muted,
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  emptyQueueBox: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 24,
-    gap: 6,
-  },
-  emptyQueueTitle: {
-    color: colors.text,
-    fontSize: 16,
-    fontWeight: "700",
-    marginTop: 4,
-  },
-  emptyQueueText: {
-    color: colors.muted,
-    fontSize: 13,
+  queueList: {
+    gap: spacing.md,
   },
   queueItemCard: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 14,
-    padding: 14,
-    backgroundColor: colors.cardSoft,
-    gap: 10,
+    gap: spacing.md,
+    padding: spacing.lg,
   },
-  queueItemTop: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-  },
-  customerName: {
-    color: colors.text,
-    fontWeight: "800",
-    fontSize: 16,
-  },
-  ticketPill: {
-    color: colors.primary,
-    fontSize: 12,
-    fontWeight: "800",
-    marginTop: 2,
-  },
-  statusBadge: {
+  queueItemHeader: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
-    backgroundColor: "rgba(59, 130, 246, 0.15)",
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
+    gap: spacing.md,
   },
-  statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: colors.primary,
+  positionBadge: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.primarySubtle,
+    borderColor: colors.primaryBorder,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
   },
-  statusBadgeText: {
+  positionText: {
+    fontSize: 14,
+    fontWeight: "900",
     color: colors.primary,
-    fontSize: 10,
-    fontWeight: "800",
   },
-  servicesTagRow: {
+  queueItemInfo: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+    marginRight: spacing.xs,
+  },
+  customerName: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: colors.text,
+  },
+  ticketPill: {
+    fontSize: 12,
+    color: colors.muted,
+    fontWeight: "600",
+  },
+  itemServicesRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: 6,
+    gap: spacing.xs,
   },
-  serviceTag: {
-    backgroundColor: "rgba(255, 255, 255, 0.05)",
-    paddingHorizontal: 8,
+  serviceChip: {
+    backgroundColor: colors.cardSoft,
+    borderColor: colors.border,
+    borderWidth: 1,
+    borderRadius: radii.full,
+    paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 6,
   },
-  serviceTagText: {
-    color: colors.muted,
-    fontSize: 12,
+  serviceChipText: {
+    fontSize: 11,
+    color: colors.textSecondary,
+    fontWeight: "600",
   },
   itemActionRow: {
     flexDirection: "row",
-    gap: 10,
-    paddingTop: 6,
-    borderTopWidth: 1,
-    borderTopColor: "rgba(255, 255, 255, 0.06)",
+    alignItems: "center",
+    gap: spacing.md,
+    paddingTop: 2,
   },
   doneBtn: {
     flex: 1,
@@ -670,97 +638,95 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
-    backgroundColor: "rgba(16, 185, 129, 0.15)",
-    borderColor: "rgba(16, 185, 129, 0.35)",
-    borderWidth: 1,
+    backgroundColor: colors.success,
     paddingVertical: 9,
-    borderRadius: 10,
+    borderRadius: radii.md,
   },
   doneBtnText: {
-    color: "#10B981",
     fontSize: 13,
     fontWeight: "700",
+    color: "#FFFFFF",
   },
   cancelBtn: {
-    flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    backgroundColor: "rgba(239, 68, 68, 0.12)",
-    borderColor: "rgba(239, 68, 68, 0.3)",
+    gap: 4,
+    backgroundColor: colors.dangerSubtle,
+    borderColor: colors.dangerBorder,
     borderWidth: 1,
+    paddingHorizontal: 14,
     paddingVertical: 9,
-    borderRadius: 10,
+    borderRadius: radii.md,
   },
   cancelBtnText: {
-    color: "#EF4444",
     fontSize: 13,
     fontWeight: "700",
+    color: colors.danger,
   },
-  serviceCatalogCard: {
-    gap: 14,
-    paddingVertical: 18,
+  servicesGrid: {
+    gap: spacing.sm,
   },
-  serviceRow: {
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
-    padding: 14,
-    backgroundColor: colors.cardSoft,
+  serviceCard: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
+    justifyContent: "space-between",
+    padding: spacing.md,
+  },
+  serviceCardLeft: {
+    flex: 1,
+    minWidth: 0,
+    gap: 3,
+    marginRight: spacing.sm,
   },
   serviceName: {
-    color: colors.text,
-    fontWeight: "700",
     fontSize: 15,
+    fontWeight: "700",
+    color: colors.text,
+    flexWrap: "wrap",
   },
-  serviceMeta: {
-    color: colors.muted,
+  serviceMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+  },
+  serviceDuration: {
     fontSize: 12,
-    marginTop: 2,
+    color: colors.muted,
   },
-  deleteIconBtn: {
-    padding: 6,
+  dotSeparator: {
+    color: colors.mutedDark,
   },
-  addServiceContainer: {
-    marginTop: 8,
-    gap: 12,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    paddingTop: 16,
+  serviceCost: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: colors.successLight,
+  },
+  trashBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.dangerSubtle,
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  addServiceCard: {
+    gap: spacing.md,
+    padding: spacing.xl,
   },
   addServiceTitle: {
-    color: colors.text,
     fontSize: 15,
-    fontWeight: "800",
-  },
-  inputGroup: {
-    gap: 6,
-  },
-  inputLabel: {
-    color: colors.muted,
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  textInputField: {
-    width: "100%",
-    backgroundColor: colors.cardSoft,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
+    fontWeight: "700",
     color: colors.text,
-    paddingHorizontal: 14,
-    paddingVertical: 11,
-    fontSize: 14,
+    letterSpacing: -0.1,
   },
-  twoColInputs: {
+  inputTwoCol: {
     flexDirection: "row",
-    gap: 12,
+    gap: spacing.md,
+    flexWrap: "wrap",
   },
-  addBtnWrap: {
-    marginTop: 4,
+  flex1: {
+    flex: 1,
+    minWidth: 120,
   },
 });

@@ -5,18 +5,16 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
-    "splash": {
-      "resizeMode": "contain",
-      "backgroundColor": "#050B18"
-    },
     "assetBundlePatterns": [
       "**/*"
     ],
+    "icon": "./assets/icon.png",
     "ios": {
       "supportsTablet": true
     },
     "android": {
       "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#050B18"
       },
       "permissions": [
@@ -28,7 +26,15 @@
     "plugins": [
       "expo-camera",
       "expo-asset",
-      "expo-font"
+      "expo-font",
+      "expo-status-bar",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#050B18",
+          "resizeMode": "contain"
+        }
+      ]
     ],
     "extra": {
       "apiUrl": "http://localhost:5000/api"

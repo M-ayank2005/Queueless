@@ -4,6 +4,7 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
 import { ActivityIndicator, StyleSheet, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../context/AuthContext";
 import {
   AuthStackParamList,
@@ -42,14 +43,25 @@ function AuthNavigator() {
 
 // 2. Customer Bottom Tabs: Main navigation experience for customer role
 function CustomerTabsNavigator() {
+  const insets = useSafeAreaInsets();
+  const bottomPadding = Math.max(insets.bottom, 8);
+  const tabHeight = 56 + bottomPadding;
+
   return (
     <CustomerTabs.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
-        tabBarStyle: styles.tabBar,
+        tabBarStyle: [
+          styles.tabBar,
+          {
+            height: tabHeight,
+            paddingBottom: bottomPadding,
+          },
+        ],
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.muted,
         tabBarLabelStyle: styles.tabBarLabel,
+        tabBarItemStyle: styles.tabBarItem,
         tabBarIcon: ({ color, focused, size }) => {
           let iconName: keyof typeof Ionicons.glyphMap = "home";
           if (route.name === "Home") {
@@ -59,7 +71,12 @@ function CustomerTabsNavigator() {
           } else if (route.name === "Profile") {
             iconName = focused ? "person" : "person-outline";
           }
-          return <Ionicons name={iconName} size={size} color={color} />;
+
+          return (
+            <View style={[styles.tabIconWrap, focused && styles.tabIconWrapActive]}>
+              <Ionicons name={iconName} size={size - 1} color={color} />
+            </View>
+          );
         },
       })}
     >
@@ -84,14 +101,25 @@ function CustomerTabsNavigator() {
 
 // 3. Business Bottom Tabs: Dedicated workflow for shop owners
 function BusinessTabsNavigator() {
+  const insets = useSafeAreaInsets();
+  const bottomPadding = Math.max(insets.bottom, 8);
+  const tabHeight = 56 + bottomPadding;
+
   return (
     <BusinessTabs.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
-        tabBarStyle: styles.tabBar,
+        tabBarStyle: [
+          styles.tabBar,
+          {
+            height: tabHeight,
+            paddingBottom: bottomPadding,
+          },
+        ],
         tabBarActiveTintColor: colors.primary,
         tabBarInactiveTintColor: colors.muted,
         tabBarLabelStyle: styles.tabBarLabel,
+        tabBarItemStyle: styles.tabBarItem,
         tabBarIcon: ({ color, focused, size }) => {
           let iconName: keyof typeof Ionicons.glyphMap = "grid";
           if (route.name === "Dashboard") {
@@ -99,7 +127,12 @@ function BusinessTabsNavigator() {
           } else if (route.name === "Profile") {
             iconName = focused ? "person" : "person-outline";
           }
-          return <Ionicons name={iconName} size={size} color={color} />;
+
+          return (
+            <View style={[styles.tabIconWrap, focused && styles.tabIconWrapActive]}>
+              <Ionicons name={iconName} size={size - 1} color={color} />
+            </View>
+          );
         },
       })}
     >
@@ -180,16 +213,34 @@ const styles = StyleSheet.create({
     backgroundColor: colors.bg,
   },
   tabBar: {
-    backgroundColor: colors.card,
+    backgroundColor: colors.bgSecondary,
     borderTopColor: colors.border,
     borderTopWidth: 1,
-    height: 64,
-    paddingBottom: 8,
     paddingTop: 6,
+    elevation: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+  },
+  tabBarItem: {
+    paddingVertical: 2,
+  },
+  tabIconWrap: {
+    paddingHorizontal: 12,
+    paddingVertical: 3,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  tabIconWrapActive: {
+    backgroundColor: colors.primarySubtle,
   },
   tabBarLabel: {
     fontSize: 11,
     fontWeight: "700",
+    letterSpacing: 0.1,
   },
 });
+
 

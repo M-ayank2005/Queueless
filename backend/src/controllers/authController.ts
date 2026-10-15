@@ -51,6 +51,8 @@ export const register = async (req: Request, res: Response) => {
       user: { 
         id: newUser._id, 
         name: newUser.name, 
+        email: newUser.email,
+        phone: newUser.phone,
         role: newUser.role, 
         businessProfile: newUser.businessProfile 
       }, 
@@ -82,6 +84,8 @@ export const login = async (req: Request, res: Response) => {
       user: {
         id: user._id,
         name: user.name,
+        email: user.email,
+        phone: user.phone,
         role: user.role,
         businessProfile: user.businessProfile
       },

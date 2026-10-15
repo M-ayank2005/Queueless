@@ -8,14 +8,14 @@ import AppScreen from "../../components/AppScreen";
 import Card from "../../components/Card";
 import { useAuth } from "../../context/AuthContext";
 import { AuthStackParamList } from "../../navigation/types";
-import { UserRole } from "../../types";
 import { colors } from "../../theme/colors";
+import { radii, shadows, spacing, typography } from "../../theme/theme";
 
 type Props = NativeStackScreenProps<AuthStackParamList, "Register">;
 
 export default function RegisterScreen({ navigation }: Props) {
   const { register } = useAuth();
-  const [role, setRole] = useState<UserRole>("customer");
+  const [role, setRole] = useState<"customer" | "business">("customer");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -28,15 +28,23 @@ export default function RegisterScreen({ navigation }: Props) {
   const submit = async () => {
     setErrorMsg("");
     if (!name || !email || !phone || !password) {
-      const msg = "Please complete all required fields.";
+      const msg = "Please fill in all basic registration fields.";
       setErrorMsg(msg);
       if (Platform.OS === "web") window.alert(msg);
-      else Alert.alert("Missing details", msg);
+      else Alert.alert("Incomplete form", msg);
+      return;
+    }
+
+    if (password.length < 6) {
+      const msg = "Password must be at least 6 characters.";
+      setErrorMsg(msg);
+      if (Platform.OS === "web") window.alert(msg);
+      else Alert.alert("Weak password", msg);
       return;
     }
 
     if (role === "business" && (!businessName || !address)) {
-      const msg = "Please enter your business name and store address.";
+      const msg = "Store name and location are required for merchant accounts.";
       setErrorMsg(msg);
       if (Platform.OS === "web") window.alert(msg);
       else Alert.alert("Missing business details", msg);
@@ -68,30 +76,36 @@ export default function RegisterScreen({ navigation }: Props) {
   };
 
   return (
-    <AppScreen>
+    <AppScreen contentContainerStyle={styles.screenContent} keyboardOffset={20}>
       <View style={styles.container}>
-        {/* Top Navigation Row */}
-        <TouchableOpacity
-          style={styles.backBtn}
-          onPress={() => navigation.navigate("Welcome")}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="arrow-back" size={20} color={colors.text} />
-          <Text style={styles.backText}>Back</Text>
-        </TouchableOpacity>
+        <View style={styles.topSection}>
+          {/* Back navigation */}
+          <TouchableOpacity
+            style={styles.backBtn}
+            onPress={() => navigation.navigate("Welcome")}
+            activeOpacity={0.7}
+          >
+            <View style={styles.backIconCircle}>
+              <Ionicons name="arrow-back" size={18} color={colors.text} />
+            </View>
+            <Text style={styles.backText}>Back</Text>
+          </TouchableOpacity>
 
-        {/* Title Header */}
-        <View style={styles.header}>
-          <Text style={styles.title}>Create Account</Text>
-          <Text style={styles.subtitle}>
-            Select your account type to get started in under a minute.
-          </Text>
-        </View>
+          {/* Title Header */}
+          <View style={styles.header}>
+            <Text style={styles.title}>Create Account</Text>
+            <Text style={styles.subtitle}>
+              Choose your account role to set up your virtual queue profile.
+            </Text>
+          </View>
 
-        {/* Role Selector Segmented Controls */}
+          {/* Role Selector Segmented Controls */}
         <View style={styles.roleContainer}>
           <Pressable
-            onPress={() => setRole("customer")}
+            onPress={() => {
+              setRole("customer");
+              setErrorMsg("");
+            }}
             style={[styles.roleCard, role === "customer" && styles.roleCardActive]}
           >
             <View
@@ -118,7 +132,10 @@ export default function RegisterScreen({ navigation }: Props) {
           </Pressable>
 
           <Pressable
-            onPress={() => setRole("business")}
+            onPress={() => {
+              setRole("business");
+              setErrorMsg("");
+            }}
             style={[styles.roleCard, role === "business" && styles.roleCardActive]}
           >
             <View
@@ -141,15 +158,15 @@ export default function RegisterScreen({ navigation }: Props) {
             >
               Business
             </Text>
-            <Text style={styles.roleSubtitle}>Manage store queues</Text>
+            <Text style={styles.roleSubtitle}>Manage store counters</Text>
           </Pressable>
         </View>
 
         {/* Registration Form Card */}
-        <Card style={styles.formCard}>
+        <Card variant="elevated" style={styles.formCard}>
           {errorMsg ? (
             <View style={styles.errorBox}>
-              <Ionicons name="alert-circle-outline" size={18} color="#EF4444" />
+              <Ionicons name="alert-circle" size={18} color={colors.danger} />
               <Text style={styles.errorText}>{errorMsg}</Text>
             </View>
           ) : null}
@@ -158,7 +175,8 @@ export default function RegisterScreen({ navigation }: Props) {
             label="Full Name"
             value={name}
             onChangeText={setName}
-            placeholder="e.g. Jordan Smith"
+            placeholder="e.g. Mayank Patel"
+            icon="person-outline"
           />
 
           <AppInput
@@ -167,7 +185,8 @@ export default function RegisterScreen({ navigation }: Props) {
             onChangeText={setEmail}
             autoCapitalize="none"
             keyboardType="email-address"
-            placeholder="e.g. jordan@example.com"
+            placeholder="e.g. mayank@example.com"
+            icon="mail-outline"
           />
 
           <AppInput
@@ -175,121 +194,142 @@ export default function RegisterScreen({ navigation }: Props) {
             value={phone}
             onChangeText={setPhone}
             keyboardType="phone-pad"
-            placeholder="e.g. +1 555 123 4567"
+            placeholder="e.g. +91 98765 43210"
+            icon="call-outline"
           />
-
-          {role === "business" && (
-            <View style={styles.businessSection}>
-              <View style={styles.businessBadge}>
-                <Ionicons name="business-outline" size={14} color={colors.primary} />
-                <Text style={styles.businessBadgeText}>BUSINESS DETAILS</Text>
-              </View>
-
-              <AppInput
-                label="Store / Business Name"
-                value={businessName}
-                onChangeText={setBusinessName}
-                placeholder="e.g. Metro Grooming & Spa"
-              />
-
-              <AppInput
-                label="Store Physical Address"
-                value={address}
-                onChangeText={setAddress}
-                placeholder="e.g. 128 Main Street, Suite 4"
-              />
-            </View>
-          )}
 
           <AppInput
             label="Password"
             value={password}
             onChangeText={setPassword}
             secureTextEntry
-            autoCapitalize="none"
-            placeholder="Create a strong password (min 6 chars)"
+            placeholder="At least 6 characters"
+            icon="lock-closed-outline"
           />
 
-          <View style={styles.buttonSpacing}>
-            <AppButton
-              title="Create Account"
-              onPress={submit}
-              loading={loading}
-              icon="arrow-forward-outline"
-            />
-          </View>
-        </Card>
+          {role === "business" ? (
+            <View style={styles.businessFieldsWrap}>
+              <View style={styles.divider} />
+              <Text style={styles.businessSectionTitle}>Store Details</Text>
 
-        {/* Footer Link */}
-        <View style={styles.footerRow}>
-          <Text style={styles.footerPrompt}>Already have an account?</Text>
-          <TouchableOpacity
-            onPress={() => navigation.navigate("Login")}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.footerLink}>Sign in</Text>
-          </TouchableOpacity>
-        </View>
+              <AppInput
+                label="Store / Business Name"
+                value={businessName}
+                onChangeText={setBusinessName}
+                placeholder="e.g. Kirana General Store"
+                icon="storefront-outline"
+              />
+
+              <AppInput
+                label="Store Location & Address"
+                value={address}
+                onChangeText={setAddress}
+                placeholder="e.g. Shop 12, Main Market, LKO"
+                icon="location-outline"
+              />
+            </View>
+          ) : null}
+
+          <AppButton
+            title={`Register as ${role === "business" ? "Merchant" : "Customer"}`}
+            size="lg"
+            onPress={submit}
+            loading={loading}
+            icon="checkmark-circle-outline"
+            style={{ marginTop: spacing.xs }}
+          />
+        </Card>
       </View>
-    </AppScreen>
-  );
+
+      {/* Bottom sign-in route */}
+      <View style={styles.footerRow}>
+        <Text style={styles.footerText}>Already have an account?</Text>
+        <TouchableOpacity
+          onPress={() => navigation.navigate("Login")}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.loginLink}>Sign in here</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  </AppScreen>
+);
 }
 
 const styles = StyleSheet.create({
-  container: {
-    paddingTop: 12,
-    gap: 16,
-  },
+screenContent: {
+  flexGrow: 1,
+},
+container: {
+  flex: 1,
+  justifyContent: "space-between",
+  gap: spacing.lg,
+},
+topSection: {
+  gap: spacing.lg,
+  paddingTop: spacing.xs,
+},
   backBtn: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    paddingVertical: 6,
+    gap: spacing.sm,
     alignSelf: "flex-start",
+    paddingVertical: spacing.xs,
+  },
+  backIconCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: colors.cardSoft,
+    borderColor: colors.border,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
   },
   backText: {
-    color: colors.text,
+    color: colors.textSecondary,
     fontSize: 14,
     fontWeight: "600",
   },
   header: {
-    gap: 4,
+    gap: spacing.xs,
   },
   title: {
-    color: colors.text,
     fontSize: 28,
-    fontWeight: "900",
-    letterSpacing: -0.4,
+    fontWeight: "800",
+    color: colors.text,
+    letterSpacing: -0.5,
   },
   subtitle: {
-    color: colors.muted,
     fontSize: 14,
+    color: colors.muted,
     lineHeight: 20,
   },
   roleContainer: {
     flexDirection: "row",
-    gap: 12,
+    gap: spacing.md,
   },
   roleCard: {
     flex: 1,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 14,
+    minWidth: 0,
     backgroundColor: colors.card,
-    paddingVertical: 14,
-    paddingHorizontal: 12,
+    borderColor: colors.border,
+    borderWidth: 1.5,
+    borderRadius: radii.lg,
+    padding: spacing.md,
     alignItems: "center",
     gap: 4,
   },
   roleCardActive: {
     borderColor: colors.primary,
-    backgroundColor: colors.cardSoft,
+    backgroundColor: colors.cardElevated,
+    ...shadows.glow,
   },
   roleIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "rgba(255, 255, 255, 0.05)",
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.cardSoft,
     alignItems: "center",
     justifyContent: "center",
     marginBottom: 4,
@@ -298,74 +338,67 @@ const styles = StyleSheet.create({
     backgroundColor: colors.primary,
   },
   roleTitle: {
-    color: colors.muted,
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: "700",
-  },
-  roleTitleActive: {
     color: colors.text,
   },
+  roleTitleActive: {
+    color: colors.primaryHover,
+  },
   roleSubtitle: {
-    color: colors.muted,
     fontSize: 11,
-    opacity: 0.8,
+    color: colors.muted,
+    textAlign: "center",
   },
   formCard: {
-    gap: 14,
-    paddingVertical: 20,
-  },
-  businessSection: {
-    gap: 14,
-    backgroundColor: "rgba(59, 130, 246, 0.05)",
-    borderWidth: 1,
-    borderColor: "rgba(59, 130, 246, 0.2)",
-    borderRadius: 14,
-    padding: 14,
-    marginVertical: 4,
-  },
-  businessBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  businessBadgeText: {
-    color: colors.primary,
-    fontSize: 11,
-    fontWeight: "800",
-    letterSpacing: 0.6,
-  },
-  buttonSpacing: {
-    marginTop: 6,
+    gap: spacing.lg,
+    padding: spacing.xl,
   },
   errorBox: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    backgroundColor: "rgba(239, 68, 68, 0.12)",
+    backgroundColor: colors.dangerSubtle,
     borderWidth: 1,
-    borderColor: "rgba(239, 68, 68, 0.35)",
-    borderRadius: 12,
-    padding: 12,
+    borderColor: colors.dangerBorder,
+    borderRadius: radii.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    gap: spacing.sm,
   },
   errorText: {
-    flex: 1,
-    color: "#FCA5A5",
+    color: colors.danger,
     fontSize: 13,
     fontWeight: "600",
-    lineHeight: 18,
+    flex: 1,
+  },
+  businessFieldsWrap: {
+    gap: spacing.lg,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: colors.border,
+    marginVertical: spacing.xs,
+  },
+  businessSectionTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: colors.primary,
+    letterSpacing: 0.4,
+    textTransform: "uppercase",
   },
   footerRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
-    paddingVertical: 10,
+    gap: spacing.xs,
+    marginTop: spacing.sm,
   },
-  footerPrompt: {
+  footerText: {
     color: colors.muted,
     fontSize: 14,
   },
-  footerLink: {
+  loginLink: {
     color: colors.primary,
     fontSize: 14,
     fontWeight: "700",

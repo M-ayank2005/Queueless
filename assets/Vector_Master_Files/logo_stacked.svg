@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800" width="100%" height="100%" fill="none">
+  <defs>
+    <filter id="stack-glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="10" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+
+    <linearGradient id="stack-q-grad" x1="60" y1="60" x2="420" y2="420" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#38BDF8" />
+      <stop offset="45%" stop-color="#2563EB" />
+      <stop offset="100%" stop-color="#4F46E5" />
+    </linearGradient>
+
+    <linearGradient id="stack-arrow-grad" x1="220" y1="360" x2="450" y2="180" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#38BDF8" />
+      <stop offset="50%" stop-color="#60A5FA" />
+      <stop offset="100%" stop-color="#E0F2FE" />
+    </linearGradient>
+
+    <linearGradient id="stack-less-grad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#38BDF8" />
+      <stop offset="60%" stop-color="#3B82F6" />
+      <stop offset="100%" stop-color="#6366F1" />
+    </linearGradient>
+  </defs>
+
+  <!-- Top Centered Icon (Offset to center on 800x800) -->
+  <g transform="translate(160, 40) scale(0.95)">
+    <!-- Radar / Queue Target Rings -->
+    <g opacity="0.4" stroke="#38BDF8" stroke-width="2.5" stroke-dasharray="6 8">
+      <circle cx="235" cy="245" r="95" />
+      <circle cx="235" cy="245" r="65" />
+    </g>
+
+    <!-- Crosshairs -->
+    <g opacity="0.35" stroke="#7DD3FC" stroke-width="2" stroke-linecap="round">
+      <line x1="235" y1="130" x2="235" y2="170" />
+      <line x1="235" y1="320" x2="235" y2="360" />
+      <line x1="120" y1="245" x2="160" y2="245" />
+      <line x1="310" y1="245" x2="350" y2="245" />
+    </g>
+
+    <!-- Central Pulse -->
+    <circle cx="235" cy="245" r="18" fill="#38BDF8" filter="url(#stack-glow)" />
+    <circle cx="235" cy="245" r="9" fill="#FFFFFF" />
+
+    <!-- Stream Speed Flares -->
+    <path d="M 330 190 C 375 195 405 170 425 140 C 410 175 375 220 320 230 Z" fill="#38BDF8" opacity="0.8" />
+    <path d="M 360 250 C 405 240 435 210 445 180 C 435 220 395 265 345 280 Z" fill="#60A5FA" opacity="0.9" />
+
+    <!-- Q Major Ring -->
+    <path d="
+      M 235 70
+      C 138 70 60 148 60 245
+      C 60 342 138 420 235 420
+      C 285 420 330 399 362 365
+      C 335 345 305 320 285 300
+      C 270 315 253 325 235 325
+      C 191 325 155 289 155 245
+      C 155 201 191 165 235 165
+      C 279 165 315 201 315 245
+      C 315 260 310 274 302 286
+      C 324 300 355 325 385 345
+      C 401 316 410 282 410 245
+      C 410 148 332 70 235 70 Z"
+      fill="url(#stack-q-grad)"
+    />
+
+    <!-- Surge Arrow -->
+    <path d="
+      M 245 325
+      C 290 325 330 345 365 375
+      C 395 345 425 295 455 220
+      L 460 255
+      L 475 190
+      L 410 205
+      L 435 220
+      C 405 280 375 320 345 340
+      C 315 315 275 290 245 290
+      Z"
+      fill="url(#stack-arrow-grad)"
+    />
+  </g>
+
+  <!-- Centered Typography: QueueLess -->
+  <g transform="translate(400, 600)" text-anchor="middle">
+    <text font-family="system-ui, -apple-system, 'Inter', 'Segoe UI', sans-serif" font-size="94" font-weight="800" letter-spacing="-2">
+      <tspan fill="#FFFFFF">Queue</tspan><tspan fill="url(#stack-less-grad)">Less</tspan>
+    </text>
+  </g>
+
+  <!-- Tagline below -->
+  <g transform="translate(400, 665)" text-anchor="middle">
+    <text font-family="system-ui, -apple-system, 'Inter', 'Segoe UI', sans-serif" font-size="20" font-weight="600" letter-spacing="8" fill="#94A3B8">
+      SMART DIGITAL QUEUE FLOW
+    </text>
+  </g>
+</svg>

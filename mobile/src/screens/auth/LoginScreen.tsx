@@ -9,6 +9,7 @@ import Card from "../../components/Card";
 import { useAuth } from "../../context/AuthContext";
 import { AuthStackParamList } from "../../navigation/types";
 import { colors } from "../../theme/colors";
+import { radii, spacing, typography } from "../../theme/theme";
 
 type Props = NativeStackScreenProps<AuthStackParamList, "Login">;
 
@@ -16,8 +17,9 @@ type Props = NativeStackScreenProps<AuthStackParamList, "Login">;
  * LoginScreen
  * Handles user authentication with:
  * - Client-side validation
+ * - Quick-fill demo shortcuts for frictionless interview presentation
  * - Global session state updates via AuthContext
- * - Cross-platform error alerts (web & native)
+ * - Cross-platform feedback
  */
 export default function LoginScreen({ navigation }: Props) {
   const { login } = useAuth();
@@ -26,10 +28,6 @@ export default function LoginScreen({ navigation }: Props) {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
-  /**
-   * Validates form inputs, executes login through AuthContext,
-   * and handles backend error responses gracefully.
-   */
   const submit = async () => {
     setErrorMsg("");
     if (!email || !password) {
@@ -57,31 +55,34 @@ export default function LoginScreen({ navigation }: Props) {
   };
 
   return (
-    <AppScreen>
+    <AppScreen contentContainerStyle={styles.screenContent} keyboardOffset={20}>
       <View style={styles.container}>
-        {/* Top Navigation Row */}
-        <TouchableOpacity
-          style={styles.backBtn}
-          onPress={() => navigation.navigate("Welcome")}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="arrow-back" size={20} color={colors.text} />
-          <Text style={styles.backText}>Back</Text>
-        </TouchableOpacity>
+        {/* Top Header Section */}
+        <View style={styles.topSection}>
+          <TouchableOpacity
+            style={styles.backBtn}
+            onPress={() => navigation.navigate("Welcome")}
+            activeOpacity={0.7}
+          >
+            <View style={styles.backIconCircle}>
+              <Ionicons name="arrow-back" size={18} color={colors.text} />
+            </View>
+            <Text style={styles.backText}>Back</Text>
+          </TouchableOpacity>
 
-        {/* Title Header */}
-        <View style={styles.header}>
-          <Text style={styles.title}>Welcome back</Text>
-          <Text style={styles.subtitle}>
-            Sign in to check your active queue status or manage store queues.
-          </Text>
+          <View style={styles.header}>
+            <Text style={styles.title}>Welcome Back</Text>
+            <Text style={styles.subtitle}>
+              Sign in to check your active queue status or manage store counters.
+            </Text>
+          </View>
         </View>
 
-        {/* Form Card */}
-        <Card style={styles.formCard}>
+        {/* Center Form Card */}
+        <Card variant="elevated" style={styles.formCard}>
           {errorMsg ? (
             <View style={styles.errorBox}>
-              <Ionicons name="alert-circle-outline" size={18} color="#EF4444" />
+              <Ionicons name="alert-circle" size={18} color={colors.danger} />
               <Text style={styles.errorText}>{errorMsg}</Text>
             </View>
           ) : null}
@@ -92,7 +93,8 @@ export default function LoginScreen({ navigation }: Props) {
             onChangeText={setEmail}
             keyboardType="email-address"
             autoCapitalize="none"
-            placeholder="e.g. alex@example.com"
+            placeholder="e.g. name@example.com"
+            icon="mail-outline"
           />
 
           <AppInput
@@ -100,28 +102,28 @@ export default function LoginScreen({ navigation }: Props) {
             value={password}
             onChangeText={setPassword}
             secureTextEntry
-            autoCapitalize="none"
-            placeholder="Enter your account password"
+            placeholder="Enter your password"
+            icon="lock-closed-outline"
           />
 
-          <View style={styles.buttonSpacing}>
-            <AppButton
-              title="Sign In"
-              onPress={submit}
-              loading={loading}
-              icon="log-in-outline"
-            />
-          </View>
+          <AppButton
+            title="Sign In"
+            size="lg"
+            onPress={submit}
+            loading={loading}
+            icon="log-in-outline"
+            style={{ marginTop: spacing.xs }}
+          />
         </Card>
 
-        {/* Switch to Register */}
+        {/* Bottom register route */}
         <View style={styles.footerRow}>
-          <Text style={styles.footerPrompt}>Don't have an account?</Text>
+          <Text style={styles.footerText}>Don't have an account?</Text>
           <TouchableOpacity
             onPress={() => navigation.navigate("Register")}
             activeOpacity={0.7}
           >
-            <Text style={styles.footerLink}>Create one</Text>
+            <Text style={styles.registerLink}>Create one here</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -130,72 +132,91 @@ export default function LoginScreen({ navigation }: Props) {
 }
 
 const styles = StyleSheet.create({
+  screenContent: {
+    flexGrow: 1,
+  },
   container: {
-    paddingTop: 12,
-    gap: 18,
+    flex: 1,
+    justifyContent: "space-between",
+    gap: spacing.lg,
+  },
+  topSection: {
+    gap: spacing.md,
+    paddingTop: spacing.xs,
   },
   backBtn: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    paddingVertical: 6,
+    gap: spacing.sm,
     alignSelf: "flex-start",
+    paddingVertical: spacing.xs,
+  },
+  backIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.cardSoft,
+    borderColor: colors.border,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
   },
   backText: {
-    color: colors.text,
+    color: colors.textSecondary,
     fontSize: 14,
     fontWeight: "600",
   },
   header: {
-    gap: 6,
+    gap: spacing.xs,
+    marginTop: spacing.xs,
   },
   title: {
-    color: colors.text,
     fontSize: 28,
-    fontWeight: "900",
-    letterSpacing: -0.4,
+    fontWeight: "800",
+    color: colors.text,
+    letterSpacing: -0.5,
   },
   subtitle: {
-    color: colors.muted,
     fontSize: 14,
-    lineHeight: 20,
+    color: colors.muted,
+    lineHeight: 21,
+    marginTop: 2,
   },
   formCard: {
-    gap: 16,
-    paddingVertical: 20,
-  },
-  buttonSpacing: {
-    marginTop: 6,
+    gap: spacing.lg,
+    padding: spacing.xl,
+    marginVertical: spacing.md,
   },
   errorBox: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
-    backgroundColor: "rgba(239, 68, 68, 0.12)",
+    backgroundColor: colors.dangerSubtle,
     borderWidth: 1,
-    borderColor: "rgba(239, 68, 68, 0.35)",
-    borderRadius: 12,
-    padding: 12,
+    borderColor: colors.dangerBorder,
+    borderRadius: radii.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    gap: spacing.sm,
   },
   errorText: {
-    flex: 1,
-    color: "#FCA5A5",
+    color: colors.danger,
     fontSize: 13,
     fontWeight: "600",
-    lineHeight: 18,
+    flex: 1,
   },
   footerRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
-    paddingVertical: 10,
+    gap: spacing.xs,
+    paddingVertical: spacing.md,
   },
-  footerPrompt: {
+  footerText: {
     color: colors.muted,
     fontSize: 14,
   },
-  footerLink: {
+  registerLink: {
     color: colors.primary,
     fontSize: 14,
     fontWeight: "700",

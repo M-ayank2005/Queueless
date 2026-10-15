@@ -2,6 +2,7 @@ import "react-native-gesture-handler";
 import React from "react";
 import { StatusBar } from "expo-status-bar";
 import { Platform, StyleSheet, View } from "react-native";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AuthProvider } from "./src/context/AuthContext";
 import AppNavigator from "./src/navigation/AppNavigator";
 import { colors } from "./src/theme/colors";
@@ -36,14 +37,16 @@ if (Platform.OS === "web" && typeof document !== "undefined") {
 
 export default function App() {
   return (
-    <View style={styles.appShell}>
-      <View style={styles.appContainer}>
-        <AuthProvider>
-          <StatusBar style="light" />
-          <AppNavigator />
-        </AuthProvider>
+    <SafeAreaProvider>
+      <View style={styles.appShell}>
+        <View style={styles.appContainer}>
+          <AuthProvider>
+            <StatusBar style="light" />
+            <AppNavigator />
+          </AuthProvider>
+        </View>
       </View>
-    </View>
+    </SafeAreaProvider>
   );
 }
 

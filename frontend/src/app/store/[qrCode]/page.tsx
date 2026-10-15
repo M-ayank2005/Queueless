@@ -1,133 +1,295 @@
 "use client";
+
 import React, { useState, useEffect } from "react";
-import { useParams, useRouter } from "next/navigation"; // Correct for App Router
+import { useParams, useRouter } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { useToast } from "@/components/ui/Toast";
 import { motion } from "framer-motion";
-import { Clock, CreditCard, Check } from "lucide-react";
+import { Clock, Check, Store, MapPin, ArrowLeft, Ticket, AlertCircle } from "lucide-react";
+import Link from "next/link";
 import api from "@/lib/api";
 
+interface ServiceItem {
+  _id?: string;
+  name: string;
+  durationMin: number;
+  cost: number;
+}
+
+interface StoreData {
+  _id: string;
+  name?: string;
+  email?: string;
+  businessProfile?: {
+    shopName?: string;
+    address?: string;
+    services?: ServiceItem[];
+    workingHours?: {
+      openTime: string;
+      closeTime: string;
+      closedDays: number[];
+    };
+  };
+}
+
 export default function StorePage() {
-    const params = useParams();
-    const qrCode = params.qrCode as string;
-    const router = useRouter();
+  const params = useParams();
+  const qrCode = params.qrCode as string;
+  const router = useRouter();
+  const { toast } = useToast();
 
-    const [store, setStore] = useState<any>(null);
-    const [loading, setLoading] = useState(true);
-    const [selectedServices, setSelectedServices] = useState<number[]>([]);
-    const [showPayment, setShowPayment] = useState(false);
-    const [userName, setUserName] = useState(""); // Simple name input for now if not logged in
+  const [store, setStore] = useState<StoreData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [selectedServices, setSelectedServices] = useState<number[]>([]);
+  const [isJoining, setIsJoining] = useState(false);
 
-    useEffect(() => {
-        if (qrCode) {
-            fetchStore();
-        }
-    }, [qrCode]);
+  useEffect(() => {
+    if (qrCode) {
+      fetchStore();
+    }
+  }, [qrCode]);
 
-    const fetchStore = async () => {
-        try {
-            const res = await api.get(`/queue/store/${qrCode}`);
-            setStore(res.data);
-            setLoading(false);
-        } catch (error) {
-            console.error("Failed to fetch store", error);
-            setLoading(false);
-        }
-    };
+  const fetchStore = async () => {
+    try {
+      const res = await api.get(`/queue/store/${qrCode}`);
+      setStore(res.data);
+    } catch {
+      setStore(null);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    const toggleService = (index: number) => {
-        if (selectedServices.includes(index)) {
-            setSelectedServices(selectedServices.filter(i => i !== index));
-        } else {
-            setSelectedServices([...selectedServices, index]);
-        }
-    };
+  const toggleService = (index: number) => {
+    if (selectedServices.includes(index)) {
+      setSelectedServices(selectedServices.filter((i) => i !== index));
+    } else {
+      setSelectedServices([...selectedServices, index]);
+    }
+  };
 
-    if (loading) return <div className="min-h-screen bg-black text-white flex items-center justify-center">Loading Store...</div>;
-    if (!store) return <div className="min-h-screen bg-black text-white flex items-center justify-center">Store not found</div>;
+  const servicesList = store?.businessProfile?.services || [];
+  const totalCost = selectedServices.reduce((acc, idx) => acc + (servicesList[idx]?.cost || 0), 0);
+  const totalTime = selectedServices.reduce((acc, idx) => acc + (servicesList[idx]?.durationMin || 0), 0);
 
-    const servicesList = store.businessProfile?.services || [];
-    const totalCost = selectedServices.reduce((acc, idx) => acc + (servicesList[idx]?.cost || 0), 0);
-    const totalTime = selectedServices.reduce((acc, idx) => acc + (servicesList[idx]?.durationMin || 0), 0);
+  const handleJoinQueue = async () => {
+    if (selectedServices.length === 0) {
+      toast.info("Please select at least one service to join the queue");
+      return;
+    }
 
-    const handleJoinQueue = async () => {
-        if (selectedServices.length === 0) return;
-        
-        try {
-             const selectedServiceObjects = selectedServices.map(idx => servicesList[idx]);
-             const res = await api.post("/queue/join", {
-                 businessId: store._id,
-                 selectedServices: selectedServiceObjects
-             });
-             
-            router.push(`/status/${res.data._id}`);
-        } catch (error: any) {
-             console.error("Join Failed", error);
-             if (error.response?.status === 401) {
-                 alert("Please login to join the queue");
-                 router.push("/login");
-             } else {
-                 alert("Failed to join queue");
-             }
-        }
-    };
+    const token = localStorage.getItem("token");
+    if (!token) {
+      toast.info("Please sign in or create an account to book your queue ticket");
+      router.push(`/login?redirect=/store/${qrCode}`);
+      return;
+    }
 
+    setIsJoining(true);
+    try {
+      const selectedServiceObjects = selectedServices.map((idx) => servicesList[idx]);
+      const res = await api.post("/queue/join", {
+        businessId: store?._id,
+        selectedServices: selectedServiceObjects
+      });
+
+      toast.success("Joined queue successfully!");
+      router.push(`/status/${res.data._id}`);
+    } catch (error: any) {
+      if (error.response?.status === 401) {
+        toast.info("Your session expired. Please sign in again.");
+        router.push(`/login?redirect=/store/${qrCode}`);
+      } else {
+        toast.error(error.response?.data?.message || "Failed to join queue. The store may be closed.");
+      }
+    } finally {
+      setIsJoining(false);
+    }
+  };
+
+  if (loading) {
     return (
-        <div className="min-h-screen bg-black text-white p-6 pt-24">
-            <Navbar />
-            <div className="container mx-auto max-w-2xl">
-                <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }}>
-                    <Card className="bg-zinc-900 border-zinc-800 mb-6">
-                        <CardHeader>
-                            <CardTitle className="text-2xl text-white">{store.businessProfile?.shopName}</CardTitle>
-                            <CardDescription className="text-gray-400">{store.businessProfile?.address}</CardDescription>
-                        </CardHeader>
-                    </Card>
-
-                    <h2 className="text-lg font-semibold mb-4 text-gray-200">Select Services</h2>
-                    
-                    <div className="space-y-3 mb-8">
-                        {servicesList.map((service: any, idx: number) => (
-                            <div 
-                                key={idx} 
-                                onClick={() => toggleService(idx)}
-                                className={`p-4 rounded-lg border cursor-pointer transition-all flex justify-between items-center ${selectedServices.includes(idx) ? 'bg-blue-900/20 border-blue-500' : 'bg-zinc-900 border-zinc-800 hover:bg-zinc-800'}`}
-                            >
-                                <div className="flex items-center gap-3">
-                                    <div className={`w-5 h-5 rounded border flex items-center justify-center ${selectedServices.includes(idx) ? 'bg-blue-500 border-blue-500' : 'border-gray-500'}`}>
-                                        {selectedServices.includes(idx) && <Check className="w-3 h-3 text-white" />}
-                                    </div>
-                                    <div>
-                                        <p className="font-medium text-white">{service.name}</p>
-                                        <p className="text-sm text-gray-400 flex items-center gap-1">
-                                            <Clock className="w-3 h-3" /> {service.durationMin} min
-                                        </p>
-                                    </div>
-                                </div>
-                                <span className="font-bold text-white">${service.cost}</span>
-                            </div>
-                        ))}
-                    </div>
-
-                    <div className="fixed bottom-0 left-0 w-full bg-zinc-950/80 backdrop-blur-md border-t border-zinc-800 p-6">
-                        <div className="container mx-auto max-w-2xl flex justify-between items-center">
-                            <div>
-                                <p className="text-sm text-gray-400">{totalTime} min estimated</p>
-                                <p className="text-xl font-bold text-white">Total: ${totalCost}</p>
-                            </div>
-                            <Button 
-                                size="lg" 
-                                className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50" 
-                                disabled={selectedServices.length === 0}
-                                onClick={handleJoinQueue}
-                            >
-                                Join Queue
-                            </Button>
-                        </div>
-                    </div>
-                </motion.div>
-            </div>
+      <div className="min-h-screen bg-[#050B18] text-[#ECF2FF] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+          <p className="text-sm text-[#889DC2]">Loading store menu...</p>
         </div>
+      </div>
     );
+  }
+
+  if (!store) {
+    return (
+      <div className="min-h-screen bg-[#050B18] text-[#ECF2FF] flex flex-col">
+        <Navbar />
+        <div className="flex-1 flex items-center justify-center p-4">
+          <Card className="max-w-md w-full bg-[#101A32] border-[#203052] text-center p-6">
+            <div className="w-12 h-12 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-400 flex items-center justify-center mx-auto mb-4">
+              <AlertCircle className="w-6 h-6" />
+            </div>
+            <CardTitle className="text-lg font-bold text-[#ECF2FF] mb-2">
+              Store Not Found
+            </CardTitle>
+            <CardDescription className="text-xs text-[#889DC2] mb-6">
+              The QR code or identifier "{qrCode}" did not match any active QueueLess merchants.
+            </CardDescription>
+            <div className="flex gap-3">
+              <Link href="/scan" className="flex-1">
+                <Button className="w-full bg-blue-600 hover:bg-blue-500 text-white text-xs">
+                  Scan Another Code
+                </Button>
+              </Link>
+              <Link href="/" className="flex-1">
+                <Button variant="outline" className="w-full border-[#203052] text-xs text-[#ECF2FF]">
+                  Back to Home
+                </Button>
+              </Link>
+            </div>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
+  const shopName = store.businessProfile?.shopName || "QueueLess Store";
+  const address = store.businessProfile?.address;
+  const hours = store.businessProfile?.workingHours;
+
+  return (
+    <div className="min-h-screen bg-[#050B18] text-[#ECF2FF] pb-36">
+      <Navbar />
+
+      <main className="container mx-auto max-w-2xl px-4 pt-24">
+        {/* Back navigation */}
+        <Link
+          href="/scan"
+          className="inline-flex items-center gap-1.5 text-xs text-[#889DC2] hover:text-[#ECF2FF] mb-4 transition-colors"
+        >
+          <ArrowLeft className="w-3.5 h-3.5" />
+          Back to Scanner
+        </Link>
+
+        {/* Store Header Banner Card */}
+        <motion.div
+          initial={{ y: 16, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ duration: 0.3 }}
+        >
+          <Card className="bg-[#101A32] border-[#203052] shadow-xl mb-6">
+            <CardHeader>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-400 shrink-0">
+                  <Store className="w-5 h-5" />
+                </div>
+                <div>
+                  <CardTitle className="text-xl sm:text-2xl font-bold text-[#ECF2FF]">
+                    {shopName}
+                  </CardTitle>
+                  {address && (
+                    <CardDescription className="text-xs text-[#889DC2] flex items-center gap-1 mt-0.5">
+                      <MapPin className="w-3 h-3 text-blue-400 shrink-0" />
+                      {address}
+                    </CardDescription>
+                  )}
+                </div>
+              </div>
+
+              {hours?.openTime && hours?.closeTime && (
+                <div className="mt-3 pt-3 border-t border-[#203052]/60 text-xs text-[#889DC2] flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-blue-400" />
+                  <span>Hours today: {hours.openTime} - {hours.closeTime}</span>
+                </div>
+              )}
+            </CardHeader>
+          </Card>
+
+          {/* Service Selection List */}
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-base font-bold text-[#ECF2FF] flex items-center gap-2">
+              <Ticket className="w-4 h-4 text-blue-400" />
+              Select Your Services
+            </h2>
+            <span className="text-xs text-[#889DC2]">
+              {selectedServices.length} selected
+            </span>
+          </div>
+
+          {servicesList.length === 0 ? (
+            <div className="p-8 text-center rounded-2xl border border-dashed border-[#203052] bg-[#101A32]/50 text-xs text-[#889DC2]">
+              This merchant has not listed specific services yet.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {servicesList.map((service, idx) => {
+                const isSelected = selectedServices.includes(idx);
+                return (
+                  <motion.div
+                    key={idx}
+                    whileHover={{ scale: 1.005 }}
+                    whileTap={{ scale: 0.995 }}
+                    onClick={() => toggleService(idx)}
+                    className={`p-4 rounded-xl border cursor-pointer transition-all flex items-center justify-between ${
+                      isSelected
+                        ? "bg-blue-600/15 border-blue-500 shadow-[0_0_16px_rgba(59,130,246,0.15)]"
+                        : "bg-[#101A32] border-[#203052] hover:border-[#203052]/90 hover:bg-[#152243]/50"
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={`w-5 h-5 rounded-md border flex items-center justify-center transition-colors ${
+                          isSelected
+                            ? "bg-blue-600 border-blue-500"
+                            : "border-[#203052] bg-[#0A1329]"
+                        }`}
+                      >
+                        {isSelected && <Check className="w-3.5 h-3.5 text-white stroke-[3]" />}
+                      </div>
+
+                      <div>
+                        <p className="font-semibold text-sm text-[#ECF2FF]">{service.name}</p>
+                        <p className="text-xs text-[#889DC2] flex items-center gap-1 mt-0.5">
+                          <Clock className="w-3 h-3 text-blue-400" />
+                          ~{service.durationMin} mins
+                        </p>
+                      </div>
+                    </div>
+
+                    <span className="font-bold text-sm text-[#ECF2FF]">
+                      ${service.cost}
+                    </span>
+                  </motion.div>
+                );
+              })}
+            </div>
+          )}
+        </motion.div>
+      </main>
+
+      {/* Fixed Checkout / Join Queue Bottom Bar */}
+      <div className="fixed bottom-0 left-0 right-0 bg-[#0A1329]/95 backdrop-blur-xl border-t border-[#203052] p-4 z-30 shadow-2xl">
+        <div className="container mx-auto max-w-2xl flex items-center justify-between gap-4">
+          <div>
+            <div className="text-xs text-[#889DC2] flex items-center gap-1">
+              <Clock className="w-3 h-3 text-blue-400" />
+              ~{totalTime} mins estimated wait
+            </div>
+            <div className="text-lg sm:text-xl font-extrabold text-[#ECF2FF]">
+              Total: ${totalCost}
+            </div>
+          </div>
+
+          <Button
+            size="lg"
+            disabled={selectedServices.length === 0 || isJoining}
+            onClick={handleJoinQueue}
+            className="bg-blue-600 hover:bg-blue-500 text-white font-semibold text-sm px-6 h-11 shadow-[0_0_20px_rgba(59,130,246,0.35)] active:scale-95 transition-all disabled:opacity-50"
+          >
+            {isJoining ? "Securing Spot..." : `Join Queue (${selectedServices.length})`}
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
 }
