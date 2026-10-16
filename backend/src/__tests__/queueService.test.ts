@@ -318,6 +318,11 @@ describe("Queue Service Engine — Unit Tests", () => {
       };
 
       (QueueEntry.findOne as jest.Mock).mockResolvedValue(mockTicket);
+      (QueueEntry.findOneAndUpdate as jest.Mock).mockResolvedValue({
+        ...mockTicket,
+        status: "in_progress",
+        notificationLedger: { yourTurnSentAt: new Date() }
+      });
       (User.findById as jest.Mock).mockResolvedValue({
         businessProfile: { shopName: "Elite Barber" }
       });
@@ -335,16 +340,15 @@ describe("Queue Service Engine — Unit Tests", () => {
         };
       });
 
-      await transitionTicketStatusService(
+      const updated = await transitionTicketStatusService(
         ticketId.toString(),
         dummyBusinessId.toString(),
         "in_progress",
         mockIo
       );
 
-      expect(mockTicket.status).toBe("in_progress");
-      expect(mockTicket.notificationLedger.yourTurnSentAt).toBeDefined();
-      expect(mockTicket.save).toHaveBeenCalled();
+      expect(updated.status).toBe("in_progress");
+      expect(QueueEntry.findOneAndUpdate).toHaveBeenCalled();
       expect(mockEmitter.emit).toHaveBeenCalledWith("customer_notification", expect.objectContaining({
         type: "YOUR_TURN",
         title: "It's Your Turn! 🎯"

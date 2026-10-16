@@ -24,9 +24,20 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   next();
 });
 
-// Cross-Origin Resource Sharing
+export const getAppCorsOrigins = (): string[] | boolean => {
+  if (process.env.ALLOWED_ORIGINS) {
+    return process.env.ALLOWED_ORIGINS.split(",").map(o => o.trim()).filter(Boolean);
+  }
+  if (process.env.NODE_ENV === "production") {
+    // Fail-closed in production: reject all origins unless explicitly configured
+    return false;
+  }
+  return ["http://localhost:3000", "http://localhost:5000", "http://localhost:8081", "http://127.0.0.1:3000"];
+};
+
+// Cross-Origin Resource Sharing (Fail-closed in production)
 app.use(cors({
-  origin: process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(",") : "*",
+  origin: getAppCorsOrigins(),
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization", "X-Request-Id"]
 }));

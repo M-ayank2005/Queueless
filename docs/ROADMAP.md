@@ -242,7 +242,37 @@ This document is the authoritative tracking artifact for QueueLess production ha
   - Operational Documentation:
     - Created [`docs/OPERATIONS.md`](file:///d:/Projects/Projects/QueueLess/docs/OPERATIONS.md) detailing architecture topography, Kubernetes probe configurations, rate limiting policies, zero-downtime rolling restart sequences, and MongoDB backup & disaster recovery (`mongodump` & `mongorestore`).
 - **Verification Status: 🔵 VERIFIED**
-  - All 51 automated backend tests pass across 6 suites (`npm test`).
+  - All 64 automated backend tests pass across 8 test suites (`npm test`).
   - Backend compiles with 0 errors (`npm run build`).
   - Web Next.js 16 (Turbopack) production build succeeds (`npm run build`) with 11/11 routes.
   - Mobile Expo TypeScript check compiles with 0 errors (`npx tsc --noEmit`).
+
+---
+
+## 🔒 Security & Concurrency Hardening Audit (Post-Review Verification)
+
+Following an in-depth source-level security and concurrency review, the following critical gaps were systematically resolved and verified with automated test suites:
+
+1. **Socket.IO Room Lockdown (`backend/src/index.ts` & `src/__tests__/socketAuth.test.ts`):**
+   - **User Room Hijacking Eliminated:** Removed arbitrary `join_user` access. Sockets can only join `user_${userId}` if `socket.data.user?.id === userId`.
+   - **Business Room Fallback Removed:** Completely removed the unauthenticated `join_business` dev fallback. Only verified business owners can join `business_${businessId}`.
+   - **Ticket Room Eavesdropping Prevented:** `join_queue` now queries MongoDB and verifies that the requester is either the ticket owner or the store manager before granting room entry.
+   - **Share Token Validation on Socket Rooms:** `join_shared_ticket` hashes the incoming token and checks MongoDB to ensure the token exists, is active, is not revoked, and is not expired before granting room membership.
+
+2. **JWT Security & Fail-Closed Policies (`backend/src/middleware/authMiddleware.ts` & `backend/src/app.ts`):**
+   - **Role Allowlist & Claims Validation:** Strictly validates `decoded.role` against `["customer", "business"]`.
+   - **Database User Existence Check:** In `protect` middleware, verifies that the user still exists in MongoDB and matches their assigned role before allowing protected requests.
+   - **Fail-Closed CORS:** In production (`NODE_ENV === "production"`), missing `ALLOWED_ORIGINS` strictly rejects cross-origin browser requests (`origin: false`), rather than allowing `*`.
+   - **Error Response Sanitization:** Eliminated raw `error` object leaks in all controllers (`authController.ts`, `businessController.ts`, `queueController.ts`), returning standardized, safe JSON responses.
+
+3. **Public Ticket Sharing Lifecycle & Hashed Storage (`backend/src/models/QueueEntry.ts` & `backend/src/services/queueService.ts`):**
+   - **SHA-256 Hashed Storage:** Raw share tokens are hashed with SHA-256 before storage in MongoDB (`shareTokenHash`), ensuring raw tokens are never exposed in database dumps.
+   - **Explicit Expiration Policy:** Every share token has a 24-hour expiration (`shareTokenExpiresAt`). Expired tokens immediately return `410 Gone`.
+   - **Instant Revocation:** Revoking a ticket clears the hash, marks `shareTokenRevoked: true`, and emits `ticket_share_revoked` to active guest rooms.
+
+4. **Atomic Concurrency & Competing State Lock (`backend/src/models/QueueEntry.ts`, `backend/src/services/queueService.ts`, & `src/__tests__/concurrency.test.ts`):**
+   - **Database-Level Partial Unique Index:** Added `{ businessId: 1, customerId: 1 }` with `partialFilterExpression: { status: { $in: ["waiting", "in_progress"] } }`. Eliminates simultaneous duplicate booking race conditions at the storage engine level.
+   - **Atomic State Transitions:** `transitionTicketStatusService` and `cancelCustomerTicketService` use atomic `findOneAndUpdate` with status preconditions, returning `409 Conflict` if another process concurrently modified the ticket.
+
+5. **Mobile Session Invalidation & 401 Interceptors (`mobile/src/lib/api.ts` & `mobile/src/context/AuthContext.tsx`):**
+   - Added an Axios response interceptor for 401 Unauthorized responses with a debounced callback that invokes `logout()` cleanly, preventing multiple concurrent logout cascades.

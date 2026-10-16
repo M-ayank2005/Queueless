@@ -97,7 +97,7 @@ export const register = async (req: Request, res: Response) => {
       token
     });
   } catch (error) {
-    return res.status(500).json({ success: false, message: "Server error during registration", error });
+    return res.status(500).json({ success: false, message: "Internal server error during registration" });
   }
 };
 
@@ -138,7 +138,7 @@ export const login = async (req: Request, res: Response) => {
       token
     });
   } catch (error) {
-    return res.status(500).json({ success: false, message: "Server error during login", error });
+    return res.status(500).json({ success: false, message: "Internal server error during login" });
   }
 };
 
@@ -216,7 +216,7 @@ export const updateProfile = async (req: AuthRequest, res: Response) => {
       token
     });
   } catch (error) {
-    return res.status(500).json({ success: false, message: "Server error updating profile", error });
+    return res.status(500).json({ success: false, message: "Internal server error updating profile" });
   }
 };
 
@@ -246,6 +246,6 @@ export const deleteProfile = async (req: AuthRequest, res: Response) => {
     await User.findByIdAndDelete(userId);
     return res.json({ success: true, message: "Account and associated active queues cancelled successfully" });
   } catch (error) {
-    return res.status(500).json({ success: false, message: "Server error deleting account", error });
+    return res.status(500).json({ success: false, message: "Internal server error deleting account" });
   }
 };

@@ -133,7 +133,7 @@ describe("Secure Shareable Queue Tickets — Unit Tests", () => {
       };
 
       (jest.spyOn(QueueEntry, "findOne") as any).mockImplementation((query: any) => {
-        if (query?.shareToken) {
+        if (query?.$or || query?.shareToken || query?.shareTokenHash) {
           return {
             populate: jest.fn().mockResolvedValue(testTicket)
           };
@@ -174,6 +174,24 @@ describe("Secure Shareable Queue Tickets — Unit Tests", () => {
       expect((result as any).email).toBeUndefined();
       expect((result as any).phone).toBeUndefined();
       expect((result as any).userId).toBeUndefined();
+    });
+
+    it("should throw 410 when share token has expired", async () => {
+      testTicket.shareToken = "expired_share_token_123456";
+      testTicket.shareTokenExpiresAt = new Date(Date.now() - 3600000); // 1 hour ago
+      testTicket.businessId = {
+        _id: businessId,
+        businessProfile: { shopName: "Urban Barber Lounge" }
+      };
+
+      (jest.spyOn(QueueEntry, "findOne") as any).mockReturnValue({
+        populate: jest.fn().mockResolvedValue(testTicket)
+      } as any);
+
+      await expect(getSharedTicketService("expired_share_token_123456")).rejects.toMatchObject({
+        status: 410,
+        message: expect.stringContaining("expired")
+      });
     });
   });
 });

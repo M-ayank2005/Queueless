@@ -19,6 +19,19 @@ export function setApiToken(token: string | null): void {
   authToken = token;
 }
 
+// Global 401 unauthorized session handler callback
+let isHandlingUnauthorized = false;
+let onUnauthorizedCallback: (() => void) | null = null;
+
+export function registerUnauthorizedHandler(callback: () => void): () => void {
+  onUnauthorizedCallback = callback;
+  return () => {
+    if (onUnauthorizedCallback === callback) {
+      onUnauthorizedCallback = null;
+    }
+  };
+}
+
 // Request Interceptor: Automatically attaches the Bearer JWT token to every outgoing request
 api.interceptors.request.use(
   (config) => {
@@ -30,3 +43,25 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
+// Response Interceptor: Catches 401 Unauthorized responses and invokes session invalidation handler
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    if (error.response?.status === 401) {
+      if (!isHandlingUnauthorized) {
+        isHandlingUnauthorized = true;
+        setApiToken(null);
+        if (onUnauthorizedCallback) {
+          try {
+            onUnauthorizedCallback();
+          } catch {}
+        }
+        // Debounce to prevent simultaneous multi-request 401 logout cascades
+        setTimeout(() => {
+          isHandlingUnauthorized = false;
+        }, 1500);
+      }
+    }
+    return Promise.reject(error);
+  }
+);

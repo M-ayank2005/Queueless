@@ -60,7 +60,7 @@ export const getStoreByQr = async (req: Request, res: Response) => {
       isFavorite
     });
   } catch (error) {
-    return res.status(500).json({ success: false, message: "Server error", error });
+    return res.status(500).json({ success: false, message: "Internal server error retrieving store details" });
   }
 };
 
@@ -181,7 +181,7 @@ export const getQueueHistory = async (req: AuthRequest, res: Response) => {
     // Default: Return direct array for 100% backward compatibility
     return res.json(items);
   } catch (error: any) {
-    return res.status(500).json({ success: false, message: "Server error retrieving history", error });
+    return res.status(500).json({ success: false, message: "Internal server error retrieving history" });
   }
 };
 

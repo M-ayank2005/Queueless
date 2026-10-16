@@ -1,5 +1,5 @@
 import React, { createContext, PropsWithChildren, useContext, useEffect, useMemo, useState } from "react";
-import { api, setApiToken } from "../lib/api";
+import { api, setApiToken, registerUnauthorizedHandler } from "../lib/api";
 import { clearAuthSession, readAuthSession, saveAuthSession } from "../lib/storage";
 import { User, UserRole } from "../types";
 
@@ -31,6 +31,14 @@ export function AuthProvider({ children }: PropsWithChildren) {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
+
+  // Auto-invalidation on 401 Unauthorized API responses
+  useEffect(() => {
+    const unregister = registerUnauthorizedHandler(() => {
+      logout();
+    });
+    return unregister;
+  }, []);
 
   // Session Hydration: Restores saved JWT token & user profile from AsyncStorage on app startup
   useEffect(() => {

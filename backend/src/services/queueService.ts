@@ -340,7 +340,17 @@ export const joinQueueService = async (
     status: "waiting"
   });
 
-  await newEntry.save();
+  try {
+    await newEntry.save();
+  } catch (err: any) {
+    if (err && (err.code === 11000 || err.name === "MongoServerError")) {
+      throw {
+        status: 409,
+        message: "You already have an active ticket at this store. Please wait for your turn or view your active ticket."
+      };
+    }
+    throw err;
+  }
 
   if (io) {
     io.to(`business_${businessId}`).emit("queue_updated", {
@@ -587,17 +597,18 @@ export const transitionTicketStatusService = async (
   }
 
   const now = new Date();
-  entry.status = nextStatus as any;
+
+  // Prepare atomic update payload
+  const updateFields: any = {
+    status: nextStatus
+  };
 
   if (nextStatus === "in_progress") {
-    entry.serviceStartedAt = now;
+    updateFields.serviceStartedAt = now;
 
     // Dispatched YOUR_TURN notification (once per ticket)
     if (!entry.notificationLedger?.yourTurnSentAt) {
-      if (!entry.notificationLedger) {
-        entry.notificationLedger = {};
-      }
-      entry.notificationLedger.yourTurnSentAt = now;
+      updateFields["notificationLedger.yourTurnSentAt"] = now;
 
       let shopName = "QueueLess Store";
       try {
@@ -625,30 +636,48 @@ export const transitionTicketStatusService = async (
       }
     }
   } else if (nextStatus === "completed") {
-    entry.completedAt = now;
+    updateFields.completedAt = now;
     if (entry.serviceStartedAt) {
-      entry.actualServiceDurationMin = Math.max(
+      updateFields.actualServiceDurationMin = Math.max(
         1,
         Math.round((now.getTime() - new Date(entry.serviceStartedAt).getTime()) / 60000)
       );
     }
   } else if (nextStatus === "cancelled") {
-    entry.cancelledAt = now;
+    updateFields.cancelledAt = now;
   }
 
-  await entry.save();
+  // Atomic state transition with status precondition to eliminate race conditions
+  const updatedEntry = await QueueEntry.findOneAndUpdate(
+    { _id: ticketId, businessId, status: entry.status },
+    { $set: updateFields },
+    { new: true }
+  );
+
+  if (!updatedEntry) {
+    throw {
+      status: 409,
+      message: "Ticket status was concurrently modified by another request. Please refresh."
+    };
+  }
 
   if (io) {
-    io.to(`business_${entry.businessId}`).emit("queue_updated", {
+    io.to(`business_${updatedEntry.businessId}`).emit("queue_updated", {
       type: "STATUS_CHANGE",
-      entry
+      entry: updatedEntry
     });
-    io.to(`queue_${entry._id}`).emit("status_updated", entry);
+    io.to(`queue_${updatedEntry._id}`).emit("status_updated", updatedEntry);
 
-    if (entry.shareToken && !entry.shareTokenRevoked) {
+    const tokenLookup = updatedEntry.shareToken || updatedEntry.shareTokenHash;
+    if (tokenLookup && !updatedEntry.shareTokenRevoked) {
       try {
-        const sharedPayload = await getSharedTicketService(entry.shareToken);
-        io.to(`shared_ticket_${entry.shareToken}`).emit("shared_ticket_updated", sharedPayload);
+        const sharedPayload = await getSharedTicketService(tokenLookup);
+        if (updatedEntry.shareToken) {
+          io.to(`shared_ticket_${updatedEntry.shareToken}`).emit("shared_ticket_updated", sharedPayload);
+        }
+        if (updatedEntry.shareTokenHash) {
+          io.to(`shared_ticket_${updatedEntry.shareTokenHash}`).emit("shared_ticket_updated", sharedPayload);
+        }
       } catch {
         // Silently catch if shared payload fails
       }
@@ -656,37 +685,63 @@ export const transitionTicketStatusService = async (
   }
 
   // Advance queue & evaluate turn-approaching triggers for remaining waiting tickets
-  await evaluateQueueNotificationsService(entry.businessId, io);
+  await evaluateQueueNotificationsService(updatedEntry.businessId, io);
 
-  return entry;
+  return updatedEntry;
 };
 
 /**
- * Customer Self-Service Cancellation
+ * Customer Self-Service Cancellation (Atomic)
  */
 export const cancelCustomerTicketService = async (ticketId: string, customerId: string, io?: Server) => {
-  const entry = await QueueEntry.findOne({ _id: ticketId, customerId });
-  if (!entry) {
-    throw { status: 404, message: "Queue entry not found or unauthorized" };
-  }
+  const now = new Date();
 
-  if (entry.status === "completed" || entry.status === "cancelled") {
-    throw { status: 400, message: `Cannot cancel a ticket with status '${entry.status}'` };
-  }
+  // Atomic state change with precondition: only cancel if waiting or in_progress
+  const updatedEntry = await QueueEntry.findOneAndUpdate(
+    {
+      _id: ticketId,
+      customerId,
+      status: { $in: ["waiting", "in_progress"] }
+    },
+    {
+      $set: {
+        status: "cancelled",
+        cancelledAt: now
+      }
+    },
+    { new: true }
+  );
 
-  entry.status = "cancelled";
-  entry.cancelledAt = new Date();
-  await entry.save();
+  if (!updatedEntry) {
+    const existing = await QueueEntry.findOne({ _id: ticketId, customerId });
+    if (!existing) {
+      throw { status: 404, message: "Queue entry not found or unauthorized" };
+    }
+    throw { status: 400, message: `Cannot cancel a ticket with status '${existing.status}'` };
+  }
 
   if (io) {
-    io.to(`business_${entry.businessId}`).emit("queue_updated", { type: "CANCEL", entry });
-    io.to(`queue_${entry._id}`).emit("status_updated", entry);
+    io.to(`business_${updatedEntry.businessId}`).emit("queue_updated", { type: "CANCEL", entry: updatedEntry });
+    io.to(`queue_${updatedEntry._id}`).emit("status_updated", updatedEntry);
+
+    const tokenLookup = updatedEntry.shareToken || updatedEntry.shareTokenHash;
+    if (tokenLookup && !updatedEntry.shareTokenRevoked) {
+      try {
+        const sharedPayload = await getSharedTicketService(tokenLookup);
+        if (updatedEntry.shareToken) {
+          io.to(`shared_ticket_${updatedEntry.shareToken}`).emit("shared_ticket_updated", sharedPayload);
+        }
+        if (updatedEntry.shareTokenHash) {
+          io.to(`shared_ticket_${updatedEntry.shareTokenHash}`).emit("shared_ticket_updated", sharedPayload);
+        }
+      } catch {}
+    }
   }
 
   // Customers behind cancelled ticket move up; trigger notifications if crossing threshold
-  await evaluateQueueNotificationsService(entry.businessId, io);
+  await evaluateQueueNotificationsService(updatedEntry.businessId, io);
 
-  return entry;
+  return updatedEntry;
 };
 
 /**
@@ -966,7 +1021,7 @@ export interface SharedTicketPublicResponse {
 export const generateTicketShareTokenService = async (
   ticketId: string,
   requesterUserId: string
-): Promise<{ shareToken: string; shareUrl: string; createdAt: Date }> => {
+): Promise<{ shareToken: string; shareUrl: string; createdAt: Date; expiresAt: Date }> => {
   const entry = await QueueEntry.findById(ticketId);
   if (!entry) {
     throw { status: 404, message: "Ticket not found" };
@@ -979,17 +1034,28 @@ export const generateTicketShareTokenService = async (
     throw { status: 403, message: "Forbidden: You are not authorized to share this ticket" };
   }
 
-  if (!entry.shareToken || entry.shareTokenRevoked) {
-    entry.shareToken = crypto.randomBytes(24).toString("hex");
-    entry.shareTokenCreatedAt = new Date();
+  const now = new Date();
+  const isExpired = entry.shareTokenExpiresAt && entry.shareTokenExpiresAt < now;
+
+  // Generate new token if missing, revoked, or expired
+  if (!entry.shareToken || entry.shareTokenRevoked || isExpired) {
+    const rawToken = crypto.randomBytes(24).toString("hex");
+    const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24-hour expiration policy
+
+    entry.shareToken = rawToken;
+    entry.shareTokenHash = tokenHash;
+    entry.shareTokenCreatedAt = now;
+    entry.shareTokenExpiresAt = expiresAt;
     entry.shareTokenRevoked = false;
     await entry.save();
   }
 
   return {
-    shareToken: entry.shareToken,
+    shareToken: entry.shareToken!,
     shareUrl: `/shared/${entry.shareToken}`,
-    createdAt: entry.shareTokenCreatedAt || new Date()
+    createdAt: entry.shareTokenCreatedAt || now,
+    expiresAt: entry.shareTokenExpiresAt || new Date(Date.now() + 24 * 60 * 60 * 1000)
   };
 };
 
@@ -1013,17 +1079,23 @@ export const revokeTicketShareTokenService = async (
     throw { status: 403, message: "Forbidden: You are not authorized to modify this ticket" };
   }
 
-  if (entry.shareToken) {
+  if (entry.shareToken || entry.shareTokenHash) {
     const oldToken = entry.shareToken;
+    const oldHash = entry.shareTokenHash;
+
     entry.shareTokenRevoked = true;
     entry.shareToken = undefined;
+    entry.shareTokenHash = undefined;
+    entry.shareTokenExpiresAt = undefined;
     await entry.save();
 
     if (io) {
-      io.to(`shared_ticket_${oldToken}`).emit("ticket_share_revoked", {
+      const payload = {
         ticketNumber: entry._id.toString().slice(-4).toUpperCase(),
         message: "This share link has been revoked by the ticket holder."
-      });
+      };
+      if (oldToken) io.to(`shared_ticket_${oldToken}`).emit("ticket_share_revoked", payload);
+      if (oldHash) io.to(`shared_ticket_${oldHash}`).emit("ticket_share_revoked", payload);
     }
   }
 
@@ -1036,6 +1108,7 @@ export const revokeTicketShareTokenService = async (
 /**
  * Public Guest-Accessible Ticket Status Lookup
  * Strictly sanitizes PII (never returns customer name, email, phone, or internal user IDs)
+ * Enforces SHA-256 hash lookup and expiration check
  */
 export const getSharedTicketService = async (
   shareToken: string
@@ -1044,8 +1117,14 @@ export const getSharedTicketService = async (
     throw { status: 400, message: "Invalid share token" };
   }
 
+  const cleanToken = shareToken.trim();
+  const tokenHash = crypto.createHash("sha256").update(cleanToken).digest("hex");
+
   const entry = await QueueEntry.findOne({
-    shareToken: shareToken.trim(),
+    $or: [
+      { shareTokenHash: tokenHash },
+      { shareToken: cleanToken }
+    ],
     shareTokenRevoked: { $ne: true }
   }).populate("businessId", "businessProfile.shopName businessProfile.address");
 
@@ -1053,6 +1132,14 @@ export const getSharedTicketService = async (
     throw {
       status: 404,
       message: "This shared ticket link is invalid, expired, or has been revoked by the holder."
+    };
+  }
+
+  // Enforce explicit expiration
+  if (entry.shareTokenExpiresAt && entry.shareTokenExpiresAt < new Date()) {
+    throw {
+      status: 410,
+      message: "This shared ticket link has expired. Please request an updated link from the ticket holder."
     };
   }
 
@@ -1086,6 +1173,6 @@ export const getSharedTicketService = async (
     currentEstimatedWait: estimate.currentEstimatedWait,
     estimatedServiceStartTime: estimate.estimatedServiceStartTime,
     prediction: estimate.prediction,
-    shareToken: entry.shareToken || shareToken
+    shareToken: cleanToken
   };
 };

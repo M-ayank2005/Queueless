@@ -21,7 +21,9 @@ export interface IQueueEntry extends Document {
   customerName: string; // duplicate for easier display
   notificationLedger?: INotificationLedger;
   shareToken?: string;
+  shareTokenHash?: string;
   shareTokenCreatedAt?: Date;
+  shareTokenExpiresAt?: Date;
   shareTokenRevoked?: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -54,9 +56,20 @@ const QueueEntrySchema = new Schema<IQueueEntry>({
     yourTurnSentAt: { type: Date }
   },
   shareToken: { type: String, sparse: true, index: true },
+  shareTokenHash: { type: String, sparse: true, index: true },
   shareTokenCreatedAt: { type: Date },
+  shareTokenExpiresAt: { type: Date, index: true },
   shareTokenRevoked: { type: Boolean, default: false }
 }, { timestamps: true });
+
+// Partial unique compound index: Prevents race conditions and guarantees at most 1 active ticket per customer per store
+QueueEntrySchema.index(
+  { businessId: 1, customerId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { status: { $in: ["waiting", "in_progress"] } }
+  }
+);
 
 // Compound indexes for production query patterns
 QueueEntrySchema.index({ businessId: 1, date: 1, status: 1, joinedAt: 1 });

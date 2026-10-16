@@ -17,7 +17,7 @@ export const getBusinessProfile = async (req: AuthRequest, res: Response) => {
     }
     return res.json(user.businessProfile);
   } catch (error) {
-    return res.status(500).json({ success: false, message: "Server error", error });
+    return res.status(500).json({ success: false, message: "Internal server error retrieving business profile" });
   }
 };
 
@@ -58,7 +58,7 @@ export const updateServices = async (req: AuthRequest, res: Response) => {
     await user.save();
     return res.json(user.businessProfile);
   } catch (error) {
-    return res.status(500).json({ success: false, message: "Server error", error });
+    return res.status(500).json({ success: false, message: "Internal server error updating services" });
   }
 };
 
@@ -109,7 +109,7 @@ export const updateSettings = async (req: AuthRequest, res: Response) => {
     await user.save();
     return res.json(user.businessProfile);
   } catch (error) {
-    return res.status(500).json({ success: false, message: "Server error", error });
+    return res.status(500).json({ success: false, message: "Internal server error updating business settings" });
   }
 };
 
@@ -153,7 +153,7 @@ export const getQueue = async (req: AuthRequest, res: Response) => {
 
     return res.json([...activeQueue, ...processedQueue]);
   } catch (error) {
-    return res.status(500).json({ success: false, message: "Server error", error });
+    return res.status(500).json({ success: false, message: "Internal server error retrieving counter queue" });
   }
 };
 
