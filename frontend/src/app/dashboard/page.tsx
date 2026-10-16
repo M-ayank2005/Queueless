@@ -407,8 +407,8 @@ export default function Dashboard() {
       <QueueFlowLoader
         variant="page"
         size="lg"
-        message="Connecting to store counter..."
-        submessage="Loading live customer queue and store operations"
+        message="Connecting to QueueLess..."
+        submessage="Loading live counter and queue status"
       />
     );
   }

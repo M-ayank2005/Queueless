@@ -167,6 +167,7 @@ export default function QueueFlowLoader({
               strokeWidth="2.5"
               strokeDasharray="6 8"
               strokeLinecap="round"
+              initial={{ strokeDashoffset: 28 }}
               animate={{
                 strokeDashoffset: [28, 0],
               }}
@@ -231,9 +232,9 @@ export default function QueueFlowLoader({
                 cx="16"
                 cy="20"
                 r="4.5"
+                initial={{ fill: "#3B82F6", opacity: 0.6 }}
                 animate={{
                   fill: ["#3B82F6", "#60A5FA", "#10B981", "#3B82F6"],
-                  scale: [1, 1.25, 1.4, 1],
                   opacity: [0.6, 0.9, 1, 0.6],
                 }}
                 transition={{
@@ -254,9 +255,9 @@ export default function QueueFlowLoader({
             {/* Arrival Flash / Checkmark Indicator when ticket reaches desk */}
             {!shouldReduceMotion && (
               <motion.g
+                initial={{ opacity: 0 }}
                 animate={{
                   opacity: [0, 0, 0, 1, 0],
-                  scale: [0.6, 0.8, 0.8, 1.2, 0.8],
                 }}
                 transition={{
                   duration: loopDuration,
@@ -264,7 +265,6 @@ export default function QueueFlowLoader({
                   times: [0, 0.65, 0.72, 0.85, 1],
                   ease: "easeOut",
                 }}
-                style={{ transformOrigin: "16px 2px" }}
               >
                 <circle cx="16" cy="-2" r="7" fill="#10B981" filter="url(#qf-arrival-glow)" opacity="0.4" />
                 <circle cx="16" cy="-2" r="6" fill="#10B981" />
@@ -284,10 +284,13 @@ export default function QueueFlowLoader({
             <>
               {/* Ticket 3 (Trailing): Enters queue from left, fades in */}
               <motion.g
+                initial={{
+                  x: trackStartX - 10,
+                  opacity: 0,
+                }}
                 animate={{
                   x: [trackStartX - 10, trackStartX + (counterX - trackStartX) * 0.28],
                   opacity: [0, 0.85],
-                  scale: [0.85, 0.92],
                 }}
                 transition={{
                   duration: loopDuration,
@@ -331,13 +334,16 @@ export default function QueueFlowLoader({
 
               {/* Ticket 2 (Mid-Queue): Advances from middle to lead position */}
               <motion.g
+                initial={{
+                  x: trackStartX + (counterX - trackStartX) * 0.28,
+                  opacity: 0.85,
+                }}
                 animate={{
                   x: [
                     trackStartX + (counterX - trackStartX) * 0.28,
                     trackStartX + (counterX - trackStartX) * 0.58,
                   ],
                   opacity: [0.85, 1],
-                  scale: [0.92, 1],
                 }}
                 transition={{
                   duration: loopDuration,
@@ -379,13 +385,16 @@ export default function QueueFlowLoader({
 
               {/* Ticket 1 (Leading Ticket): Advances directly to Counter, receives glow, completes! */}
               <motion.g
+                initial={{
+                  x: trackStartX + (counterX - trackStartX) * 0.58,
+                  opacity: 1,
+                }}
                 animate={{
                   x: [
                     trackStartX + (counterX - trackStartX) * 0.58,
                     counterX - 22,
                   ],
                   opacity: [1, 1, 1, 0],
-                  scale: [1, 1.05, 1.1, 0.95],
                 }}
                 transition={{
                   duration: loopDuration,
@@ -473,7 +482,7 @@ export default function QueueFlowLoader({
 
       {/* Contextual Messaging & Accessible Status */}
       {showMessage && (
-        <div className="mt-3.5 text-center px-4 max-w-sm">
+        <div className="mt-3.5 text-center px-4 max-w-sm min-h-[50px] flex flex-col items-center justify-center">
           <p className={cn("font-bold text-[#ECF2FF] tracking-tight", sizeConfig.msgSize)}>
             {message}
           </p>

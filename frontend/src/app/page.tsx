@@ -55,10 +55,6 @@ interface QueueTicket {
 export default function Home() {
   const [user, setUser] = useState<any>(null);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
-  const [authMessage, setAuthMessage] = useState({
-    message: "Connecting to QueueLess...",
-    submessage: "Checking your session and active queues",
-  });
   const [myQueues, setMyQueues] = useState<QueueTicket[]>([]);
   const [history, setHistory] = useState<QueueTicket[]>([]);
   const [activeTab, setActiveTab] = useState<"active" | "history">("active");
@@ -85,10 +81,6 @@ export default function Home() {
         try {
           const parsedUser = JSON.parse(storedUser);
           if (parsedUser.role === "business") {
-            setAuthMessage({
-              message: "Connecting to store counter...",
-              submessage: "Redirecting to your merchant dashboard",
-            });
             // Keep isCheckingAuth = true so that the loader stays visible
             // while the route transition to /dashboard completes without flashing the landing page
             router.replace("/dashboard");
@@ -168,8 +160,8 @@ export default function Home() {
       <QueueFlowLoader
         variant="page"
         size="lg"
-        message={authMessage.message}
-        submessage={authMessage.submessage}
+        message="Connecting to QueueLess..."
+        submessage="Loading live counter and queue status"
       />
     );
   }
