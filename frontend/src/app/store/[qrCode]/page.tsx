@@ -10,6 +10,7 @@ import { motion } from "framer-motion";
 import { Clock, Check, Store, MapPin, ArrowLeft, Ticket, AlertCircle } from "lucide-react";
 import Link from "next/link";
 import api from "@/lib/api";
+import { QueueFlowLoader, LoadingButton } from "@/components/loading";
 
 interface ServiceItem {
   _id?: string;
@@ -111,12 +112,12 @@ export default function StorePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#050B18] text-[#ECF2FF] flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-10 h-10 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-          <p className="text-sm text-[#889DC2]">Loading store menu...</p>
-        </div>
-      </div>
+      <QueueFlowLoader
+        variant="page"
+        size="lg"
+        message="Checking store menu..."
+        submessage="Retrieving active services and estimated wait times"
+      />
     );
   }
 
@@ -280,14 +281,16 @@ export default function StorePage() {
             </div>
           </div>
 
-          <Button
+          <LoadingButton
             size="lg"
-            disabled={selectedServices.length === 0 || isJoining}
+            disabled={selectedServices.length === 0}
+            loading={isJoining}
+            loadingText="Securing Spot..."
             onClick={handleJoinQueue}
-            className="bg-blue-600 hover:bg-blue-500 text-white font-semibold text-sm px-6 h-11 shadow-[0_0_20px_rgba(59,130,246,0.35)] active:scale-95 transition-all disabled:opacity-50"
+            className="bg-blue-600 hover:bg-blue-500 text-white font-semibold text-sm px-6 h-11 shadow-[0_0_20px_rgba(59,130,246,0.35)]"
           >
-            {isJoining ? "Securing Spot..." : `Join Queue (${selectedServices.length})`}
-          </Button>
+            Join Queue ({selectedServices.length})
+          </LoadingButton>
         </div>
       </div>
     </div>

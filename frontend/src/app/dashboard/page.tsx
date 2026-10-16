@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { useToast } from "@/components/ui/Toast";
+import { QueueFlowLoader, LoadingButton } from "@/components/loading";
 import { 
   Plus, 
   Trash2, 
@@ -388,12 +389,12 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#050B18] text-[#ECF2FF] flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-10 h-10 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-          <p className="text-sm text-[#889DC2]">Loading Business Dashboard...</p>
-        </div>
-      </div>
+      <QueueFlowLoader
+        variant="page"
+        size="lg"
+        message="Connecting to store counter..."
+        submessage="Loading live customer queue and store operations"
+      />
     );
   }
 
@@ -823,14 +824,15 @@ export default function Dashboard() {
                     />
                   </div>
 
-                  <Button
+                  <LoadingButton
                     type="submit"
-                    disabled={isAddingService}
-                    className="w-full bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center justify-center gap-1.5"
+                    loading={isAddingService}
+                    loadingText="Adding Service..."
+                    icon={<Plus className="w-4 h-4" />}
+                    className="w-full bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold"
                   >
-                    <Plus className="w-4 h-4" />
-                    {isAddingService ? "Adding Service..." : "Add Service"}
-                  </Button>
+                    Add Service
+                  </LoadingButton>
                 </form>
               </CardContent>
             </Card>
@@ -962,13 +964,14 @@ export default function Dashboard() {
                   >
                     Cancel
                   </Button>
-                  <Button
+                  <LoadingButton
                     type="submit"
-                    disabled={isSavingSettings}
-                    className="bg-blue-600 hover:bg-blue-500 text-white min-w-[120px]"
+                    loading={isSavingSettings}
+                    loadingText="Saving Settings..."
+                    className="bg-blue-600 hover:bg-blue-500 text-white min-w-[140px]"
                   >
-                    {isSavingSettings ? "Saving..." : "Save Settings"}
-                  </Button>
+                    Save Settings
+                  </LoadingButton>
                 </div>
               </form>
             </motion.div>

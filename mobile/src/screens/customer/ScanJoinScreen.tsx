@@ -17,6 +17,7 @@ import { CameraView, useCameraPermissions } from "expo-camera";
 import { Ionicons } from "@expo/vector-icons";
 import AppButton from "../../components/AppButton";
 import AppLoader from "../../components/AppLoader";
+import QueueFlowInline from "../../components/loading/QueueFlowInline";
 import AppScreen from "../../components/AppScreen";
 import Card from "../../components/Card";
 import StatusBadge from "../../components/StatusBadge";
@@ -232,7 +233,7 @@ export default function ScanJoinScreen({ navigation, route }: Props) {
             disabled={loadingStore}
           >
             {loadingStore ? (
-              <ActivityIndicator size="small" color="#FFF" />
+              <QueueFlowInline color="#FFF" />
             ) : (
               <Ionicons name="arrow-forward" size={18} color="#FFF" />
             )}
@@ -359,6 +360,7 @@ export default function ScanJoinScreen({ navigation, route }: Props) {
             size="lg"
             onPress={joinQueue}
             loading={joining}
+            loadingText="Securing Spot..."
             icon="ticket-outline"
           />
         </Card>

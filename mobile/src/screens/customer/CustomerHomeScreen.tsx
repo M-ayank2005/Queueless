@@ -22,7 +22,7 @@ import AppScreen from "../../components/AppScreen";
 import Card from "../../components/Card";
 import EmptyState from "../../components/EmptyState";
 import SectionHeader from "../../components/SectionHeader";
-import { QueueCardSkeleton } from "../../components/SkeletonLoader";
+import { QueueCardSkeleton, HistoryItemSkeleton } from "../../components/SkeletonLoader";
 import StatusBadge from "../../components/StatusBadge";
 import { useAuth } from "../../context/AuthContext";
 import { api } from "../../lib/api";
@@ -217,9 +217,22 @@ export default function CustomerHomeScreen({ navigation }: Props) {
         </Pressable>
       </View>
 
-      {/* Ticket List or Empty State */}
+      {/* Ticket List or Skeletons or Empty State */}
       <View style={styles.sectionWrap}>
-        {entries.length === 0 ? (
+        {loading ? (
+          tab === "active" ? (
+            <View style={{ gap: spacing.md }}>
+              <QueueCardSkeleton />
+              <QueueCardSkeleton />
+            </View>
+          ) : (
+            <View style={{ gap: spacing.sm }}>
+              <HistoryItemSkeleton />
+              <HistoryItemSkeleton />
+              <HistoryItemSkeleton />
+            </View>
+          )
+        ) : entries.length === 0 ? (
           <EmptyState
             icon={tab === "active" ? "checkmark-circle-outline" : "receipt-outline"}
             title={tab === "active" ? "No Active Queue Tickets" : "No Past Visits Yet"}

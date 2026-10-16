@@ -13,11 +13,14 @@ import { Ionicons } from "@expo/vector-icons";
 import { colors } from "../theme/colors";
 import { radii, shadows, spacing } from "../theme/theme";
 
+import QueueFlowInline from "./loading/QueueFlowInline";
+
 type Props = {
   title: string;
   onPress: () => void;
   disabled?: boolean;
   loading?: boolean;
+  loadingText?: string;
   variant?: "primary" | "secondary" | "ghost" | "danger" | "success" | "outline";
   size?: "sm" | "md" | "lg";
   icon?: keyof typeof Ionicons.glyphMap;
@@ -28,7 +31,7 @@ type Props = {
 
 /**
  * AppButton Component
- * Tactile button with animated spring feedback, responsive loading spinner,
+ * Tactile button with animated spring feedback, QueueFlow micro-loader,
  * and high-contrast typography.
  */
 export default function AppButton({
@@ -36,6 +39,7 @@ export default function AppButton({
   onPress,
   disabled = false,
   loading = false,
+  loadingText,
   variant = "primary",
   size = "md",
   icon,
@@ -117,7 +121,12 @@ export default function AppButton({
         ]}
       >
         {loading ? (
-          <ActivityIndicator color={spinnerColor} size={size === "lg" ? "small" : "small"} />
+          <View style={styles.contentRow}>
+            <QueueFlowInline
+              color={spinnerColor}
+              text={loadingText || (size === "sm" ? undefined : title)}
+            />
+          </View>
         ) : (
           <View style={styles.contentRow}>
             {icon && iconPosition === "left" && (

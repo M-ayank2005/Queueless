@@ -235,6 +235,7 @@ export default function RegisterScreen({ navigation }: Props) {
             size="lg"
             onPress={submit}
             loading={loading}
+            loadingText="Creating Account..."
             icon="checkmark-circle-outline"
             style={{ marginTop: spacing.xs }}
           />

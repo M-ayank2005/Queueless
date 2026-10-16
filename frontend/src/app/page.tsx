@@ -25,6 +25,7 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import api from "@/lib/api";
+import { QueueCardSkeleton, HistorySkeleton } from "@/components/loading";
 
 interface ServiceItem {
   name: string;
@@ -207,9 +208,9 @@ export default function Home() {
           {activeTab === "active" ? (
             <div className="space-y-4">
               {loadingQueues ? (
-                <div className="p-12 text-center rounded-2xl border border-[#203052] bg-[#101A32]/40">
-                  <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-                  <p className="text-sm text-[#889DC2]">Checking active queue status...</p>
+                <div className="space-y-4">
+                  <QueueCardSkeleton />
+                  <QueueCardSkeleton />
                 </div>
               ) : myQueues.length === 0 ? (
                 <div className="text-center py-16 px-6 border border-dashed border-[#203052] rounded-2xl bg-[#0A1329]/60">
@@ -300,10 +301,7 @@ export default function Home() {
             /* Booking History Tab */
             <div className="space-y-3">
               {loadingQueues ? (
-                <div className="p-12 text-center rounded-2xl border border-[#203052] bg-[#101A32]/40">
-                  <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-                  <p className="text-sm text-[#889DC2]">Loading booking history...</p>
-                </div>
+                <HistorySkeleton count={3} />
               ) : history.length === 0 ? (
                 <div className="text-center py-16 px-6 border border-dashed border-[#203052] rounded-2xl bg-[#0A1329]/60">
                   <p className="text-sm text-[#889DC2]">No past tickets on record yet.</p>

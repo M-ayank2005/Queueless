@@ -509,6 +509,7 @@ export default function BusinessDashboardScreen(_: Props) {
             title="Add Service to Catalog"
             onPress={addService}
             loading={addingService}
+            loadingText="Adding Service..."
             icon="add-circle-outline"
             style={{ marginTop: spacing.xs }}
           />

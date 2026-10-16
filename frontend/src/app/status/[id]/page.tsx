@@ -25,6 +25,7 @@ import {
 import Link from "next/link";
 import api from "@/lib/api";
 import { io, Socket } from "socket.io-client";
+import { QueueFlowLoader, LoadingButton } from "@/components/loading";
 
 interface QueueStatusData {
   _id: string;
@@ -144,12 +145,12 @@ export default function StatusPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#050B18] text-[#ECF2FF] flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-10 h-10 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-          <p className="text-sm text-[#889DC2]">Checking live ticket status...</p>
-        </div>
-      </div>
+      <QueueFlowLoader
+        variant="page"
+        size="lg"
+        message="Checking live ticket status..."
+        submessage="Synchronizing real-time queue position with service counter"
+      />
     );
   }
 
@@ -439,14 +440,15 @@ export default function StatusPage() {
                 >
                   Stay in Line
                 </Button>
-                <Button
+                <LoadingButton
                   size="sm"
                   onClick={handleCancelSpot}
-                  disabled={isCancelling}
+                  loading={isCancelling}
+                  loadingText="Leaving..."
                   className="bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold"
                 >
-                  {isCancelling ? "Leaving..." : "Leave Queue"}
-                </Button>
+                  Leave Queue
+                </LoadingButton>
               </div>
             </motion.div>
           </div>

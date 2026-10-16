@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { useToast } from "@/components/ui/Toast";
 import { motion } from "framer-motion";
 import { Eye, EyeOff, Lock, Mail, ArrowRight } from "lucide-react";
+import { QueueFlowLoader, LoadingButton } from "@/components/loading";
 
 function LoginContent() {
   const [email, setEmail] = useState("");
@@ -143,14 +144,15 @@ function LoginContent() {
                 </div>
               </div>
 
-              <Button
+              <LoadingButton
                 type="submit"
+                loading={loading}
+                loadingText="Signing In..."
+                icon={<ArrowRight className="w-3.5 h-3.5 ml-1.5" />}
                 className="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs h-10 shadow-[0_0_16px_rgba(59,130,246,0.3)] mt-2"
-                disabled={loading}
               >
-                {loading ? "Signing In..." : "Sign In"}
-                {!loading && <ArrowRight className="w-3.5 h-3.5 ml-1.5" />}
-              </Button>
+                Sign In
+              </LoadingButton>
             </form>
           </CardContent>
           <CardFooter className="flex flex-col gap-3 text-center text-xs text-[#889DC2] border-t border-[#203052]/60 pt-4">
@@ -177,9 +179,12 @@ export default function LoginPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-[#050B18] text-[#ECF2FF] flex items-center justify-center">
-          <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-        </div>
+        <QueueFlowLoader
+          variant="page"
+          size="md"
+          message="Preparing sign in..."
+          submessage="QueueLess • Fast digital queues"
+        />
       }
     >
       <LoginContent />

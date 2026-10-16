@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { useToast } from "@/components/ui/Toast";
 import { motion } from "framer-motion";
 import { Store, User, Eye, EyeOff, ArrowRight } from "lucide-react";
+import { QueueFlowLoader, LoadingButton } from "@/components/loading";
 
 function RegisterContent() {
   const searchParams = useSearchParams();
@@ -252,16 +253,15 @@ function RegisterContent() {
                 </div>
               </div>
 
-              <Button
+              <LoadingButton
                 type="submit"
+                loading={loading}
+                loadingText="Creating Account..."
+                icon={<ArrowRight className="w-3.5 h-3.5 ml-1.5" />}
                 className="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs h-10 shadow-[0_0_16px_rgba(59,130,246,0.3)] mt-2"
-                disabled={loading}
               >
-                {loading
-                  ? "Creating Account..."
-                  : `Sign Up as ${role === "business" ? "Business" : "Customer"}`}
-                {!loading && <ArrowRight className="w-3.5 h-3.5 ml-1.5" />}
-              </Button>
+                Sign Up as {role === "business" ? "Business" : "Customer"}
+              </LoadingButton>
             </form>
           </CardContent>
 
@@ -289,9 +289,12 @@ export default function RegisterPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-[#050B18] text-[#ECF2FF] flex items-center justify-center">
-          <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-        </div>
+        <QueueFlowLoader
+          variant="page"
+          size="md"
+          message="Preparing sign up..."
+          submessage="QueueLess • Fast digital queues"
+        />
       }
     >
       <RegisterContent />

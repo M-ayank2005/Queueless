@@ -10,6 +10,7 @@ import { useToast } from "@/components/ui/Toast";
 import api from "@/lib/api";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { QueueFlowLoader, LoadingButton } from "@/components/loading";
 import { 
   User as UserIcon, 
   Phone, 
@@ -215,12 +216,12 @@ export default function ProfilePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#050B18] text-[#ECF2FF] flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-10 h-10 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-          <p className="text-sm text-[#889DC2]">Loading account details...</p>
-        </div>
-      </div>
+      <QueueFlowLoader
+        variant="page"
+        size="lg"
+        message="Loading account profile..."
+        submessage="Retrieving user credentials and queue history"
+      />
     );
   }
 
@@ -588,13 +589,14 @@ export default function ProfilePage() {
                   >
                     Cancel
                   </Button>
-                  <Button
+                  <LoadingButton
                     type="submit"
-                    disabled={isSubmitting}
-                    className="bg-blue-600 hover:bg-blue-500 text-white min-w-[120px]"
+                    loading={isSubmitting}
+                    loadingText="Saving Changes..."
+                    className="bg-blue-600 hover:bg-blue-500 text-white min-w-[140px]"
                   >
-                    {isSubmitting ? "Saving..." : "Save Changes"}
-                  </Button>
+                    Save Changes
+                  </LoadingButton>
                 </div>
               </form>
             </motion.div>

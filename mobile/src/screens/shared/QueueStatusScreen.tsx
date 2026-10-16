@@ -253,10 +253,11 @@ export default function QueueStatusScreen({ route, navigation }: Props) {
       {/* Action Buttons */}
       <View style={styles.actionsWrap}>
         <AppButton
-          title={refreshing ? "Refreshing..." : "Refresh Status"}
+          title="Refresh Status"
           size="lg"
           onPress={() => load(true)}
           loading={refreshing}
+          loadingText="Refreshing..."
           icon="refresh-outline"
         />
         <AppButton

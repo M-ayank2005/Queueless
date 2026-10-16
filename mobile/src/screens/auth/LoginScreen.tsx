@@ -111,6 +111,7 @@ export default function LoginScreen({ navigation }: Props) {
             size="lg"
             onPress={submit}
             loading={loading}
+            loadingText="Signing In..."
             icon="log-in-outline"
             style={{ marginTop: spacing.xs }}
           />
