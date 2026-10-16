@@ -28,7 +28,15 @@ import {
   X,
   Sparkles,
   ExternalLink,
-  Maximize2
+  Maximize2,
+  BarChart3,
+  TrendingUp,
+  Calendar,
+  DollarSign,
+  Zap,
+  Activity,
+  Flame,
+  RefreshCw
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { QRCodeSVG as QRCode } from "qrcode.react";
@@ -74,6 +82,39 @@ interface QueueItem {
   };
 }
 
+interface AnalyticsData {
+  range: string;
+  summary: {
+    totalCustomers: number;
+    totalCompleted: number;
+    totalCancelled: number;
+    totalActive: number;
+    completionRate: number;
+    totalRevenue: number;
+    avgWaitTimeMin: number;
+    avgServiceDurationMin: number;
+    serviceSpeedRatio: number;
+  };
+  dailyThroughput: Array<{
+    date: string;
+    label: string;
+    completed: number;
+    cancelled: number;
+    revenue: number;
+  }>;
+  peakHours: Array<{
+    hour: number;
+    label: string;
+    count: number;
+  }>;
+  servicePopularity: Array<{
+    name: string;
+    count: number;
+    revenue: number;
+    percentage: number;
+  }>;
+}
+
 export default function Dashboard() {
   const [services, setServices] = useState<any[]>([]);
   const [queue, setQueue] = useState<QueueItem[]>([]);
@@ -83,6 +124,12 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const router = useRouter();
   const { toast } = useToast();
+
+  // Tab & Analytics State
+  const [activeTab, setActiveTab] = useState<"live" | "analytics" | "services">("live");
+  const [analyticsRange, setAnalyticsRange] = useState<"today" | "7d" | "30d" | "all">("7d");
+  const [analyticsData, setAnalyticsData] = useState<AnalyticsData | null>(null);
+  const [loadingAnalytics, setLoadingAnalytics] = useState(false);
 
   // Settings & QR Modal States
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -97,6 +144,18 @@ export default function Dashboard() {
   });
 
   const socketRef = useRef<Socket | null>(null);
+
+  const fetchAnalytics = async (range: string = analyticsRange) => {
+    setLoadingAnalytics(true);
+    try {
+      const res = await api.get(`/business/analytics?range=${range}`);
+      setAnalyticsData(res.data);
+    } catch {
+      toast.error("Failed to load business analytics");
+    } finally {
+      setLoadingAnalytics(false);
+    }
+  };
 
   const activeQueue = useMemo(() => {
     return queue.filter(q => q.status === "waiting" || q.status === "in_progress");
@@ -148,10 +207,13 @@ export default function Dashboard() {
 
     fetchDashboardData();
 
-    // Setup Socket connection
+    // Setup Socket connection with authenticated merchant token
     const socketUrl = process.env.NEXT_PUBLIC_API_URL?.replace("/api", "") || "http://localhost:5000";
     const socketInstance = io(socketUrl, {
-      transports: ["websocket", "polling"]
+      transports: ["websocket", "polling"],
+      auth: {
+        token: token || undefined
+      }
     });
     socketRef.current = socketInstance;
 
@@ -457,7 +519,66 @@ export default function Dashboard() {
           </div>
         </div>
 
+        {/* Dashboard Navigation Tabs */}
+        <div className="flex border-b border-[#203052] mb-6 overflow-x-auto no-scrollbar gap-2">
+          <button
+            onClick={() => setActiveTab("live")}
+            className={`flex items-center gap-2 pb-3 px-4 text-sm font-semibold transition-colors whitespace-nowrap relative ${
+              activeTab === "live"
+                ? "text-blue-400"
+                : "text-[#889DC2] hover:text-[#ECF2FF]"
+            }`}
+          >
+            <Users className="w-4 h-4" />
+            Live Counter ({activeQueueCount})
+            {activeTab === "live" && (
+              <motion.div
+                layoutId="dashboardTabUnderline"
+                className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500 rounded-full"
+              />
+            )}
+          </button>
+          <button
+            onClick={() => {
+              setActiveTab("analytics");
+              if (!analyticsData) fetchAnalytics(analyticsRange);
+            }}
+            className={`flex items-center gap-2 pb-3 px-4 text-sm font-semibold transition-colors whitespace-nowrap relative ${
+              activeTab === "analytics"
+                ? "text-emerald-400"
+                : "text-[#889DC2] hover:text-[#ECF2FF]"
+            }`}
+          >
+            <BarChart3 className="w-4 h-4" />
+            Analytics & Insights
+            {activeTab === "analytics" && (
+              <motion.div
+                layoutId="dashboardTabUnderline"
+                className="absolute bottom-0 left-0 right-0 h-0.5 bg-emerald-500 rounded-full"
+              />
+            )}
+          </button>
+          <button
+            onClick={() => setActiveTab("services")}
+            className={`flex items-center gap-2 pb-3 px-4 text-sm font-semibold transition-colors whitespace-nowrap relative ${
+              activeTab === "services"
+                ? "text-blue-400"
+                : "text-[#889DC2] hover:text-[#ECF2FF]"
+            }`}
+          >
+            <Store className="w-4 h-4" />
+            Service Catalog ({services.length})
+            {activeTab === "services" && (
+              <motion.div
+                layoutId="dashboardTabUnderline"
+                className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500 rounded-full"
+              />
+            )}
+          </button>
+        </div>
+
         {/* Dashboard Responsive Grid */}
+        {activeTab === "live" && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           {/* Left Column: Live Queue (7 cols on lg) */}
           <div className="lg:col-span-7 space-y-6">
@@ -838,6 +959,451 @@ export default function Dashboard() {
             </Card>
           </div>
         </div>
+        )}
+
+        {/* Tab 2: Analytics & Operational Intelligence View */}
+        {activeTab === "analytics" && (
+          <div className="space-y-6">
+            {/* Header Controls */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-2xl bg-[#101A32] border border-[#203052]">
+              <div>
+                <h2 className="text-lg font-bold text-[#ECF2FF] flex items-center gap-2">
+                  <BarChart3 className="w-5 h-5 text-emerald-400" />
+                  Counter Intelligence & Operational Analytics
+                </h2>
+                <p className="text-xs text-[#889DC2] mt-0.5">
+                  Real-time aggregation from completed tickets, service durations, and customer throughput.
+                </p>
+              </div>
+
+              {/* Time Range Selector & Refresh */}
+              <div className="flex items-center gap-2">
+                <div className="flex p-1 bg-[#0A1329] border border-[#203052] rounded-xl text-xs font-semibold">
+                  {(["today", "7d", "30d", "all"] as const).map((r) => (
+                    <button
+                      key={r}
+                      onClick={() => {
+                        setAnalyticsRange(r);
+                        fetchAnalytics(r);
+                      }}
+                      className={`px-3 py-1.5 rounded-lg transition-all ${
+                        analyticsRange === r
+                          ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 shadow-sm"
+                          : "text-[#889DC2] hover:text-[#ECF2FF]"
+                      }`}
+                    >
+                      {r === "today" ? "Today" : r === "7d" ? "7 Days" : r === "30d" ? "30 Days" : "All Time"}
+                    </button>
+                  ))}
+                </div>
+
+                <button
+                  onClick={() => fetchAnalytics(analyticsRange)}
+                  disabled={loadingAnalytics}
+                  className="p-2 rounded-xl border border-[#203052] bg-[#0A1329] text-[#889DC2] hover:text-[#ECF2FF] hover:bg-[#152243] transition-colors"
+                  title="Refresh analytics data"
+                  aria-label="Refresh analytics data"
+                >
+                  <RefreshCw className={`w-4 h-4 ${loadingAnalytics ? "animate-spin text-emerald-400" : ""}`} />
+                </button>
+              </div>
+            </div>
+
+            {loadingAnalytics ? (
+              <div className="py-20 flex justify-center items-center">
+                <QueueFlowLoader
+                  variant="card"
+                  size="md"
+                  message="Aggregating operational intelligence..."
+                  submessage="Calculating service speeds, wait times, and throughput"
+                />
+              </div>
+            ) : !analyticsData ? (
+              <div className="text-center py-16 px-4 border border-dashed border-[#203052] rounded-2xl bg-[#0A1329]/50">
+                <p className="text-sm text-[#889DC2]">Unable to load analytics data at this time.</p>
+              </div>
+            ) : (
+              <>
+                {/* 4 Summary KPI Cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <Card className="bg-[#101A32] border-[#203052] p-5 shadow-xl hover:border-emerald-500/30 transition-all">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-[#889DC2]">Completed Customers</span>
+                      <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center text-emerald-400">
+                        <CheckCircle2 className="w-4 h-4" />
+                      </div>
+                    </div>
+                    <div className="mt-3 text-3xl font-extrabold text-[#ECF2FF]">
+                      {analyticsData.summary.totalCompleted}
+                      <span className="text-xs font-medium text-[#889DC2] ml-2">served</span>
+                    </div>
+                    <div className="mt-2.5 flex items-center gap-2">
+                      <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                        {analyticsData.summary.completionRate}% completion
+                      </span>
+                      <span className="text-[11px] text-[#889DC2]">
+                        {analyticsData.summary.totalCancelled} cancelled
+                      </span>
+                    </div>
+                  </Card>
+
+                  <Card className="bg-[#101A32] border-[#203052] p-5 shadow-xl hover:border-blue-500/30 transition-all">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-[#889DC2]">Estimated Revenue</span>
+                      <div className="w-8 h-8 rounded-lg bg-blue-500/10 border border-blue-500/25 flex items-center justify-center text-blue-400">
+                        <DollarSign className="w-4 h-4" />
+                      </div>
+                    </div>
+                    <div className="mt-3 text-3xl font-extrabold text-[#ECF2FF]">
+                      ${analyticsData.summary.totalRevenue.toLocaleString()}
+                    </div>
+                    <p className="mt-2.5 text-[11px] text-[#889DC2]">
+                      From {analyticsData.summary.totalCompleted} completed service orders
+                    </p>
+                  </Card>
+
+                  <Card className="bg-[#101A32] border-[#203052] p-5 shadow-xl hover:border-amber-500/30 transition-all">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-[#889DC2]">Avg Customer Wait</span>
+                      <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/25 flex items-center justify-center text-amber-400">
+                        <Clock className="w-4 h-4" />
+                      </div>
+                    </div>
+                    <div className="mt-3 text-3xl font-extrabold text-[#ECF2FF]">
+                      ~{analyticsData.summary.avgWaitTimeMin} mins
+                    </div>
+                    <p className="mt-2.5 text-[11px] text-[#889DC2]">
+                      Mean wait before being called to counter
+                    </p>
+                  </Card>
+
+                  <Card className="bg-[#101A32] border-[#203052] p-5 shadow-xl hover:border-purple-500/30 transition-all">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-[#889DC2]">Avg Service Duration</span>
+                      <div className="w-8 h-8 rounded-lg bg-purple-500/10 border border-purple-500/25 flex items-center justify-center text-purple-400">
+                        <Zap className="w-4 h-4" />
+                      </div>
+                    </div>
+                    <div className="mt-3 text-3xl font-extrabold text-[#ECF2FF]">
+                      ~{analyticsData.summary.avgServiceDurationMin} mins
+                    </div>
+                    <div className="mt-2.5">
+                      <span
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold border ${
+                          analyticsData.summary.serviceSpeedRatio <= 1.0
+                            ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+                            : "bg-amber-500/15 text-amber-400 border-amber-500/30"
+                        }`}
+                      >
+                        <Activity className="w-3 h-3" />
+                        {analyticsData.summary.serviceSpeedRatio <= 1.0
+                          ? `${Math.round((1 - analyticsData.summary.serviceSpeedRatio) * 100)}% Faster than catalog`
+                          : `${Math.round((analyticsData.summary.serviceSpeedRatio - 1) * 100)}% Slower than catalog`}
+                      </span>
+                    </div>
+                  </Card>
+                </div>
+
+                {/* Daily Volume Throughput Chart */}
+                <Card className="bg-[#101A32] border-[#203052] shadow-xl p-6">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-6">
+                    <div>
+                      <h3 className="text-base font-bold text-[#ECF2FF] flex items-center gap-2">
+                        <TrendingUp className="w-4 h-4 text-emerald-400" />
+                        Daily Customer Volume Throughput
+                      </h3>
+                      <p className="text-xs text-[#889DC2] mt-0.5">
+                        Breakdown of completed customers, cancellations, and daily revenue.
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-4 text-xs font-medium text-[#889DC2]">
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-3 h-3 rounded bg-emerald-500 inline-block" />
+                        <span>Completed</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-3 h-3 rounded bg-rose-500/80 inline-block" />
+                        <span>Cancelled</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {analyticsData.dailyThroughput.length === 0 ? (
+                    <p className="text-xs text-[#889DC2] text-center py-10">No daily ticket records in this time period.</p>
+                  ) : (
+                    <div className="pt-4">
+                      {/* Responsive Visual Bar Chart */}
+                      {(() => {
+                        const maxVol = Math.max(
+                          ...analyticsData.dailyThroughput.map((d) => d.completed + d.cancelled),
+                          5
+                        );
+
+                        return (
+                          <div className="space-y-3">
+                            <div className="grid grid-cols-7 sm:grid-cols-7 lg:grid-cols-7 gap-2 sm:gap-4 items-end h-48 border-b border-[#203052] pb-2">
+                              {analyticsData.dailyThroughput.map((day, idx) => {
+                                const total = day.completed + day.cancelled;
+                                const completedPct = Math.round((day.completed / maxVol) * 100);
+                                const cancelledPct = Math.round((day.cancelled / maxVol) * 100);
+
+                                return (
+                                  <div key={idx} className="flex flex-col items-center h-full justify-end group relative">
+                                    {/* Tooltip on hover */}
+                                    <div className="absolute -top-12 z-20 hidden group-hover:flex flex-col items-center bg-[#050B18] border border-[#203052] text-[10px] text-[#ECF2FF] px-2 py-1 rounded-lg shadow-xl whitespace-nowrap pointer-events-none">
+                                      <span className="font-bold">{day.label}</span>
+                                      <span className="text-emerald-400">{day.completed} completed (${day.revenue})</span>
+                                      {day.cancelled > 0 && <span className="text-rose-400">{day.cancelled} cancelled</span>}
+                                    </div>
+
+                                    {/* Stacked bar */}
+                                    <div className="w-full max-w-[42px] bg-[#0A1329] rounded-t-lg overflow-hidden flex flex-col justify-end border border-[#203052]/80 h-full">
+                                      {cancelledPct > 0 && (
+                                        <div
+                                          style={{ height: `${cancelledPct}%` }}
+                                          className="bg-rose-500/80 w-full transition-all"
+                                        />
+                                      )}
+                                      <div
+                                        style={{ height: `${Math.max(completedPct, total > 0 ? 6 : 0)}%` }}
+                                        className="bg-gradient-to-t from-emerald-600 to-emerald-400 w-full transition-all shadow-[0_0_8px_rgba(16,185,129,0.3)]"
+                                      />
+                                    </div>
+                                    <span className="text-[10px] font-bold text-[#ECF2FF] mt-1.5">{total}</span>
+                                    <span className="text-[10px] text-[#889DC2] truncate max-w-full">{day.label.slice(0, 3)}</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
+                </Card>
+
+                {/* Two-Column Breakdown: Peak Hours & Service Popularity */}
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                  {/* Left Column (7 cols): Peak Hours Heatmap / Bars */}
+                  <div className="lg:col-span-7">
+                    <Card className="bg-[#101A32] border-[#203052] shadow-xl p-6 h-full">
+                      <div className="flex items-center justify-between mb-4">
+                        <div>
+                          <h3 className="text-base font-bold text-[#ECF2FF] flex items-center gap-2">
+                            <Clock className="w-4 h-4 text-blue-400" />
+                            Counter Peak Hours
+                          </h3>
+                          <p className="text-xs text-[#889DC2] mt-0.5">
+                            Customer arrival density throughout the business day.
+                          </p>
+                        </div>
+
+                        {(() => {
+                          const peak = [...analyticsData.peakHours].sort((a, b) => b.count - a.count)[0];
+                          if (peak && peak.count > 0) {
+                            return (
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-500/15 border border-amber-500/30 text-amber-400">
+                                <Flame className="w-3.5 h-3.5 fill-amber-500" />
+                                Peak: {peak.label} ({peak.count})
+                              </span>
+                            );
+                          }
+                          return null;
+                        })()}
+                      </div>
+
+                      <div className="space-y-2 pt-2 max-h-96 overflow-y-auto pr-1">
+                        {(() => {
+                          const maxCount = Math.max(...analyticsData.peakHours.map((h) => h.count), 1);
+                          const hoursToShow = analyticsData.peakHours.filter(
+                            (h) => (h.hour >= 7 && h.hour <= 22) || h.count > 0
+                          );
+
+                          return hoursToShow.map((hourItem) => {
+                            const pct = Math.round((hourItem.count / maxCount) * 100);
+                            const isPeak = hourItem.count === maxCount && hourItem.count > 0;
+
+                            return (
+                              <div key={hourItem.hour} className="flex items-center gap-3 text-xs">
+                                <span className="w-14 text-[#889DC2] font-mono text-[11px] shrink-0">
+                                  {hourItem.label}
+                                </span>
+                                <div className="flex-1 h-5 bg-[#0A1329] rounded-md overflow-hidden border border-[#203052] p-0.5">
+                                  <div
+                                    style={{ width: `${Math.max(pct, hourItem.count > 0 ? 8 : 0)}%` }}
+                                    className={`h-full rounded transition-all ${
+                                      isPeak
+                                        ? "bg-gradient-to-r from-amber-500 to-orange-400 shadow-[0_0_8px_rgba(245,158,11,0.4)]"
+                                        : "bg-blue-600/80"
+                                    }`}
+                                  />
+                                </div>
+                                <span className={`w-8 text-right font-bold text-[11px] ${isPeak ? "text-amber-400" : "text-[#ECF2FF]"}`}>
+                                  {hourItem.count}
+                                </span>
+                              </div>
+                            );
+                          });
+                        })()}
+                      </div>
+                    </Card>
+                  </div>
+
+                  {/* Right Column (5 cols): Service Popularity Distribution */}
+                  <div className="lg:col-span-5">
+                    <Card className="bg-[#101A32] border-[#203052] shadow-xl p-6 h-full">
+                      <div className="mb-4">
+                        <h3 className="text-base font-bold text-[#ECF2FF] flex items-center gap-2">
+                          <Sparkles className="w-4 h-4 text-purple-400" />
+                          Service Popularity Distribution
+                        </h3>
+                        <p className="text-xs text-[#889DC2] mt-0.5">
+                          Most requested catalog offerings by volume and revenue.
+                        </p>
+                      </div>
+
+                      {analyticsData.servicePopularity.length === 0 ? (
+                        <p className="text-xs text-[#889DC2] text-center py-10">
+                          No service bookings on record for this period.
+                        </p>
+                      ) : (
+                        <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
+                          {analyticsData.servicePopularity.map((service, idx) => (
+                            <div key={idx} className="p-3 rounded-xl bg-[#0A1329] border border-[#203052] text-xs">
+                              <div className="flex items-center justify-between mb-1.5">
+                                <div className="flex items-center gap-2">
+                                  <span className="w-5 h-5 rounded-md bg-purple-500/15 border border-purple-500/30 text-purple-400 font-bold text-[10px] flex items-center justify-center">
+                                    #{idx + 1}
+                                  </span>
+                                  <span className="font-semibold text-[#ECF2FF] text-sm">
+                                    {service.name}
+                                  </span>
+                                </div>
+                                <span className="font-bold text-emerald-400">
+                                  ${service.revenue}
+                                </span>
+                              </div>
+
+                              <div className="flex items-center justify-between text-[11px] text-[#889DC2] mb-1.5">
+                                <span>{service.count} {service.count === 1 ? "booking" : "bookings"}</span>
+                                <span>{service.percentage}% of volume</span>
+                              </div>
+
+                              <div className="h-1.5 bg-[#101A32] rounded-full overflow-hidden">
+                                <div
+                                  style={{ width: `${service.percentage}%` }}
+                                  className="h-full bg-gradient-to-r from-purple-500 to-blue-500 rounded-full"
+                                />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </Card>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Tab 3: Dedicated Service Catalog Management View */}
+        {activeTab === "services" && (
+          <div className="max-w-3xl mx-auto space-y-6">
+            <Card className="bg-[#101A32] border-[#203052] shadow-xl">
+              <CardHeader className="pb-4 border-b border-[#203052]/60">
+                <CardTitle className="text-lg font-bold text-[#ECF2FF] flex items-center gap-2">
+                  <Store className="w-5 h-5 text-blue-400" />
+                  Service Catalog & Pricing
+                </CardTitle>
+                <CardDescription className="text-xs text-[#889DC2]">
+                  Manage the services, estimated turnaround times, and prices displayed to customers.
+                </CardDescription>
+              </CardHeader>
+
+              <CardContent className="pt-5 space-y-6">
+                <div className="space-y-3">
+                  {services.length === 0 ? (
+                    <div className="text-center py-12 px-4 border border-dashed border-[#203052] rounded-xl bg-[#0A1329]/50">
+                      <Store className="w-8 h-8 text-[#889DC2]/60 mx-auto mb-2" />
+                      <p className="text-sm font-semibold text-[#ECF2FF]">No Services Configured</p>
+                      <p className="text-xs text-[#889DC2]">Add services below so customers can select what they need.</p>
+                    </div>
+                  ) : (
+                    services.map((service, idx) => (
+                      <div
+                        key={idx}
+                        className="flex items-center justify-between p-4 rounded-xl bg-[#0A1329] border border-[#203052] shadow-sm"
+                      >
+                        <div>
+                          <div className="font-semibold text-sm text-[#ECF2FF]">{service.name}</div>
+                          <div className="text-xs text-[#889DC2] mt-1 flex items-center gap-3">
+                            <span className="flex items-center gap-1">
+                              <Clock className="w-3.5 h-3.5 text-blue-400" />
+                              {service.durationMin} mins
+                            </span>
+                            <span>•</span>
+                            <span className="font-bold text-emerald-400">${service.cost}</span>
+                          </div>
+                        </div>
+
+                        <button
+                          onClick={() => handleRemoveService(idx)}
+                          className="p-2 rounded-xl text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 transition-colors"
+                          aria-label={`Remove service ${service.name}`}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                {/* Add Service Form */}
+                <form onSubmit={handleAddService} className="p-4 rounded-xl bg-[#0A1329] border border-[#203052] space-y-3">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-[#889DC2]">Add New Service</h4>
+                  <Input
+                    placeholder="Service Name (e.g. Deluxe Beard Trim)"
+                    value={newService.name}
+                    onChange={(e) => setNewService({ ...newService, name: e.target.value })}
+                    className="bg-[#101A32] border-[#203052] text-xs text-[#ECF2FF]"
+                    required
+                  />
+                  <div className="grid grid-cols-2 gap-3">
+                    <Input
+                      type="number"
+                      placeholder="Duration (Minutes)"
+                      value={newService.durationMin}
+                      onChange={(e) => setNewService({ ...newService, durationMin: e.target.value })}
+                      className="bg-[#101A32] border-[#203052] text-xs text-[#ECF2FF]"
+                      min="1"
+                      required
+                    />
+                    <Input
+                      type="number"
+                      placeholder="Price ($)"
+                      value={newService.cost}
+                      onChange={(e) => setNewService({ ...newService, cost: e.target.value })}
+                      className="bg-[#101A32] border-[#203052] text-xs text-[#ECF2FF]"
+                      min="0"
+                      required
+                    />
+                  </div>
+                  <LoadingButton
+                    type="submit"
+                    loading={isAddingService}
+                    loadingText="Adding Service..."
+                    icon={<Plus className="w-4 h-4" />}
+                    className="w-full bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold"
+                  >
+                    Add Service to Catalog
+                  </LoadingButton>
+                </form>
+              </CardContent>
+            </Card>
+          </div>
+        )}
       </main>
 
       {/* Store Settings Modal */}

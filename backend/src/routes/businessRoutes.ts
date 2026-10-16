@@ -1,13 +1,24 @@
 import express from "express";
-import { protect } from "../middleware/authMiddleware";
-import { getBusinessProfile, updateServices, getQueue, updateQueueStatus, updateSettings } from "../controllers/businessController";
+import { protect, requireRole } from "../middleware/authMiddleware";
+import { 
+  getBusinessProfile, 
+  updateServices, 
+  getQueue, 
+  updateQueueStatus, 
+  updateSettings,
+  getAnalytics
+} from "../controllers/businessController";
 
 const router = express.Router();
 
-router.get("/me", protect, getBusinessProfile);
-router.put("/services", protect, updateServices);
-router.put("/settings", protect, updateSettings);
-router.get("/queue", protect, getQueue);
-router.put("/queue/:id/status", protect, updateQueueStatus);
+// Enforce authentication AND business role on all business endpoints
+router.use(protect, requireRole("business"));
+
+router.get("/me", getBusinessProfile);
+router.put("/services", updateServices);
+router.put("/settings", updateSettings);
+router.get("/queue", getQueue);
+router.put("/queue/:id/status", updateQueueStatus);
+router.get("/analytics", getAnalytics);
 
 export default router;

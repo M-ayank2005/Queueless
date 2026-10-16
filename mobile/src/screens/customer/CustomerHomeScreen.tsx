@@ -27,7 +27,7 @@ import StatusBadge from "../../components/StatusBadge";
 import { useAuth } from "../../context/AuthContext";
 import { api } from "../../lib/api";
 import { CustomerTabParamList, RootStackParamList } from "../../navigation/types";
-import { QueueEntry } from "../../types";
+import { QueueEntry, FavoriteStore } from "../../types";
 import { colors } from "../../theme/colors";
 import { radii, shadows, spacing, typography } from "../../theme/theme";
 
@@ -43,20 +43,50 @@ export default function CustomerHomeScreen({ navigation }: Props) {
   const laserAnim = useRef(new Animated.Value(0)).current;
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [tab, setTab] = useState<"active" | "history">("active");
+  const [tab, setTab] = useState<"active" | "favorites" | "history">("active");
   const [activeQueues, setActiveQueues] = useState<QueueEntry[]>([]);
   const [history, setHistory] = useState<QueueEntry[]>([]);
+  const [favorites, setFavorites] = useState<FavoriteStore[]>([]);
+  const [rebookingId, setRebookingId] = useState<string | null>(null);
 
   const fetchData = async () => {
     try {
-      const [activeRes, historyRes] = await Promise.all([
+      const [activeRes, historyRes, favRes] = await Promise.all([
         api.get("/queue/my-queues"),
         api.get("/queue/history"),
+        api.get("/queue/favorites"),
       ]);
       setActiveQueues(activeRes.data || []);
       setHistory(historyRes.data || []);
+      setFavorites(favRes.data || []);
     } catch {
       // non-blocking
+    }
+  };
+
+  const handleQuickRebook = async (pastTicketId: string) => {
+    setRebookingId(pastTicketId);
+    try {
+      const res = await api.post("/queue/quick-rebook", { pastTicketId });
+      Alert.alert("Success", "Rejoined queue successfully!");
+      rootNavigation.navigate("QueueStatus", { id: res.data._id });
+    } catch (err: any) {
+      Alert.alert(
+        "Rebooking Failed",
+        err.response?.data?.message ||
+          "Could not rebook. The store may be closed or you already have an active ticket."
+      );
+    } finally {
+      setRebookingId(null);
+    }
+  };
+
+  const handleRemoveFavorite = async (businessId: string) => {
+    try {
+      await api.post("/queue/favorites/toggle", { businessId });
+      setFavorites((prev) => prev.filter((f) => f._id !== businessId));
+    } catch (err: any) {
+      Alert.alert("Error", err.response?.data?.message || "Failed to remove saved store.");
     }
   };
 
@@ -131,7 +161,6 @@ export default function CustomerHomeScreen({ navigation }: Props) {
   };
 
   const initial = user?.name ? user.name.charAt(0).toUpperCase() : "C";
-  const entries = tab === "active" ? activeQueues : history;
 
   if (loading) {
     return (
@@ -186,7 +215,7 @@ export default function CustomerHomeScreen({ navigation }: Props) {
         </TouchableOpacity>
       </View>
 
-      {/* Segmented Switcher for Live Tickets vs History */}
+      {/* Segmented Switcher for Live Tickets vs Saved vs History */}
       <View style={styles.segmentContainer}>
         <Pressable
           onPress={() => setTab("active")}
@@ -194,11 +223,30 @@ export default function CustomerHomeScreen({ navigation }: Props) {
         >
           <Ionicons
             name="time-outline"
-            size={16}
+            size={15}
             color={tab === "active" ? colors.primary : colors.muted}
           />
           <Text style={[styles.segmentText, tab === "active" && styles.segmentTextActive]}>
-            Live Tickets ({activeQueues.length})
+            Live ({activeQueues.length})
+          </Text>
+        </Pressable>
+
+        <Pressable
+          onPress={() => setTab("favorites")}
+          style={[styles.segmentBtn, tab === "favorites" && styles.segmentBtnActive]}
+        >
+          <Ionicons
+            name={tab === "favorites" ? "heart" : "heart-outline"}
+            size={15}
+            color={tab === "favorites" ? colors.danger : colors.muted}
+          />
+          <Text
+            style={[
+              styles.segmentText,
+              tab === "favorites" && [styles.segmentTextActive, { color: colors.danger }],
+            ]}
+          >
+            Saved ({favorites.length})
           </Text>
         </Pressable>
 
@@ -208,7 +256,7 @@ export default function CustomerHomeScreen({ navigation }: Props) {
         >
           <Ionicons
             name="receipt-outline"
-            size={16}
+            size={15}
             color={tab === "history" ? colors.primary : colors.muted}
           />
           <Text style={[styles.segmentText, tab === "history" && styles.segmentTextActive]}>
@@ -232,70 +280,263 @@ export default function CustomerHomeScreen({ navigation }: Props) {
               <HistoryItemSkeleton />
             </View>
           )
-        ) : entries.length === 0 ? (
-          <EmptyState
-            icon={tab === "active" ? "checkmark-circle-outline" : "receipt-outline"}
-            title={tab === "active" ? "No Active Queue Tickets" : "No Past Visits Yet"}
-            description={
-              tab === "active"
-                ? "You're all caught up! Scan a merchant's counter QR code to take your spot in line."
-                : "Completed or cancelled bookings will automatically appear here."
-            }
-            actionTitle={tab === "active" ? "Scan Store Code" : undefined}
-            onActionPress={tab === "active" ? handleOpenScanner : undefined}
-            actionIcon="qr-code-outline"
-          />
+        ) : tab === "active" ? (
+          activeQueues.length === 0 ? (
+            <EmptyState
+              icon="checkmark-circle-outline"
+              title="No Active Queue Tickets"
+              description="You're all caught up! Scan a merchant's counter QR code to take your spot in line."
+              actionTitle="Scan Store Code"
+              onActionPress={handleOpenScanner}
+              actionIcon="qr-code-outline"
+            />
+          ) : (
+            activeQueues.map((entry) => {
+              const shopName =
+                entry.businessId?.businessProfile?.shopName ||
+                entry.businessId?.shopName ||
+                "QueueLess Store";
+              const wait = entry.currentEstimatedWait ?? 0;
+              const ahead = entry.peopleAhead ?? 0;
+
+              return (
+                <Card
+                  key={entry._id}
+                  variant="elevated"
+                  onPress={() => rootNavigation.navigate("QueueStatus", { id: entry._id })}
+                  style={styles.ticketCard}
+                >
+                  <View style={styles.ticketHeader}>
+                    <View style={styles.ticketStoreCol}>
+                      <Text style={styles.ticketShopName} numberOfLines={1}>
+                        {shopName}
+                      </Text>
+                      <Text style={styles.ticketNumber}>
+                        Ticket #{entry._id.slice(-4).toUpperCase()}
+                      </Text>
+                    </View>
+                    <View style={styles.ticketBadgeCol}>
+                      <StatusBadge status={entry.status} size="sm" />
+                      {entry.alert?.active && (
+                        <View
+                          style={[
+                            styles.turnAlertBadge,
+                            {
+                              backgroundColor:
+                                entry.alert.type === "YOUR_TURN"
+                                  ? "rgba(16, 185, 129, 0.2)"
+                                  : "rgba(245, 158, 11, 0.2)",
+                              borderColor:
+                                entry.alert.type === "YOUR_TURN"
+                                  ? "rgba(16, 185, 129, 0.5)"
+                                  : "rgba(245, 158, 11, 0.5)",
+                            },
+                          ]}
+                        >
+                          <Ionicons
+                            name={entry.alert.type === "YOUR_TURN" ? "sparkles" : "notifications"}
+                            size={10}
+                            color={entry.alert.type === "YOUR_TURN" ? colors.success : colors.warning}
+                          />
+                          <Text
+                            style={[
+                              styles.turnAlertBadgeText,
+                              {
+                                color:
+                                  entry.alert.type === "YOUR_TURN"
+                                    ? colors.success
+                                    : colors.warning,
+                              },
+                            ]}
+                          >
+                            {entry.alert.type === "YOUR_TURN" ? "Your Turn" : "Near Turn"}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  </View>
+
+                  <View style={styles.ticketDottedLine} />
+
+                  <View style={styles.ticketMetaRow}>
+                    <View style={styles.metaChip}>
+                      <Ionicons name="people" size={14} color={colors.primary} />
+                      <Text style={styles.metaChipText}>{ahead} ahead</Text>
+                    </View>
+
+                    <View style={[styles.metaChip, { backgroundColor: colors.warningSubtle }]}>
+                      <Ionicons name="hourglass" size={14} color={colors.warning} />
+                      <Text style={[styles.metaChipText, { color: colors.warning }]}>
+                        {entry.prediction?.rangeDisplay
+                          ? `~${entry.prediction.rangeDisplay}`
+                          : `~${wait} mins wait`}
+                      </Text>
+                    </View>
+
+                    <View style={styles.trackLiveBtn}>
+                      <Text style={styles.trackLiveText}>Track Live</Text>
+                      <Ionicons name="chevron-forward" size={14} color={colors.primary} />
+                    </View>
+                  </View>
+                </Card>
+              );
+            })
+          )
+        ) : tab === "favorites" ? (
+          favorites.length === 0 ? (
+            <EmptyState
+              icon="heart-outline"
+              title="No Saved Stores Yet"
+              description="Tap the heart icon when viewing any merchant to save your favourite spots for 1-tap rebooking."
+              actionTitle="Scan Store Code"
+              onActionPress={handleOpenScanner}
+              actionIcon="qr-code-outline"
+            />
+          ) : (
+            favorites.map((fav) => {
+              const shopName = fav.businessProfile?.shopName || fav.name || "QueueLess Merchant";
+              const address = fav.businessProfile?.address;
+
+              return (
+                <Card key={fav._id} variant="elevated" style={styles.ticketCard}>
+                  <View style={styles.ticketHeader}>
+                    <View style={styles.ticketStoreCol}>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                        <StatusBadge
+                          status={fav.isOpen ? "open" : "cancelled"}
+                          label={fav.isOpen ? "OPEN" : "CLOSED"}
+                          size="sm"
+                        />
+                        {fav.openReason && !fav.isOpen && (
+                          <Text style={styles.favClosedReason} numberOfLines={1}>
+                            ({fav.openReason})
+                          </Text>
+                        )}
+                      </View>
+                      <Text style={styles.ticketShopName} numberOfLines={1}>
+                        {shopName}
+                      </Text>
+                      {address && (
+                        <Text style={styles.favAddress} numberOfLines={1}>
+                          {address}
+                        </Text>
+                      )}
+                    </View>
+
+                    <TouchableOpacity
+                      onPress={() => handleRemoveFavorite(fav._id)}
+                      style={styles.favHeartBtn}
+                      activeOpacity={0.7}
+                      accessibilityLabel="Remove from saved stores"
+                    >
+                      <Ionicons name="heart" size={18} color={colors.danger} />
+                    </TouchableOpacity>
+                  </View>
+
+                  <View style={styles.ticketDottedLine} />
+
+                  <View style={styles.ticketMetaRow}>
+                    <View style={styles.metaChip}>
+                      <Ionicons name="people" size={14} color={colors.primary} />
+                      <Text style={styles.metaChipText}>{fav.activeQueueCount} in line</Text>
+                    </View>
+
+                    <View style={[styles.metaChip, { backgroundColor: colors.warningSubtle }]}>
+                      <Ionicons name="hourglass" size={14} color={colors.warning} />
+                      <Text style={[styles.metaChipText, { color: colors.warning }]}>
+                        {fav.prediction?.rangeDisplay
+                          ? `~${fav.prediction.rangeDisplay}`
+                          : `~${fav.estimatedWait} mins wait`}
+                      </Text>
+                    </View>
+
+                    <TouchableOpacity
+                      style={styles.queueUpBtn}
+                      onPress={() => navigation.navigate("ScanJoin", { qrCode: fav.qrCode || fav._id })}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.queueUpBtnText}>Queue Up</Text>
+                      <Ionicons name="arrow-forward" size={13} color="#FFF" />
+                    </TouchableOpacity>
+                  </View>
+                </Card>
+              );
+            })
+          )
         ) : (
-          entries.map((entry) => {
-            const shopName =
-              entry.businessId?.businessProfile?.shopName ||
-              entry.businessId?.shopName ||
-              "QueueLess Store";
-            const wait = entry.currentEstimatedWait ?? 0;
-            const ahead = entry.peopleAhead ?? 0;
+          /* History Tab */
+          history.length === 0 ? (
+            <EmptyState
+              icon="receipt-outline"
+              title="No Past Visits Yet"
+              description="Completed or cancelled bookings will automatically appear here."
+            />
+          ) : (
+            history.map((entry) => {
+              const shopName =
+                entry.businessId?.businessProfile?.shopName ||
+                entry.businessId?.shopName ||
+                "QueueLess Store";
+              const dateStr = entry.date || entry.joinedAt;
+              const formattedDate = dateStr
+                ? new Date(dateStr).toLocaleDateString(undefined, {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                  })
+                : "Previous Visit";
 
-            return (
-              <Card
-                key={entry._id}
-                variant="elevated"
-                onPress={() => rootNavigation.navigate("QueueStatus", { id: entry._id })}
-                style={styles.ticketCard}
-              >
-                <View style={styles.ticketHeader}>
-                  <View style={styles.ticketStoreCol}>
-                    <Text style={styles.ticketShopName} numberOfLines={1}>
-                      {shopName}
-                    </Text>
-                    <Text style={styles.ticketNumber}>
-                      Ticket #{entry._id.slice(-4).toUpperCase()}
-                    </Text>
-                  </View>
-                  <StatusBadge status={entry.status} size="sm" />
-                </View>
-
-                <View style={styles.ticketDottedLine} />
-
-                <View style={styles.ticketMetaRow}>
-                  <View style={styles.metaChip}>
-                    <Ionicons name="people" size={14} color={colors.primary} />
-                    <Text style={styles.metaChipText}>{ahead} ahead</Text>
-                  </View>
-
-                  <View style={[styles.metaChip, { backgroundColor: colors.warningSubtle }]}>
-                    <Ionicons name="hourglass" size={14} color={colors.warning} />
-                    <Text style={[styles.metaChipText, { color: colors.warning }]}>
-                      ~{wait} mins wait
-                    </Text>
+              return (
+                <Card
+                  key={entry._id}
+                  variant="subtle"
+                  style={styles.historyCard}
+                >
+                  <View style={styles.historyHeader}>
+                    <View style={styles.ticketStoreCol}>
+                      <Text style={styles.historyShopName} numberOfLines={1}>
+                        {shopName}
+                      </Text>
+                      <Text style={styles.historyDate}>
+                        {formattedDate} • Ticket #{entry._id.slice(-4).toUpperCase()}
+                      </Text>
+                    </View>
+                    <StatusBadge status={entry.status} size="sm" />
                   </View>
 
-                  <View style={styles.trackLiveBtn}>
-                    <Text style={styles.trackLiveText}>Track Live</Text>
-                    <Ionicons name="chevron-forward" size={14} color={colors.primary} />
+                  <View style={styles.ticketDottedLine} />
+
+                  <View style={styles.historyActionsRow}>
+                    <TouchableOpacity
+                      style={styles.rebookBtn}
+                      disabled={rebookingId === entry._id}
+                      onPress={() => handleQuickRebook(entry._id)}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons
+                        name="repeat-outline"
+                        size={14}
+                        color={colors.primary}
+                        style={{ marginRight: 4 }}
+                      />
+                      <Text style={styles.rebookBtnText}>
+                        {rebookingId === entry._id ? "Rebooking..." : "Rebook Services"}
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.trackLiveBtn}
+                      onPress={() => rootNavigation.navigate("QueueStatus", { id: entry._id })}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.trackLiveText}>View Ticket</Text>
+                      <Ionicons name="chevron-forward" size={14} color={colors.primary} />
+                    </TouchableOpacity>
                   </View>
-                </View>
-              </Card>
-            );
-          })
+                </Card>
+              );
+            })
+          )
         )}
       </View>
 
@@ -591,6 +832,75 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: colors.primary,
   },
+  favClosedReason: {
+    fontSize: 11,
+    color: colors.muted,
+  },
+  favAddress: {
+    fontSize: 12,
+    color: colors.muted,
+    marginTop: 2,
+  },
+  favHeartBtn: {
+    padding: 8,
+    borderRadius: radii.md,
+    backgroundColor: "rgba(239, 68, 68, 0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(239, 68, 68, 0.3)",
+  },
+  queueUpBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: colors.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: radii.sm,
+  },
+  queueUpBtnText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  historyCard: {
+    gap: spacing.sm,
+    padding: spacing.md,
+  },
+  historyHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+  },
+  historyShopName: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: colors.text,
+  },
+  historyDate: {
+    fontSize: 12,
+    color: colors.muted,
+    marginTop: 2,
+  },
+  historyActionsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  rebookBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.primarySubtle,
+    borderWidth: 1,
+    borderColor: colors.primaryBorder,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: radii.sm,
+  },
+  rebookBtnText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: colors.primary,
+  },
   quickActionCard: {
     padding: spacing.lg,
     gap: spacing.md,
@@ -770,5 +1080,22 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "600",
     color: colors.primary,
+  },
+  ticketBadgeCol: {
+    alignItems: "flex-end",
+    gap: 4,
+  },
+  turnAlertBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: radii.full,
+    borderWidth: 1,
+  },
+  turnAlertBadgeText: {
+    fontSize: 10,
+    fontWeight: "700",
   },
 });

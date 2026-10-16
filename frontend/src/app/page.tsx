@@ -20,11 +20,16 @@ import {
   ChevronRight,
   ExternalLink,
   MapPin,
-  Calendar
+  Calendar,
+  BellRing,
+  Heart,
+  Repeat
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import api from "@/lib/api";
+import { io } from "socket.io-client";
+import { useToast } from "@/components/ui/Toast";
 import { QueueFlowLoader, QueueCardSkeleton, HistorySkeleton } from "@/components/loading";
 
 interface ServiceItem {
@@ -33,11 +38,43 @@ interface ServiceItem {
   price?: number;
 }
 
+interface FavoriteStore {
+  _id: string;
+  name?: string;
+  email?: string;
+  qrCode?: string;
+  businessProfile?: {
+    shopName?: string;
+    address?: string;
+    services?: Array<{ name: string; durationMin?: number; cost?: number }>;
+  };
+  isOpen: boolean;
+  openReason?: string;
+  activeQueueCount: number;
+  estimatedWait: number;
+  prediction?: {
+    estimatedWaitMinutes: number;
+    rangeDisplay: string;
+    confidenceLabel: string;
+  };
+}
+
 interface QueueTicket {
   _id: string;
   status: "waiting" | "in_progress" | "completed" | "cancelled" | string;
   peopleAhead: number;
   currentEstimatedWait: number;
+  prediction?: {
+    rangeDisplay?: string;
+    confidenceLabel?: string;
+    confidence?: string;
+  };
+  alert?: {
+    active: boolean;
+    type: "TURN_APPROACHING" | "YOUR_TURN";
+    title: string;
+    message: string;
+  };
   date?: string;
   createdAt?: string;
   selectedServices?: ServiceItem[];
@@ -57,15 +94,19 @@ export default function Home() {
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const [myQueues, setMyQueues] = useState<QueueTicket[]>([]);
   const [history, setHistory] = useState<QueueTicket[]>([]);
-  const [activeTab, setActiveTab] = useState<"active" | "history">("active");
+  const [favorites, setFavorites] = useState<FavoriteStore[]>([]);
+  const [activeTab, setActiveTab] = useState<"active" | "favorites" | "history">("active");
   const [loadingQueues, setLoadingQueues] = useState(false);
+  const [rebookingId, setRebookingId] = useState<string | null>(null);
   const router = useRouter();
+  const { toast } = useToast();
 
   useEffect(() => {
     const handleAuthLogout = () => {
       setUser(null);
       setMyQueues([]);
       setHistory([]);
+      setFavorites([]);
       setIsCheckingAuth(false);
     };
 
@@ -116,9 +157,10 @@ export default function Home() {
   const fetchQueuesData = async () => {
     setLoadingQueues(true);
     try {
-      const [activeRes, historyRes] = await Promise.allSettled([
+      const [activeRes, historyRes, favRes] = await Promise.allSettled([
         api.get("/queue/my-queues"),
-        api.get("/queue/history")
+        api.get("/queue/history"),
+        api.get("/queue/favorites")
       ]);
 
       if (activeRes.status === "fulfilled" && Array.isArray(activeRes.value.data)) {
@@ -127,12 +169,79 @@ export default function Home() {
       if (historyRes.status === "fulfilled" && Array.isArray(historyRes.value.data)) {
         setHistory(historyRes.value.data);
       }
+      if (favRes.status === "fulfilled" && Array.isArray(favRes.value.data)) {
+        setFavorites(favRes.value.data);
+      }
     } catch {
       // Handled gracefully
     } finally {
       setLoadingQueues(false);
     }
   };
+
+  const handleQuickRebook = async (pastTicketId: string) => {
+    setRebookingId(pastTicketId);
+    try {
+      const res = await api.post("/queue/quick-rebook", { pastTicketId });
+      toast.success("Successfully rejoined queue!");
+      router.push(`/status/${res.data._id}`);
+    } catch (err: any) {
+      toast.error(
+        err.response?.data?.message ||
+          "Could not rebook. The store may be closed or you already have an active reservation."
+      );
+    } finally {
+      setRebookingId(null);
+    }
+  };
+
+  const handleRemoveFavorite = async (businessId: string) => {
+    try {
+      await api.post("/queue/favorites/toggle", { businessId });
+      setFavorites((prev) => prev.filter((f) => f._id !== businessId));
+      toast.info("Store removed from your saved list");
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to remove saved store");
+    }
+  };
+
+  useEffect(() => {
+    if (!user || user.role !== "customer") return;
+
+    const socketUrl = process.env.NEXT_PUBLIC_API_URL?.replace("/api", "") || "http://localhost:5000";
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    const socket = io(socketUrl, {
+      transports: ["websocket", "polling"],
+      auth: {
+        token: token || undefined
+      }
+    });
+
+    socket.on("customer_notification", (notif: any) => {
+      fetchQueuesData();
+
+      if (
+        typeof window !== "undefined" &&
+        "Notification" in window &&
+        Notification.permission === "granted"
+      ) {
+        try {
+          new Notification(notif.title, {
+            body: notif.message,
+            icon: "/icon.svg"
+          });
+        } catch {}
+      }
+    });
+
+    socket.on("status_updated", () => {
+      fetchQueuesData();
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [user]);
 
   // Helper to extract store name accurately from backend populated structure
   const getStoreName = (ticket: QueueTicket) => {
@@ -197,10 +306,10 @@ export default function Home() {
           </div>
 
           {/* Navigation Tabs */}
-          <div className="flex border-b border-[#203052] mb-6">
+          <div className="flex border-b border-[#203052] mb-6 overflow-x-auto no-scrollbar">
             <button
               onClick={() => setActiveTab("active")}
-              className={`flex items-center gap-2 pb-3 px-4 text-sm font-semibold transition-colors relative ${
+              className={`flex items-center gap-2 pb-3 px-4 text-sm font-semibold transition-colors whitespace-nowrap relative ${
                 activeTab === "active"
                   ? "text-blue-400"
                   : "text-[#889DC2] hover:text-[#ECF2FF]"
@@ -216,8 +325,25 @@ export default function Home() {
               )}
             </button>
             <button
+              onClick={() => setActiveTab("favorites")}
+              className={`flex items-center gap-2 pb-3 px-4 text-sm font-semibold transition-colors whitespace-nowrap relative ${
+                activeTab === "favorites"
+                  ? "text-rose-400"
+                  : "text-[#889DC2] hover:text-[#ECF2FF]"
+              }`}
+            >
+              <Heart className={`w-4 h-4 ${activeTab === "favorites" ? "fill-rose-500 text-rose-500" : ""}`} />
+              Saved Stores ({favorites.length})
+              {activeTab === "favorites" && (
+                <motion.div
+                  layoutId="activeTabUnderline"
+                  className="absolute bottom-0 left-0 right-0 h-0.5 bg-rose-500 rounded-full"
+                />
+              )}
+            </button>
+            <button
               onClick={() => setActiveTab("history")}
-              className={`flex items-center gap-2 pb-3 px-4 text-sm font-semibold transition-colors relative ${
+              className={`flex items-center gap-2 pb-3 px-4 text-sm font-semibold transition-colors whitespace-nowrap relative ${
                 activeTab === "history"
                   ? "text-blue-400"
                   : "text-[#889DC2] hover:text-[#ECF2FF]"
@@ -235,7 +361,7 @@ export default function Home() {
           </div>
 
           {/* Active Queues Tab */}
-          {activeTab === "active" ? (
+          {activeTab === "active" && (
             <div className="space-y-4">
               {loadingQueues ? (
                 <div className="space-y-4">
@@ -281,6 +407,18 @@ export default function Home() {
                               Ticket #{ticketNumber}
                             </span>
                             <StatusBadge status={q.status} />
+                            {q.alert?.active && (
+                              <span
+                                className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold inline-flex items-center gap-1 shadow-sm ${
+                                  q.alert.type === "YOUR_TURN"
+                                    ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 animate-bounce"
+                                    : "bg-amber-500/20 text-amber-300 border border-amber-500/40 animate-pulse"
+                                }`}
+                              >
+                                <BellRing className="w-3 h-3" />
+                                {q.alert.type === "YOUR_TURN" ? "Your Turn!" : "Turn Approaching"}
+                              </span>
+                            )}
                           </div>
 
                           <h2 className="text-xl font-bold text-[#ECF2FF] pt-1">
@@ -308,9 +446,9 @@ export default function Home() {
                                 {q.peopleAhead === 1 ? "person ahead" : "people ahead"}
                               </span>
                             </div>
-                            <div className="text-xs text-blue-400 flex items-center gap-1 mt-0.5 sm:justify-end">
+                            <div className="text-xs text-blue-400 flex items-center gap-1 mt-0.5 sm:justify-end font-medium">
                               <Clock className="w-3 h-3" />
-                              ~{q.currentEstimatedWait} mins estimated
+                              {q.prediction?.rangeDisplay ? `~${q.prediction.rangeDisplay}` : `~${q.currentEstimatedWait} mins`}
                             </div>
                           </div>
 
@@ -327,8 +465,139 @@ export default function Home() {
                 })
               )}
             </div>
-          ) : (
-            /* Booking History Tab */
+          )}
+
+          {/* Saved Stores Tab */}
+          {activeTab === "favorites" && (
+            <div className="space-y-4">
+              {loadingQueues ? (
+                <div className="space-y-4">
+                  <QueueCardSkeleton />
+                  <QueueCardSkeleton />
+                </div>
+              ) : favorites.length === 0 ? (
+                <div className="text-center py-16 px-6 border border-dashed border-[#203052] rounded-2xl bg-[#0A1329]/60">
+                  <div className="w-14 h-14 rounded-2xl bg-[#101A32] border border-[#203052] flex items-center justify-center text-rose-400 mx-auto mb-4 shadow-inner">
+                    <Heart className="w-7 h-7" />
+                  </div>
+                  <h3 className="text-lg font-bold text-[#ECF2FF] mb-1">
+                    No Saved Stores Yet
+                  </h3>
+                  <p className="text-sm text-[#889DC2] max-w-sm mx-auto mb-6">
+                    Tap the heart icon on any store page to save your favourite merchants for quick 1-click rebooking and live queue tracking.
+                  </p>
+                  <Link href="/scan">
+                    <Button className="bg-blue-600 hover:bg-blue-500 text-white font-medium gap-2">
+                      <QrCode className="w-4 h-4" />
+                      Find Stores to Save
+                    </Button>
+                  </Link>
+                </div>
+              ) : (
+                favorites.map((fav) => {
+                  const shopName =
+                    fav.businessProfile?.shopName || fav.name || "QueueLess Merchant";
+                  const address = fav.businessProfile?.address;
+                  const servicesCount = fav.businessProfile?.services?.length || 0;
+
+                  return (
+                    <motion.div
+                      key={fav._id}
+                      whileHover={{ scale: 1.005 }}
+                      transition={{ duration: 0.15 }}
+                      className="rounded-2xl border border-[#203052] bg-[#101A32] p-5 sm:p-6 shadow-xl hover:border-blue-500/40 transition-colors"
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2.5 flex-wrap">
+                            <span
+                              className={`px-2.5 py-0.5 rounded-full text-xs font-bold inline-flex items-center gap-1.5 ${
+                                fav.isOpen
+                                  ? "bg-emerald-500/15 border border-emerald-500/30 text-emerald-400"
+                                  : "bg-rose-500/15 border border-rose-500/30 text-rose-400"
+                              }`}
+                            >
+                              <span
+                                className={`w-1.5 h-1.5 rounded-full ${
+                                  fav.isOpen ? "bg-emerald-400 animate-pulse" : "bg-rose-400"
+                                }`}
+                              />
+                              {fav.isOpen ? "Open Now" : "Closed"}
+                            </span>
+                            {fav.openReason && !fav.isOpen && (
+                              <span className="text-[11px] text-[#889DC2]">
+                                ({fav.openReason})
+                              </span>
+                            )}
+                          </div>
+
+                          <h2 className="text-xl font-bold text-[#ECF2FF] pt-1">
+                            {shopName}
+                          </h2>
+
+                          {address && (
+                            <p className="text-xs text-[#889DC2] flex items-center gap-1.5">
+                              <MapPin className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                              {address}
+                            </p>
+                          )}
+
+                          {servicesCount > 0 && (
+                            <p className="text-xs text-[#889DC2]">
+                              {servicesCount} {servicesCount === 1 ? "service" : "services"} listed
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Live Waiting Info & Action */}
+                        <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-center border-t sm:border-t-0 pt-3 sm:pt-0 border-[#203052] gap-3">
+                          <div className="text-left sm:text-right">
+                            <div className="text-xl font-extrabold text-[#ECF2FF]">
+                              {fav.activeQueueCount}{" "}
+                              <span className="text-xs font-medium text-[#889DC2]">
+                                in line
+                              </span>
+                            </div>
+                            <div className="text-xs text-blue-400 flex items-center gap-1 mt-0.5 sm:justify-end font-medium">
+                              <Clock className="w-3 h-3" />
+                              {fav.prediction?.rangeDisplay
+                                ? `~${fav.prediction.rangeDisplay}`
+                                : `~${fav.estimatedWait} mins wait`}
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 mt-1">
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveFavorite(fav._id)}
+                              className="p-2 rounded-xl text-rose-400 hover:bg-rose-500/10 border border-[#203052] transition-colors"
+                              title="Remove from saved stores"
+                              aria-label="Remove from saved stores"
+                            >
+                              <Heart className="w-4 h-4 fill-rose-500 text-rose-500" />
+                            </button>
+
+                            <Link href={`/store/${fav.qrCode || fav._id}`}>
+                              <Button
+                                size="sm"
+                                className="bg-blue-600 hover:bg-blue-500 text-white font-medium text-xs flex items-center gap-1.5 shadow-[0_0_12px_rgba(59,130,246,0.3)]"
+                              >
+                                <span>Queue Up</span>
+                                <ArrowRight className="w-3.5 h-3.5" />
+                              </Button>
+                            </Link>
+                          </div>
+                        </div>
+                      </div>
+                    </motion.div>
+                  );
+                })
+              )}
+            </div>
+          )}
+
+          {/* Booking History Tab */}
+          {activeTab === "history" && (
             <div className="space-y-3">
               {loadingQueues ? (
                 <HistorySkeleton count={3} />
@@ -366,8 +635,21 @@ export default function Home() {
                         </p>
                       </div>
 
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-2">
                         <StatusBadge status={h.status} />
+
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={rebookingId === h._id}
+                          onClick={() => handleQuickRebook(h._id)}
+                          className="border-[#203052] hover:bg-blue-600/15 hover:border-blue-500/40 text-xs text-blue-400 font-medium flex items-center gap-1.5 h-8 px-2.5"
+                          title="Quick rebook with the same services"
+                        >
+                          <Repeat className={`w-3 h-3 ${rebookingId === h._id ? "animate-spin" : ""}`} />
+                          {rebookingId === h._id ? "Rebooking..." : "Rebook"}
+                        </Button>
+
                         <Link href={`/status/${h._id}`}>
                           <button
                             className="p-1.5 rounded-lg text-[#889DC2] hover:text-[#ECF2FF] hover:bg-[#152243] transition-colors"

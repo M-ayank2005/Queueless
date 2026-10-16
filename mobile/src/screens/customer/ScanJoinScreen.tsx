@@ -29,6 +29,7 @@ import { radii, shadows, spacing, typography } from "../../theme/theme";
 
 type StoreData = {
   _id: string;
+  isFavorite?: boolean;
   businessProfile: {
     shopName: string;
     address: string;
@@ -49,6 +50,8 @@ export default function ScanJoinScreen({ navigation, route }: Props) {
   const [loadingStore, setLoadingStore] = useState(false);
   const [joining, setJoining] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [isFavorite, setIsFavorite] = useState(false);
+  const [togglingFav, setTogglingFav] = useState(false);
 
   // Animated laser bar for camera scanner
   const laserAnim = useRef(new Animated.Value(0)).current;
@@ -92,14 +95,34 @@ export default function ScanJoinScreen({ navigation, route }: Props) {
       setLoadingStore(true);
       const response = await api.get(`/queue/store/${code}`);
       setStore(response.data);
+      setIsFavorite(Boolean(response.data?.isFavorite));
       setSelected([]);
     } catch (error: any) {
       const msg = error?.response?.data?.message || "Store not found. Please verify the QR code.";
       setErrorMessage(msg);
       showAlert("Store not found", msg);
       setStore(null);
+      setIsFavorite(false);
     } finally {
       setLoadingStore(false);
+    }
+  };
+
+  const handleToggleFavorite = async () => {
+    if (!store?._id || togglingFav) return;
+    setTogglingFav(true);
+    try {
+      const res = await api.post("/queue/favorites/toggle", { businessId: store._id });
+      const nextFav = Boolean(res.data?.isFavorite);
+      setIsFavorite(nextFav);
+      showAlert(
+        nextFav ? "Store Saved" : "Store Removed",
+        nextFav ? "Added to your saved stores for fast 1-tap rebooking." : "Removed from your saved stores."
+      );
+    } catch (err: any) {
+      showAlert("Error", err.response?.data?.message || "Failed to update saved store.");
+    } finally {
+      setTogglingFav(false);
     }
   };
 
@@ -299,6 +322,26 @@ export default function ScanJoinScreen({ navigation, route }: Props) {
               <Text style={styles.storeName}>{store.businessProfile?.shopName || "QueueLess Merchant"}</Text>
               <Text style={styles.storeAddress}>{store.businessProfile?.address || "Store Location"}</Text>
             </View>
+            <TouchableOpacity
+              onPress={handleToggleFavorite}
+              disabled={togglingFav}
+              style={{
+                padding: 7,
+                borderRadius: radii.md,
+                backgroundColor: isFavorite ? "rgba(239, 68, 68, 0.15)" : colors.cardSoft,
+                borderWidth: 1,
+                borderColor: isFavorite ? "rgba(239, 68, 68, 0.4)" : colors.border,
+                marginRight: 6,
+              }}
+              activeOpacity={0.7}
+              accessibilityLabel={isFavorite ? "Remove from saved stores" : "Save store"}
+            >
+              <Ionicons
+                name={isFavorite ? "heart" : "heart-outline"}
+                size={18}
+                color={isFavorite ? colors.danger : colors.muted}
+              />
+            </TouchableOpacity>
             <StatusBadge status="open" label="READY" size="sm" />
           </View>
 

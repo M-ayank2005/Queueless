@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useToast } from "@/components/ui/Toast";
 import { motion } from "framer-motion";
-import { Clock, Check, Store, MapPin, ArrowLeft, Ticket, AlertCircle } from "lucide-react";
+import { Clock, Check, Store, MapPin, ArrowLeft, Ticket, AlertCircle, Heart } from "lucide-react";
 import Link from "next/link";
 import api from "@/lib/api";
 import { QueueFlowLoader, LoadingButton } from "@/components/loading";
@@ -23,6 +23,7 @@ interface StoreData {
   _id: string;
   name?: string;
   email?: string;
+  isFavorite?: boolean;
   businessProfile?: {
     shopName?: string;
     address?: string;
@@ -45,6 +46,8 @@ export default function StorePage() {
   const [loading, setLoading] = useState(true);
   const [selectedServices, setSelectedServices] = useState<number[]>([]);
   const [isJoining, setIsJoining] = useState(false);
+  const [isFavorite, setIsFavorite] = useState(false);
+  const [isTogglingFavorite, setIsTogglingFavorite] = useState(false);
 
   useEffect(() => {
     if (qrCode) {
@@ -56,10 +59,36 @@ export default function StorePage() {
     try {
       const res = await api.get(`/queue/store/${qrCode}`);
       setStore(res.data);
+      setIsFavorite(Boolean(res.data.isFavorite));
     } catch {
       setStore(null);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleToggleFavorite = async () => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+    if (!token) {
+      toast.info("Please sign in to save this merchant to your favourites");
+      return;
+    }
+    if (!store?._id || isTogglingFavorite) return;
+
+    setIsTogglingFavorite(true);
+    try {
+      const res = await api.post("/queue/favorites/toggle", { businessId: store._id });
+      const nextFav = Boolean(res.data.isFavorite);
+      setIsFavorite(nextFav);
+      if (nextFav) {
+        toast.success("Saved to your favourites!");
+      } else {
+        toast.info("Removed from your favourites");
+      }
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to update favourites");
+    } finally {
+      setIsTogglingFavorite(false);
     }
   };
 
@@ -180,21 +209,39 @@ export default function StorePage() {
         >
           <Card className="bg-[#101A32] border-[#203052] shadow-xl mb-6">
             <CardHeader>
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-400 shrink-0">
-                  <Store className="w-5 h-5" />
+              <div className="flex items-start sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-400 shrink-0">
+                    <Store className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <CardTitle className="text-xl sm:text-2xl font-bold text-[#ECF2FF]">
+                      {shopName}
+                    </CardTitle>
+                    {address && (
+                      <CardDescription className="text-xs text-[#889DC2] flex items-center gap-1 mt-0.5">
+                        <MapPin className="w-3 h-3 text-blue-400 shrink-0" />
+                        {address}
+                      </CardDescription>
+                    )}
+                  </div>
                 </div>
-                <div>
-                  <CardTitle className="text-xl sm:text-2xl font-bold text-[#ECF2FF]">
-                    {shopName}
-                  </CardTitle>
-                  {address && (
-                    <CardDescription className="text-xs text-[#889DC2] flex items-center gap-1 mt-0.5">
-                      <MapPin className="w-3 h-3 text-blue-400 shrink-0" />
-                      {address}
-                    </CardDescription>
-                  )}
-                </div>
+
+                <motion.button
+                  type="button"
+                  whileTap={{ scale: 0.9 }}
+                  onClick={handleToggleFavorite}
+                  disabled={isTogglingFavorite}
+                  title={isFavorite ? "Remove from saved stores" : "Save store to favourites"}
+                  aria-label={isFavorite ? "Remove from saved stores" : "Save store to favourites"}
+                  className={`p-2.5 rounded-xl border transition-all shrink-0 flex items-center justify-center ${
+                    isFavorite
+                      ? "bg-rose-500/15 border-rose-500/40 text-rose-400 shadow-[0_0_14px_rgba(244,63,94,0.25)]"
+                      : "bg-[#0A1329] border-[#203052] text-[#889DC2] hover:text-rose-400 hover:border-rose-500/40"
+                  }`}
+                >
+                  <Heart className={`w-5 h-5 transition-transform ${isFavorite ? "fill-rose-500 text-rose-500 scale-105" : ""}`} />
+                </motion.button>
               </div>
 
               {hours?.openTime && hours?.closeTime && (

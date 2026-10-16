@@ -15,6 +15,7 @@ export interface IBusinessProfile {
       openTime: string;
       closeTime: string;
       closedDays: number[];
+      timezone?: string;
   };
 }
 
@@ -25,6 +26,7 @@ export interface IUser extends Document {
   passwordHash: string;
   role: "customer" | "business";
   businessProfile?: IBusinessProfile;
+  favoriteBusinesses?: mongoose.Types.ObjectId[];
 }
 
 const ServiceSchema = new Schema<IService>({
@@ -41,7 +43,8 @@ const BusinessProfileSchema = new Schema<IBusinessProfile>({
   workingHours: {
       openTime: { type: String, default: "00:00" }, // 24h format HH:mm
       closeTime: { type: String, default: "23:59" },
-      closedDays: { type: [Number], default: [] } // 0=Sunday, 1=Monday...
+      closedDays: { type: [Number], default: [] }, // 0=Sunday, 1=Monday...
+      timezone: { type: String, default: "UTC" }
   }
 });
 
@@ -52,6 +55,7 @@ const UserSchema = new Schema<IUser>({
   passwordHash: { type: String, required: true },
   role: { type: String, enum: ["customer", "business"], required: true },
   businessProfile: { type: BusinessProfileSchema },
+  favoriteBusinesses: [{ type: Schema.Types.ObjectId, ref: "User" }],
 }, { timestamps: true });
 
 export default mongoose.model<IUser>("User", UserSchema);

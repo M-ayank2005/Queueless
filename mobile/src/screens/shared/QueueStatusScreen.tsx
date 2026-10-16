@@ -2,9 +2,11 @@ import React, { useEffect, useState } from "react";
 import {
   Alert,
   Platform,
+  Share,
   StyleSheet,
   Text,
   TouchableOpacity,
+  Vibration,
   View,
 } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
@@ -25,13 +27,90 @@ type Props = NativeStackScreenProps<RootStackParamList, "QueueStatus">;
 export default function QueueStatusScreen({ route, navigation }: Props) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [sharing, setSharing] = useState(false);
+  const [shareToken, setShareToken] = useState<string | null>(null);
   const [entry, setEntry] = useState<QueueEntry | null>(null);
+  const [isAlertDismissed, setIsAlertDismissed] = useState(false);
+
+  const handleShareTicket = async () => {
+    if (!entry) return;
+    try {
+      setSharing(true);
+      const res = await api.post(`/queue/${entry._id}/share`);
+      const token = res.data.shareToken;
+      setShareToken(token);
+
+      const shopName = entry.businessId?.businessProfile?.shopName || "QueueLess Store";
+      const shareUrl = `https://queueless.com/shared/${token}`;
+      const message = `Track my live queue spot (#${entry._id.slice(-4).toUpperCase()}) at ${shopName} in real-time:\n${shareUrl}`;
+
+      if (Platform.OS === "web") {
+        if (typeof navigator !== "undefined" && navigator.clipboard) {
+          await navigator.clipboard.writeText(shareUrl);
+          window.alert(`Share link copied to clipboard!\n${shareUrl}`);
+        }
+      } else {
+        await Share.share({
+          message,
+          url: shareUrl,
+          title: `QueueLess — ${shopName} Live Ticket`,
+        });
+      }
+    } catch (err: any) {
+      const msg = err.response?.data?.message || "Could not generate share link.";
+      if (Platform.OS === "web") window.alert(msg);
+      else Alert.alert("Share Error", msg);
+    } finally {
+      setSharing(false);
+    }
+  };
+
+  const handleRevokeShare = async () => {
+    if (!entry) return;
+    const confirmRevoke = async () => {
+      try {
+        await api.delete(`/queue/${entry._id}/share`);
+        setShareToken(null);
+        const msg = "Public share link has been revoked.";
+        if (Platform.OS === "web") window.alert(msg);
+        else Alert.alert("Link Revoked", msg);
+      } catch (err: any) {
+        const msg = err.response?.data?.message || "Could not revoke share link.";
+        if (Platform.OS === "web") window.alert(msg);
+        else Alert.alert("Error", msg);
+      }
+    };
+
+    if (Platform.OS === "web") {
+      if (window.confirm("Are you sure you want to revoke the public share link?")) {
+        confirmRevoke();
+      }
+    } else {
+      Alert.alert(
+        "Revoke Share Link",
+        "Are you sure you want to revoke the public share link? Anyone with the link will no longer be able to track your queue.",
+        [
+          { text: "Keep Link", style: "cancel" },
+          { text: "Revoke", style: "destructive", onPress: confirmRevoke },
+        ]
+      );
+    }
+  };
 
   const load = async (isManual = false) => {
     try {
       if (isManual) setRefreshing(true);
       const response = await api.get(`/queue/status/${route.params.id}`);
       setEntry(response.data);
+
+      if (response.data?.alert?.active && !isAlertDismissed) {
+        if (Platform.OS !== "web") {
+          try {
+            Vibration.vibrate([0, 250, 100, 250]);
+          } catch {}
+        }
+      }
     } catch {
       if (isManual) {
         if (Platform.OS === "web") {
@@ -43,6 +122,47 @@ export default function QueueStatusScreen({ route, navigation }: Props) {
     } finally {
       setLoading(false);
       if (isManual) setRefreshing(false);
+    }
+  };
+
+  const handleCancelTicket = () => {
+    if (!entry) return;
+    const confirmCancel = () => {
+      setCancelling(true);
+      api
+        .post("/queue/cancel", { queueId: entry._id })
+        .then(() => {
+          if (Platform.OS === "web") {
+            window.alert("Your ticket has been cancelled.");
+          } else {
+            Alert.alert("Ticket Cancelled", "Your spot in line has been cancelled.");
+          }
+          load(true);
+        })
+        .catch((err) => {
+          const msg = err.response?.data?.message || "Failed to cancel ticket.";
+          if (Platform.OS === "web") {
+            window.alert(msg);
+          } else {
+            Alert.alert("Error", msg);
+          }
+        })
+        .finally(() => setCancelling(false));
+    };
+
+    if (Platform.OS === "web") {
+      if (window.confirm("Are you sure you want to leave this queue? Your spot will be forfeited.")) {
+        confirmCancel();
+      }
+    } else {
+      Alert.alert(
+        "Leave Queue",
+        "Are you sure you want to leave this queue? Your spot will be forfeited.",
+        [
+          { text: "Keep Spot", style: "cancel" },
+          { text: "Leave Queue", style: "destructive", onPress: confirmCancel }
+        ]
+      );
     }
   };
 
@@ -132,6 +252,57 @@ export default function QueueStatusScreen({ route, navigation }: Props) {
         </View>
       </View>
 
+      {/* Turn Approaching / Your Turn Notification Banner */}
+      {entry.alert?.active && !isAlertDismissed && (
+        <Card
+          variant="elevated"
+          style={[
+            styles.notifAlertCard,
+            entry.alert.type === "YOUR_TURN"
+              ? styles.notifAlertCardYourTurn
+              : styles.notifAlertCardApproaching
+          ]}
+        >
+          <View style={styles.notifAlertHeader}>
+            <View
+              style={[
+                styles.notifAlertIconCircle,
+                entry.alert.type === "YOUR_TURN"
+                  ? styles.notifIconCircleYourTurn
+                  : styles.notifIconCircleApproaching
+              ]}
+            >
+              <Ionicons
+                name={entry.alert.type === "YOUR_TURN" ? "sparkles" : "notifications"}
+                size={18}
+                color={entry.alert.type === "YOUR_TURN" ? colors.success : colors.warning}
+              />
+            </View>
+            <View style={styles.notifAlertTextCol}>
+              <View style={styles.notifPillRow}>
+                <Text
+                  style={[
+                    styles.notifBadgeTag,
+                    { color: entry.alert.type === "YOUR_TURN" ? colors.success : colors.warning }
+                  ]}
+                >
+                  {entry.alert.type === "YOUR_TURN" ? "COUNTER READY" : "TURN APPROACHING"}
+                </Text>
+              </View>
+              <Text style={styles.notifAlertTitle}>{entry.alert.title}</Text>
+              <Text style={styles.notifAlertBody}>{entry.alert.message}</Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => setIsAlertDismissed(true)}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              style={styles.notifDismissBtn}
+            >
+              <Ionicons name="close" size={16} color={colors.muted} />
+            </TouchableOpacity>
+          </View>
+        </Card>
+      )}
+
       {/* Hero Boarding Pass Ticket Card */}
       <Card variant="glow" style={styles.ticketCard}>
         {/* Ticket Header */}
@@ -206,17 +377,38 @@ export default function QueueStatusScreen({ route, navigation }: Props) {
             <Ionicons name="people" size={20} color={colors.primary} />
           </View>
           <Text style={styles.metricBigVal}>{ahead}</Text>
-          <Text style={styles.metricLabelText}>People Ahead</Text>
+          <Text style={styles.metricLabelText}>
+            {ahead === 1 ? "Person Ahead" : "People Ahead"}
+          </Text>
         </Card>
 
         <Card variant="elevated" style={styles.metricCard}>
           <View style={[styles.metricIconWrap, { backgroundColor: colors.warningSubtle }]}>
             <Ionicons name="hourglass" size={20} color={colors.warning} />
           </View>
-          <Text style={[styles.metricBigVal, { color: colors.warning }]}>~{wait}m</Text>
+          <Text style={[styles.metricBigVal, { color: colors.warning }]}>
+            {entry.prediction?.rangeDisplay ? `~${entry.prediction.rangeDisplay}` : `~${wait}m`}
+          </Text>
           <Text style={styles.metricLabelText}>Estimated Wait</Text>
         </Card>
       </View>
+
+      {/* Smart Prediction Telemetry Pill */}
+      {entry.prediction?.confidenceLabel && !isCompleted && !isCancelled && (
+        <View style={styles.predictionPill}>
+          <View style={styles.predictionPillLeft}>
+            <Ionicons name="sparkles" size={13} color={colors.warning} />
+            <Text style={styles.predictionPillText} numberOfLines={1}>
+              {entry.prediction.confidenceLabel}
+            </Text>
+          </View>
+          {entry.estimatedServiceStartTime && wait > 0 && (
+            <Text style={styles.estStartTimeText}>
+              Est. {new Date(entry.estimatedServiceStartTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </Text>
+          )}
+        </View>
+      )}
 
       {/* Selected Services Breakdown Card */}
       <Card variant="default" style={styles.servicesCard}>
@@ -252,6 +444,30 @@ export default function QueueStatusScreen({ route, navigation }: Props) {
 
       {/* Action Buttons */}
       <View style={styles.actionsWrap}>
+        {!isCancelled && (
+          <AppButton
+            title="Share Live Ticket"
+            size="md"
+            variant="secondary"
+            onPress={handleShareTicket}
+            loading={sharing}
+            loadingText="Generating Link..."
+            icon="share-social-outline"
+          />
+        )}
+
+        {shareToken && !isCancelled && (
+          <View style={styles.shareActiveBanner}>
+            <View style={styles.shareActiveLeft}>
+              <Ionicons name="shield-checkmark" size={14} color={colors.primary} />
+              <Text style={styles.shareActiveText}>Public link active</Text>
+            </View>
+            <TouchableOpacity onPress={handleRevokeShare} activeOpacity={0.7}>
+              <Text style={styles.revokeText}>Revoke Link</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         <AppButton
           title="Refresh Status"
           size="lg"
@@ -260,6 +476,17 @@ export default function QueueStatusScreen({ route, navigation }: Props) {
           loadingText="Refreshing..."
           icon="refresh-outline"
         />
+        {!isCompleted && !isCancelled && (
+          <AppButton
+            title="Leave Queue"
+            size="md"
+            variant="danger"
+            onPress={handleCancelTicket}
+            loading={cancelling}
+            loadingText="Leaving Queue..."
+            icon="close-circle-outline"
+          />
+        )}
         <AppButton
           title="Return to Home"
           size="md"
@@ -556,4 +783,119 @@ const styles = StyleSheet.create({
     textAlign: "center",
     lineHeight: 18,
   },
+  predictionPill: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    backgroundColor: colors.cardElevated,
+    borderColor: colors.borderLight,
+    borderWidth: 1,
+    borderRadius: radii.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    marginTop: spacing.xs,
+  },
+  predictionPillLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    flex: 1,
+    marginRight: spacing.sm,
+  },
+  predictionPillText: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    fontWeight: "600",
+  },
+  estStartTimeText: {
+    fontSize: 12,
+    color: colors.primary,
+    fontWeight: "700",
+  },
+  notifAlertCard: {
+    padding: spacing.md,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    marginBottom: spacing.md,
+  },
+  notifAlertCardYourTurn: {
+    backgroundColor: "rgba(16, 185, 129, 0.12)",
+    borderColor: "rgba(16, 185, 129, 0.4)",
+  },
+  notifAlertCardApproaching: {
+    backgroundColor: "rgba(245, 158, 11, 0.12)",
+    borderColor: "rgba(245, 158, 11, 0.4)",
+  },
+  notifAlertHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: spacing.sm,
+  },
+  notifAlertIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: radii.md,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  notifIconCircleYourTurn: {
+    backgroundColor: "rgba(16, 185, 129, 0.2)",
+  },
+  notifIconCircleApproaching: {
+    backgroundColor: "rgba(245, 158, 11, 0.2)",
+  },
+  notifAlertTextCol: {
+    flex: 1,
+  },
+  notifPillRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 2,
+  },
+  notifBadgeTag: {
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 0.8,
+  },
+  notifAlertTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: colors.text,
+  },
+  notifAlertBody: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    lineHeight: 16,
+    marginTop: 2,
+  },
+  notifDismissBtn: {
+    padding: 4,
+  },
+  shareActiveBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: colors.cardSoft,
+    borderColor: colors.border,
+    borderWidth: 1,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderRadius: radii.md,
+  },
+  shareActiveLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+  },
+  shareActiveText: {
+    fontSize: 12,
+    color: colors.textSecondary,
+    fontWeight: "600",
+  },
+  revokeText: {
+    fontSize: 12,
+    color: colors.danger,
+    fontWeight: "700",
+  },
 });
+

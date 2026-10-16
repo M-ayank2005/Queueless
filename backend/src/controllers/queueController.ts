@@ -1,183 +1,274 @@
 import { Request, Response } from "express";
+import jwt from "jsonwebtoken";
 import User from "../models/User";
-import QueueEntry, { IQueueEntry } from "../models/QueueEntry";
 import { AuthRequest } from "../middleware/authMiddleware";
+import {
+  calculateTicketWaitEstimate,
+  joinQueueService,
+  getTicketStatusService,
+  getCustomerActiveQueuesService,
+  cancelCustomerTicketService,
+  getCustomerHistoryService,
+  isStoreOpenNow,
+  toggleFavoriteService,
+  getCustomerFavoritesService,
+  quickRebookService,
+  generateTicketShareTokenService,
+  revokeTicketShareTokenService,
+  getSharedTicketService
+} from "../services/queueService";
 
-// Get Store Info by QR Code (Public)
+// Re-export timezone-aware open hours helper
+export { isStoreOpenNow };
+
+// Get Store Info by QR Code (Public with optional auth enrichment)
 export const getStoreByQr = async (req: Request, res: Response) => {
   try {
     const { qrCode } = req.params;
     const store = await User.findOne({ "businessProfile.uniqueQrCode": qrCode, role: "business" })
-      .select("name businessProfile.shopName businessProfile.address businessProfile.services");
-      
-    if (!store) {
-      return res.status(404).json({ message: "Store not found" });
+      .select("name businessProfile.shopName businessProfile.address businessProfile.services businessProfile.workingHours");
+
+    if (!store || !store.businessProfile) {
+      return res.status(404).json({ success: false, message: "Store not found" });
     }
-    res.json(store);
+
+    const workingHours = store.businessProfile.workingHours;
+    const openStatus = workingHours ? isStoreOpenNow(workingHours) : { isOpen: true };
+
+    let isFavorite = false;
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      try {
+        const token = authHeader.split(" ")[1];
+        const secret = process.env.JWT_SECRET || "your_jwt_secret_key";
+        const decoded: any = jwt.verify(token, secret);
+        if (decoded && decoded.id) {
+          const user = await User.findById(decoded.id).select("favoriteBusinesses");
+          if (user?.favoriteBusinesses) {
+            isFavorite = user.favoriteBusinesses.some(id => id.toString() === store._id.toString());
+          }
+        }
+      } catch {}
+    }
+
+    return res.json({
+      _id: store._id,
+      name: store.name,
+      businessProfile: store.businessProfile,
+      isOpen: openStatus.isOpen,
+      closedReason: openStatus.reason,
+      isFavorite
+    });
   } catch (error) {
-    res.status(500).json({ message: "Server error", error });
+    return res.status(500).json({ success: false, message: "Server error", error });
   }
 };
 
-// Join Queue
+// Join Queue (Customer) - delegates to QueueService
 export const joinQueue = async (req: AuthRequest, res: Response) => {
   try {
-    const { businessId, selectedServices } = req.body; 
-    
-    // 1. Check if Business exists and is OPEN
+    const { businessId, selectedServices } = req.body;
+
+    if (!businessId) {
+      return res.status(400).json({ success: false, message: "businessId is required" });
+    }
+
+    if (!Array.isArray(selectedServices) || selectedServices.length === 0) {
+      return res.status(400).json({ success: false, message: "At least one service must be selected" });
+    }
+
+    // Verify operating hours before joining
     const businessUser = await User.findById(businessId);
-    if (!businessUser || !businessUser.businessProfile) {
-         return res.status(404).json({ message: "Business not found" });
+    if (!businessUser || !businessUser.businessProfile || businessUser.role !== "business") {
+      return res.status(404).json({ success: false, message: "Business not found or invalid" });
     }
 
-    const { workingHours } = businessUser.businessProfile;
-    if (workingHours) {
-        const now = new Date();
-        const currentDay = now.getDay(); // 0-6
-        const currentTime = now.getHours() * 60 + now.getMinutes(); // Minutes from midnight
-
-        // Check Closed Days
-        if (workingHours.closedDays && workingHours.closedDays.includes(currentDay)) {
-            return res.status(400).json({ message: "Shop is closed today" });
-        }
-
-        // Check Time
-        const [openH, openM] = workingHours.openTime.split(":").map(Number);
-        const [closeH, closeM] = workingHours.closeTime.split(":").map(Number);
-        const openMin = openH * 60 + openM;
-        const closeMin = closeH * 60 + closeM;
-
-        if (currentTime < openMin || currentTime > closeMin) {
-             return res.status(400).json({ message: `Shop is closed. Open from ${workingHours.openTime} to ${workingHours.closeTime}` });
-        }
+    if (businessUser.businessProfile.workingHours) {
+      const openCheck = isStoreOpenNow(businessUser.businessProfile.workingHours);
+      if (!openCheck.isOpen) {
+        return res.status(400).json({ success: false, message: openCheck.reason || "Store is closed" });
+      }
     }
 
-    // Calculate total duration for this user
-    const userDuration = selectedServices.reduce((acc: number, curr: any) => acc + curr.durationMin, 0);
-
-    // Get current queue for this business to calculate estimated wait time
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date();
-    endOfDay.setHours(23, 59, 59, 999);
-
-    const activeQueue = await QueueEntry.find({
+    const result = await joinQueueService(
+      req.user!.id,
+      req.user!.name || "Customer",
       businessId,
-      date: { $gte: startOfDay, $lte: endOfDay },
-      status: { $in: ["waiting", "in_progress"] }
-    });
-
-    // Calculate wait time: Sum of durations of all people ahead
-    let waitTime = activeQueue.reduce((acc, entry) => {
-        const entryDuration = entry.selectedServices.reduce((sAcc, s) => sAcc + s.durationMin, 0);
-        return acc + entryDuration;
-    }, 0);
-
-    const newEntry = new QueueEntry({
-      businessId,
-      customerId: req.user.id,
-      customerName: req.user.name || "Customer", 
-      date: new Date(),
       selectedServices,
-      totalEstimatedTime: waitTime,
-      status: "waiting"
-    });
+      req.app.get("io")
+    );
 
-    await newEntry.save();
-    
-    // Emit socket event to Business
-    const io = req.app.get("io");
-    if(io) {
-        io.to(`business_${businessId}`).emit("queue_updated", { type: "JOIN", entry: newEntry });
-    }
-    
-    res.status(201).json(newEntry);
-  } catch (error) {
-    res.status(500).json({ message: "Server error", error });
+    return res.status(201).json(result);
+  } catch (error: any) {
+    const status = error.status || 500;
+    return res.status(status).json({
+      success: false,
+      message: error.message || "Server error while joining queue",
+      activeTicketId: error.activeTicketId
+    });
   }
 };
 
-// Get My Queue Status (Customer)
+// Get Ticket Status (Customer / Business) - delegates to QueueService
 export const getMyQueueStatus = async (req: AuthRequest, res: Response) => {
-    try {
-        const { id } = req.params; // QueueEntry ID
-        const entry = await QueueEntry.findById(id).populate("businessId", "businessProfile.shopName");
-        
-        if (!entry) return res.status(404).json({ message: "Queue entry not found" });
-
-        // Recalculate wait time dynamically
-        const startOfDay = new Date();
-        startOfDay.setHours(0, 0, 0, 0);
-        
-        // Find all active entries for this business created BEFORE this entry
-        const peopleAhead = await QueueEntry.find({
-            businessId: entry.businessId,
-            date: { $gte: startOfDay },
-            status: { $in: ["waiting", "in_progress"] },
-            joinedAt: { $lt: entry.joinedAt }
-        });
-
-        const updatedWaitTime = peopleAhead.reduce((acc, p) => {
-             const d = p.selectedServices.reduce((s, i) => s + i.durationMin, 0);
-             return acc + d;
-        }, 0);
-
-        res.json({
-            ...entry.toObject(),
-            peopleAhead: peopleAhead.length,
-            currentEstimatedWait: updatedWaitTime
-        });
-
-    } catch (error) {
-        res.status(500).json({ message: "Server error", error });
-    }
-}
-
-// Get My Queues (Customer)
-export const getMyQueues = async (req: AuthRequest, res: Response) => {
-    try {
-        const queues = await QueueEntry.find({ 
-            customerId: req.user.id,
-            status: { $in: ['waiting', 'in_progress'] } // Active only
-        })
-        .populate('businessId', 'businessProfile.shopName businessProfile.address')
-        .sort({ joinedAt: -1 });
-
-        // Calculate dynamic wait times for each
-        const result = await Promise.all(queues.map(async (q) => {
-            const position = await QueueEntry.countDocuments({
-                businessId: q.businessId._id,
-                date: q.date,
-                status: { $in: ['waiting', 'in_progress'] },
-                joinedAt: { $lt: q.joinedAt }
-            });
-            
-            return {
-                ...q.toObject(),
-                peopleAhead: position,
-                currentEstimatedWait: (position + 1) * 10 // Mock 10 mins per person for now
-            };
-        }));
-
-        res.json(result);
-    } catch (error) {
-        res.status(500).json({ message: "Server error", error });
-    }
+  try {
+    const { id } = req.params;
+    const result = await getTicketStatusService(id, req.user!.id);
+    return res.json(result);
+  } catch (error: any) {
+    const status = error.status || 500;
+    return res.status(status).json({
+      success: false,
+      message: error.message || "Server error retrieving ticket status"
+    });
+  }
 };
 
-// Get Queue History
-export const getQueueHistory = async (req: AuthRequest, res: Response) => {
-    try {
-        const history = await QueueEntry.find({
-            customerId: req.user.id,
-            status: { $in: ["completed", "cancelled"] }
-        })
-        .sort({ date: -1 }) // Newest first
-        .limit(20)
-        .populate("businessId", "businessProfile.shopName"); // Changed to businessProfile.shopName to match existing schema
-        
-        res.json(history);
-    } catch (error) {
-         res.status(500).json({ message: "Server error", error });
+// Get My Active Queues (Customer) - delegates to QueueService
+export const getMyQueues = async (req: AuthRequest, res: Response) => {
+  try {
+    const result = await getCustomerActiveQueuesService(req.user!.id);
+    return res.json(result);
+  } catch (error: any) {
+    const status = error.status || 500;
+    return res.status(status).json({
+      success: false,
+      message: error.message || "Server error retrieving active queues"
+    });
+  }
+};
+
+// Cancel Queue Ticket (Customer self-service) - delegates to QueueService
+export const cancelQueue = async (req: AuthRequest, res: Response) => {
+  try {
+    const { queueId } = req.body;
+    if (!queueId) {
+      return res.status(400).json({ success: false, message: "queueId is required" });
     }
+
+    const entry = await cancelCustomerTicketService(queueId, req.user!.id, req.app.get("io"));
+    return res.json({ success: true, message: "Queue entry cancelled successfully", entry });
+  } catch (error: any) {
+    const status = error.status || 500;
+    return res.status(status).json({
+      success: false,
+      message: error.message || "Server error cancelling ticket"
+    });
+  }
+};
+
+// Get Queue History (Customer) with Cursor Pagination Support
+export const getQueueHistory = async (req: AuthRequest, res: Response) => {
+  try {
+    const limit = parseInt(req.query.limit as string, 10) || 20;
+    const cursor = req.query.cursor as string | undefined;
+    const isPaginated = req.query.paginated === "true";
+
+    const { items, nextCursor, hasMore } = await getCustomerHistoryService(
+      req.user!.id,
+      limit,
+      cursor
+    );
+
+    // Set cursor pagination response headers
+    if (nextCursor) res.setHeader("X-Next-Cursor", nextCursor);
+    res.setHeader("X-Has-More", String(hasMore));
+
+    if (isPaginated) {
+      return res.json({ items, nextCursor, hasMore });
+    }
+
+    // Default: Return direct array for 100% backward compatibility
+    return res.json(items);
+  } catch (error: any) {
+    return res.status(500).json({ success: false, message: "Server error retrieving history", error });
+  }
+};
+
+// Toggle Store in Customer Favorites
+export const toggleFavorite = async (req: AuthRequest, res: Response) => {
+  try {
+    const { businessId } = req.body;
+    if (!businessId) {
+      return res.status(400).json({ success: false, message: "businessId is required" });
+    }
+
+    const result = await toggleFavoriteService(req.user!.id, businessId);
+    return res.json({ success: true, ...result });
+  } catch (error: any) {
+    const status = error.status || 500;
+    return res.status(status).json({ success: false, message: error.message || "Failed to toggle favorite" });
+  }
+};
+
+// Get Customer Favorited Stores with Live Telemetry
+export const getFavorites = async (req: AuthRequest, res: Response) => {
+  try {
+    const favorites = await getCustomerFavoritesService(req.user!.id);
+    return res.json(favorites);
+  } catch (error: any) {
+    const status = error.status || 500;
+    return res.status(status).json({ success: false, message: error.message || "Failed to fetch favorites" });
+  }
+};
+
+// 1-Click Quick Rebook Queue Entry
+export const quickRebookQueue = async (req: AuthRequest, res: Response) => {
+  try {
+    const { businessId, pastTicketId, serviceNames } = req.body;
+    const io = req.app.get("io");
+
+    const result = await quickRebookService(
+      req.user!.id,
+      req.user!.name || "Customer",
+      { businessId, pastTicketId, serviceNames },
+      io
+    );
+
+    return res.status(201).json(result);
+  } catch (error: any) {
+    const status = error.status || 500;
+    return res.status(status).json({
+      success: false,
+      message: error.message || "Quick rebook failed",
+      activeTicketId: error.activeTicketId
+    });
+  }
+};
+
+// Generate / Retrieve Shareable Link (Protected: Customer or Business)
+export const generateTicketShareToken = async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const result = await generateTicketShareTokenService(id, req.user!.id);
+    return res.json(result);
+  } catch (error: any) {
+    const status = error.status || 500;
+    return res.status(status).json({ success: false, message: error.message || "Failed to generate share link" });
+  }
+};
+
+// Revoke Shareable Link (Protected: Customer or Business)
+export const revokeTicketShareToken = async (req: AuthRequest, res: Response) => {
+  try {
+    const { id } = req.params;
+    const io = req.app.get("io");
+    const result = await revokeTicketShareTokenService(id, req.user!.id, io);
+    return res.json(result);
+  } catch (error: any) {
+    const status = error.status || 500;
+    return res.status(status).json({ success: false, message: error.message || "Failed to revoke share link" });
+  }
+};
+
+// Public Guest-Accessible Shared Ticket Status Lookup (Sanitized, No PII)
+export const getSharedTicket = async (req: Request, res: Response) => {
+  try {
+    const { shareToken } = req.params;
+    const result = await getSharedTicketService(shareToken);
+    return res.json(result);
+  } catch (error: any) {
+    const status = error.status || 500;
+    return res.status(status).json({ success: false, message: error.message || "Shared ticket not found" });
+  }
 };
