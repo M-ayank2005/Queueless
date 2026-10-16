@@ -25,7 +25,7 @@ import {
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import api from "@/lib/api";
-import { QueueCardSkeleton, HistorySkeleton } from "@/components/loading";
+import { QueueFlowLoader, QueueCardSkeleton, HistorySkeleton } from "@/components/loading";
 
 interface ServiceItem {
   name: string;
@@ -54,7 +54,11 @@ interface QueueTicket {
 
 export default function Home() {
   const [user, setUser] = useState<any>(null);
-  const [mounted, setMounted] = useState(false);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  const [authMessage, setAuthMessage] = useState({
+    message: "Connecting to QueueLess...",
+    submessage: "Checking your session and active queues",
+  });
   const [myQueues, setMyQueues] = useState<QueueTicket[]>([]);
   const [history, setHistory] = useState<QueueTicket[]>([]);
   const [activeTab, setActiveTab] = useState<"active" | "history">("active");
@@ -66,34 +70,54 @@ export default function Home() {
       setUser(null);
       setMyQueues([]);
       setHistory([]);
+      setIsCheckingAuth(false);
+    };
+
+    const handleAuthLogin = () => {
+      syncAuthState();
+    };
+
+    const syncAuthState = () => {
+      const storedUser = localStorage.getItem("user");
+      const storedToken = localStorage.getItem("token");
+
+      if (storedUser && storedToken) {
+        try {
+          const parsedUser = JSON.parse(storedUser);
+          if (parsedUser.role === "business") {
+            setAuthMessage({
+              message: "Connecting to store counter...",
+              submessage: "Redirecting to your merchant dashboard",
+            });
+            // Keep isCheckingAuth = true so that the loader stays visible
+            // while the route transition to /dashboard completes without flashing the landing page
+            router.replace("/dashboard");
+            return;
+          } else {
+            setUser(parsedUser);
+            fetchQueuesData();
+            setIsCheckingAuth(false);
+          }
+        } catch {
+          localStorage.removeItem("user");
+          localStorage.removeItem("token");
+          setUser(null);
+          setIsCheckingAuth(false);
+        }
+      } else {
+        setUser(null);
+        setIsCheckingAuth(false);
+      }
     };
 
     window.addEventListener("auth_logout", handleAuthLogout);
+    window.addEventListener("auth_login", handleAuthLogin);
 
-    const storedUser = localStorage.getItem("user");
-    const storedToken = localStorage.getItem("token");
-
-    if (storedUser && storedToken) {
-      try {
-        const parsedUser = JSON.parse(storedUser);
-        setUser(parsedUser);
-        if (parsedUser.role === "business") {
-          router.push("/dashboard");
-        } else {
-          fetchQueuesData();
-        }
-      } catch {
-        localStorage.removeItem("user");
-        localStorage.removeItem("token");
-        setUser(null);
-      }
-    } else {
-      setUser(null);
-    }
-    setMounted(true);
+    syncAuthState();
 
     return () => {
       window.removeEventListener("auth_logout", handleAuthLogout);
+      window.removeEventListener("auth_login", handleAuthLogin);
     };
   }, [router]);
 
@@ -137,9 +161,23 @@ export default function Home() {
   };
 
   // ==========================================
+  // INITIAL AUTH VERIFICATION STATE (Prevents Flash)
+  // ==========================================
+  if (isCheckingAuth) {
+    return (
+      <QueueFlowLoader
+        variant="page"
+        size="lg"
+        message={authMessage.message}
+        submessage={authMessage.submessage}
+      />
+    );
+  }
+
+  // ==========================================
   // CUSTOMER DASHBOARD VIEW (When Authenticated)
   // ==========================================
-  if (mounted && user && user.role === "customer") {
+  if (user && user.role === "customer") {
     return (
       <div className="min-h-screen bg-[#050B18] text-[#ECF2FF] pb-20">
         <Navbar />
