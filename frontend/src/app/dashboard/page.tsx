@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import api from "@/lib/api";
 import Navbar from "@/components/Navbar";
@@ -59,6 +59,7 @@ interface QueueItem {
   customerName?: string;
   status: "waiting" | "in_progress" | "completed" | "cancelled" | string;
   joinedAt?: string;
+  updatedAt?: string;
   selectedServices: Array<{
     name: string;
     durationMin?: number;
@@ -396,7 +397,22 @@ export default function Dashboard() {
     );
   }
 
-  const activeQueueCount = queue.filter(q => q.status === "waiting" || q.status === "in_progress").length;
+  const activeQueue = useMemo(() => {
+    return queue.filter(q => q.status === "waiting" || q.status === "in_progress");
+  }, [queue]);
+
+  const processedQueue = useMemo(() => {
+    return queue
+      .filter(q => q.status === "completed" || q.status === "cancelled")
+      .sort((a, b) => {
+        const timeA = new Date(a.updatedAt || a.joinedAt || 0).getTime();
+        const timeB = new Date(b.updatedAt || b.joinedAt || 0).getTime();
+        return timeB - timeA;
+      })
+      .slice(0, 10);
+  }, [queue]);
+
+  const activeQueueCount = activeQueue.length;
   const storeOrigin = typeof window !== "undefined" ? window.location.origin : "";
   const storeUrl = `${storeOrigin}/store/${businessProfile?.uniqueQrCode || ""}`;
 
@@ -467,7 +483,7 @@ export default function Dashboard() {
               </CardHeader>
 
               <CardContent className="pt-5 space-y-3">
-                {queue.length === 0 ? (
+                {activeQueue.length === 0 ? (
                   <div className="text-center py-16 px-4 border border-dashed border-[#203052] rounded-xl bg-[#0A1329]/50">
                     <Users className="w-10 h-10 text-[#889DC2]/60 mx-auto mb-3" />
                     <h3 className="text-base font-semibold text-[#ECF2FF] mb-1">
@@ -478,13 +494,11 @@ export default function Dashboard() {
                     </p>
                   </div>
                 ) : (
-                  queue.map((item) => {
+                  activeQueue.map((item) => {
                     const customerName = item.customerId?.name || item.customerName || "Customer";
                     const customerPhone = item.customerId?.phone;
                     const ticketNumber = item._id.slice(-4).toUpperCase();
                     const servicesString = item.selectedServices?.map(s => s.name).join(", ");
-                    const isCompleted = item.status === "completed";
-                    const isCancelled = item.status === "cancelled";
                     const isWaiting = item.status === "waiting";
                     const isInProgress = item.status === "in_progress";
 
@@ -495,9 +509,7 @@ export default function Dashboard() {
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         className={`p-4 rounded-xl border transition-all ${
-                          isCompleted || isCancelled
-                            ? "bg-[#0A1329]/40 border-[#203052]/40 opacity-60"
-                            : isInProgress
+                          isInProgress
                             ? "bg-[#152243] border-blue-500/50 shadow-[0_0_16px_rgba(59,130,246,0.15)]"
                             : "bg-[#0A1329] border-[#203052]"
                         }`}
@@ -529,44 +541,134 @@ export default function Dashboard() {
                           </div>
 
                           {/* Action Buttons for active tickets */}
-                          {!isCompleted && !isCancelled && (
-                            <div className="flex items-center gap-2 shrink-0 border-t sm:border-t-0 pt-2 sm:pt-0 border-[#203052]">
-                              {isWaiting && (
-                                <Button
-                                  size="sm"
-                                  onClick={() => handleUpdateStatus(item._id, "in_progress")}
-                                  className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow-sm"
-                                >
-                                  <Play className="w-3.5 h-3.5 fill-current" />
-                                  Call Customer
-                                </Button>
-                              )}
-
-                              {isInProgress && (
-                                <Button
-                                  size="sm"
-                                  onClick={() => handleUpdateStatus(item._id, "completed")}
-                                  className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow-sm"
-                                >
-                                  <CheckCircle2 className="w-3.5 h-3.5" />
-                                  Complete
-                                </Button>
-                              )}
-
+                          <div className="flex items-center gap-2 shrink-0 border-t sm:border-t-0 pt-2 sm:pt-0 border-[#203052]">
+                            {isWaiting && (
                               <Button
                                 size="sm"
-                                variant="outline"
-                                onClick={() => handleUpdateStatus(item._id, "cancelled")}
-                                className="border-red-500/30 hover:bg-red-500/10 text-red-400 text-xs flex items-center gap-1"
-                                title="Cancel Ticket"
+                                onClick={() => handleUpdateStatus(item._id, "in_progress")}
+                                className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow-sm"
                               >
-                                <XCircle className="w-3.5 h-3.5" />
-                                Cancel
+                                <Play className="w-3.5 h-3.5 fill-current" />
+                                Call Customer
                               </Button>
-                            </div>
-                          )}
+                            )}
+
+                            {isInProgress && (
+                              <Button
+                                size="sm"
+                                onClick={() => handleUpdateStatus(item._id, "completed")}
+                                className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow-sm"
+                              >
+                                <CheckCircle2 className="w-3.5 h-3.5" />
+                                Complete
+                              </Button>
+                            )}
+
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleUpdateStatus(item._id, "cancelled")}
+                              className="border-red-500/30 hover:bg-red-500/10 text-red-400 text-xs flex items-center gap-1"
+                              title="Cancel Ticket"
+                            >
+                              <XCircle className="w-3.5 h-3.5" />
+                              Cancel
+                            </Button>
+                          </div>
                         </div>
                       </motion.div>
+                    );
+                  })
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Processed Customers Card (Max 10, Most Recent on Top) */}
+            <Card className="bg-[#101A32] border-[#203052] shadow-xl">
+              <CardHeader className="pb-4 border-b border-[#203052]/60">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center text-emerald-400">
+                      <CheckCircle2 className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <CardTitle className="text-lg font-bold text-[#ECF2FF]">
+                        Processed Customers
+                      </CardTitle>
+                      <CardDescription className="text-xs text-[#889DC2]">
+                        Recently served or resolved customers (most recent 10).
+                      </CardDescription>
+                    </div>
+                  </div>
+                  <span className="text-xs font-bold font-mono px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400">
+                    {processedQueue.length} Recent
+                  </span>
+                </div>
+              </CardHeader>
+
+              <CardContent className="pt-5 space-y-3">
+                {processedQueue.length === 0 ? (
+                  <div className="text-center py-10 px-4 border border-dashed border-[#203052] rounded-xl bg-[#0A1329]/50">
+                    <CheckCircle2 className="w-8 h-8 text-[#889DC2]/60 mx-auto mb-2" />
+                    <h3 className="text-sm font-semibold text-[#ECF2FF] mb-1">
+                      No Processed Customers Yet
+                    </h3>
+                    <p className="text-xs text-[#889DC2] max-w-sm mx-auto">
+                      Customers who are marked completed or cancelled will appear here in reverse chronological order.
+                    </p>
+                  </div>
+                ) : (
+                  processedQueue.map((item) => {
+                    const customerName = item.customerId?.name || item.customerName || "Customer";
+                    const customerPhone = item.customerId?.phone;
+                    const ticketNumber = item._id.slice(-4).toUpperCase();
+                    const servicesString = item.selectedServices?.map(s => s.name).join(", ");
+                    const processedTimestamp = item.updatedAt || item.joinedAt;
+                    const processedTimeStr = processedTimestamp
+                      ? new Date(processedTimestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                      : "";
+
+                    return (
+                      <div
+                        key={item._id}
+                        className="p-3.5 rounded-xl border border-[#203052] bg-[#0A1329]/70 hover:bg-[#0A1329] transition-colors"
+                      >
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-blue-500/15 border border-blue-500/30 text-blue-400">
+                                #{ticketNumber}
+                              </span>
+                              <h3 className="font-bold text-sm text-[#ECF2FF]">
+                                {customerName}
+                              </h3>
+                              <StatusBadge status={item.status} />
+                            </div>
+
+                            {customerPhone && (
+                              <p className="text-xs text-[#889DC2] flex items-center gap-1">
+                                <Phone className="w-3 h-3 text-blue-400" />
+                                {customerPhone}
+                              </p>
+                            )}
+
+                            {servicesString && (
+                              <p className="text-xs text-[#C5D5F5] pt-0.5">
+                                <span className="text-[#889DC2]">Services:</span> {servicesString}
+                              </p>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0 text-xs text-[#889DC2] sm:self-center">
+                            {processedTimeStr && (
+                              <span className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-[#101A32] border border-[#203052]">
+                                <Clock className="w-3 h-3 text-blue-400" />
+                                {processedTimeStr}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
                     );
                   })
                 )}

@@ -96,6 +96,19 @@ export default function BusinessDashboardScreen(_: Props) {
     [queue]
   );
 
+  const processedQueue = useMemo(
+    () =>
+      queue
+        .filter((item) => item.status === "completed" || item.status === "cancelled")
+        .sort((a, b) => {
+          const timeA = new Date(a.updatedAt || a.joinedAt || 0).getTime();
+          const timeB = new Date(b.updatedAt || b.joinedAt || 0).getTime();
+          return timeB - timeA;
+        })
+        .slice(0, 10),
+    [queue]
+  );
+
   const addService = async () => {
     if (!profile || !serviceName || !durationMin || !cost) {
       const msg = "Please enter service name, duration in minutes, and cost.";
@@ -343,6 +356,80 @@ export default function BusinessDashboardScreen(_: Props) {
                       <Text style={styles.cancelBtnText}>Cancel</Text>
                     </TouchableOpacity>
                   </View>
+                </Card>
+              );
+            })}
+          </View>
+        )}
+      </View>
+
+      {/* Processed Customers Section */}
+      <View style={styles.sectionWrap}>
+        <SectionHeader
+          title="Processed Customers"
+          subtitle="Recently served or resolved customers (max 10)"
+          icon="checkmark-done-circle-outline"
+          iconColor={colors.success}
+          count={processedQueue.length}
+        />
+
+        {processedQueue.length === 0 ? (
+          <EmptyState
+            icon="time-outline"
+            iconColor={colors.muted}
+            title="No Processed Customers Yet"
+            description="Customers whose service is completed or cancelled will appear here."
+          />
+        ) : (
+          <View style={styles.queueList}>
+            {processedQueue.map((item) => {
+              const processedTimestamp = item.updatedAt || item.joinedAt;
+              const processedTimeStr = processedTimestamp
+                ? new Date(processedTimestamp).toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })
+                : "";
+
+              return (
+                <Card key={item._id} variant="subtle" style={styles.processedItemCard}>
+                  <View style={styles.processedItemHeader}>
+                    <View style={styles.processedItemInfo}>
+                      <View style={styles.processedNameRow}>
+                        <Text style={styles.customerName} numberOfLines={1}>
+                          {item.customerId?.name || item.customerName || "Customer"}
+                        </Text>
+                        <StatusBadge status={item.status} size="sm" />
+                      </View>
+                      <View style={styles.processedMetaRow}>
+                        <Text style={styles.ticketPill}>
+                          Ticket #{item._id.slice(-4).toUpperCase()}
+                        </Text>
+                        {processedTimeStr ? (
+                          <>
+                            <Text style={styles.dotSeparator}>•</Text>
+                            <View style={styles.processedTimeBox}>
+                              <Ionicons name="time-outline" size={12} color={colors.muted} />
+                              <Text style={styles.processedTimeText}>{processedTimeStr}</Text>
+                            </View>
+                          </>
+                        ) : null}
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* Services summary if any */}
+                  {item.selectedServices?.length ? (
+                    <View style={styles.itemServicesRow}>
+                      {item.selectedServices.map((s, idx) => (
+                        <View key={`${s.name}_${idx}`} style={styles.serviceChip}>
+                          <Text style={styles.serviceChipText}>
+                            {s.name} (${s.cost})
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  ) : null}
                 </Card>
               );
             })}
@@ -729,4 +816,42 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 120,
   },
+  processedItemCard: {
+    gap: spacing.sm,
+    padding: spacing.md,
+    backgroundColor: colors.cardSoft,
+    borderColor: colors.border,
+  },
+  processedItemHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  processedItemInfo: {
+    flex: 1,
+    minWidth: 0,
+    gap: 4,
+  },
+  processedNameRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: spacing.sm,
+  },
+  processedMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+  },
+  processedTimeBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+  },
+  processedTimeText: {
+    fontSize: 11,
+    color: colors.muted,
+    fontWeight: "600",
+  },
 });
+

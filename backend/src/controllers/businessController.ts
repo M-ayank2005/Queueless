@@ -60,22 +60,27 @@ export const updateSettings = async (req: AuthRequest, res: Response) => {
     }
 };
 
-// Get Today's Queue
+// Get Current Queue and Recently Processed Entries
 export const getQueue = async (req: AuthRequest, res: Response) => {
   try {
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
-    
-    const endOfDay = new Date();
-    endOfDay.setHours(23, 59, 59, 999);
-
-    const queue = await QueueEntry.find({
+    // 1. Fetch active queue entries (waiting or in_progress), oldest first so queue order is preserved
+    const activeQueue = await QueueEntry.find({
       businessId: req.user.id,
-      date: { $gte: startOfDay, $lte: endOfDay },
-      status: { $ne: 'cancelled' } // Show everything except cancelled? Or show all. Let's show waiting/in-progress/completed
-    }).populate("customerId", "name phone email").sort({ joinedAt: 1 });
+      status: { $in: ["waiting", "in_progress"] }
+    })
+      .populate("customerId", "name phone email")
+      .sort({ joinedAt: 1 });
 
-    res.json(queue);
+    // 2. Fetch recently processed entries (completed or cancelled), most recent on top, max 10
+    const processedQueue = await QueueEntry.find({
+      businessId: req.user.id,
+      status: { $in: ["completed", "cancelled"] }
+    })
+      .populate("customerId", "name phone email")
+      .sort({ updatedAt: -1, joinedAt: -1 })
+      .limit(10);
+
+    res.json([...activeQueue, ...processedQueue]);
   } catch (error) {
     res.status(500).json({ message: "Server error", error });
   }
