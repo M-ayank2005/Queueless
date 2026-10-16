@@ -98,6 +98,21 @@ export default function Dashboard() {
 
   const socketRef = useRef<Socket | null>(null);
 
+  const activeQueue = useMemo(() => {
+    return queue.filter(q => q.status === "waiting" || q.status === "in_progress");
+  }, [queue]);
+
+  const processedQueue = useMemo(() => {
+    return queue
+      .filter(q => q.status === "completed" || q.status === "cancelled")
+      .sort((a, b) => {
+        const timeA = new Date(a.updatedAt || a.joinedAt || 0).getTime();
+        const timeB = new Date(b.updatedAt || b.joinedAt || 0).getTime();
+        return timeB - timeA;
+      })
+      .slice(0, 10);
+  }, [queue]);
+
   // Close modals on Escape key press
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -397,21 +412,6 @@ export default function Dashboard() {
       />
     );
   }
-
-  const activeQueue = useMemo(() => {
-    return queue.filter(q => q.status === "waiting" || q.status === "in_progress");
-  }, [queue]);
-
-  const processedQueue = useMemo(() => {
-    return queue
-      .filter(q => q.status === "completed" || q.status === "cancelled")
-      .sort((a, b) => {
-        const timeA = new Date(a.updatedAt || a.joinedAt || 0).getTime();
-        const timeB = new Date(b.updatedAt || b.joinedAt || 0).getTime();
-        return timeB - timeA;
-      })
-      .slice(0, 10);
-  }, [queue]);
 
   const activeQueueCount = activeQueue.length;
   const storeOrigin = typeof window !== "undefined" ? window.location.origin : "";
