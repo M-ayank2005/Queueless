@@ -24,7 +24,8 @@ import StatusBadge from "../../components/StatusBadge";
 import { api } from "../../lib/api";
 import { CustomerTabParamList, RootStackParamList } from "../../navigation/types";
 import { ServiceItem } from "../../types";
-import { colors } from "../../theme/colors";
+import { useTheme } from "../../context/ThemeContext";
+import { ThemeColors } from "../../theme/colors";
 import { radii, shadows, spacing, typography } from "../../theme/theme";
 
 type StoreData = {
@@ -41,6 +42,8 @@ type Props = BottomTabScreenProps<CustomerTabParamList, "ScanJoin">;
 
 export default function ScanJoinScreen({ navigation, route }: Props) {
   const rootNavigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   const [permission, requestPermission] = useCameraPermissions();
   const [scannerOpen, setScannerOpen] = useState(false);
@@ -455,7 +458,8 @@ export default function ScanJoinScreen({ navigation, route }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   header: {
     paddingBottom: spacing.xs,
   },

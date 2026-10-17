@@ -1,11 +1,12 @@
 import React from "react";
-import { NavigationContainer, DarkTheme } from "@react-navigation/native";
+import { NavigationContainer, DefaultTheme, DarkTheme } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
-import { ActivityIndicator, StyleSheet, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "../context/AuthContext";
+import { useTheme } from "../context/ThemeContext";
 import {
   AuthStackParamList,
   BusinessTabParamList,
@@ -20,11 +21,8 @@ import ScanJoinScreen from "../screens/customer/ScanJoinScreen";
 import BusinessDashboardScreen from "../screens/business/BusinessDashboardScreen";
 import ProfileScreen from "../screens/shared/ProfileScreen";
 import QueueStatusScreen from "../screens/shared/QueueStatusScreen";
-import { colors } from "../theme/colors";
 import AppLoader from "../components/AppLoader";
 
-// Native Stack uses native navigation primitives (UINavigationController on iOS / Fragment on Android)
-// for optimal performance and 60 FPS transitions
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
 const RootStack = createNativeStackNavigator<RootStackParamList>();
 const CustomerTabs = createBottomTabNavigator<CustomerTabParamList>();
@@ -44,6 +42,7 @@ function AuthNavigator() {
 // 2. Customer Bottom Tabs: Main navigation experience for customer role
 function CustomerTabsNavigator() {
   const insets = useSafeAreaInsets();
+  const { colors, isDark } = useTheme();
   const bottomPadding = Math.max(insets.bottom, 8);
   const tabHeight = 56 + bottomPadding;
 
@@ -56,6 +55,10 @@ function CustomerTabsNavigator() {
           {
             height: tabHeight,
             paddingBottom: bottomPadding,
+            backgroundColor: colors.card,
+            borderTopColor: colors.border,
+            shadowColor: "#000",
+            shadowOpacity: isDark ? 0.25 : 0.04,
           },
         ],
         tabBarActiveTintColor: colors.primary,
@@ -73,7 +76,10 @@ function CustomerTabsNavigator() {
           }
 
           return (
-            <View style={[styles.tabIconWrap, focused && styles.tabIconWrapActive]}>
+            <View style={[
+              styles.tabIconWrap, 
+              focused && { backgroundColor: colors.primarySubtle }
+            ]}>
               <Ionicons name={iconName} size={size - 1} color={color} />
             </View>
           );
@@ -102,6 +108,7 @@ function CustomerTabsNavigator() {
 // 3. Business Bottom Tabs: Dedicated workflow for shop owners
 function BusinessTabsNavigator() {
   const insets = useSafeAreaInsets();
+  const { colors, isDark } = useTheme();
   const bottomPadding = Math.max(insets.bottom, 8);
   const tabHeight = 56 + bottomPadding;
 
@@ -114,6 +121,10 @@ function BusinessTabsNavigator() {
           {
             height: tabHeight,
             paddingBottom: bottomPadding,
+            backgroundColor: colors.card,
+            borderTopColor: colors.border,
+            shadowColor: "#000",
+            shadowOpacity: isDark ? 0.25 : 0.04,
           },
         ],
         tabBarActiveTintColor: colors.primary,
@@ -129,7 +140,10 @@ function BusinessTabsNavigator() {
           }
 
           return (
-            <View style={[styles.tabIconWrap, focused && styles.tabIconWrapActive]}>
+            <View style={[
+              styles.tabIconWrap, 
+              focused && { backgroundColor: colors.primarySubtle }
+            ]}>
               <Ionicons name={iconName} size={size - 1} color={color} />
             </View>
           );
@@ -184,20 +198,22 @@ function AppNavigatorInner() {
   );
 }
 
-// Global Dark Theme tokens extending React Navigation's DarkTheme
-const navTheme = {
-  ...DarkTheme,
-  colors: {
-    ...DarkTheme.colors,
-    background: colors.bg,
-    card: colors.card,
-    text: colors.text,
-    border: colors.border,
-    primary: colors.primary,
-  },
-};
-
 export default function AppNavigator() {
+  const { colors, isDark } = useTheme();
+
+  const baseTheme = isDark ? DarkTheme : DefaultTheme;
+  const navTheme = {
+    ...baseTheme,
+    colors: {
+      ...baseTheme.colors,
+      background: colors.bg,
+      card: colors.card,
+      text: colors.text,
+      border: colors.border,
+      primary: colors.primary,
+    },
+  };
+
   return (
     <NavigationContainer theme={navTheme}>
       <AppNavigatorInner />
@@ -206,21 +222,11 @@ export default function AppNavigator() {
 }
 
 const styles = StyleSheet.create({
-  loaderWrap: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: colors.bg,
-  },
   tabBar: {
-    backgroundColor: colors.bgSecondary,
-    borderTopColor: colors.border,
     borderTopWidth: 1,
     paddingTop: 6,
     elevation: 8,
-    shadowColor: "#000",
     shadowOffset: { width: 0, height: -3 },
-    shadowOpacity: 0.25,
     shadowRadius: 6,
   },
   tabBarItem: {
@@ -233,14 +239,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  tabIconWrapActive: {
-    backgroundColor: colors.primarySubtle,
-  },
   tabBarLabel: {
     fontSize: 11,
     fontWeight: "700",
     letterSpacing: 0.1,
   },
 });
-
-

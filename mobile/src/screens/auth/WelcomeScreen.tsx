@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useMemo, useRef } from "react";
 import {
   Animated,
   StyleSheet,
@@ -12,12 +12,16 @@ import AppScreen from "../../components/AppScreen";
 import Card from "../../components/Card";
 import StatusBadge from "../../components/StatusBadge";
 import { AuthStackParamList } from "../../navigation/types";
-import { colors } from "../../theme/colors";
-import { radii, shadows, spacing, typography } from "../../theme/theme";
+import { useTheme } from "../../context/ThemeContext";
+import { ThemeColors } from "../../theme/colors";
+import { radii, shadows, spacing } from "../../theme/theme";
 
 type Props = NativeStackScreenProps<AuthStackParamList, "Welcome">;
 
 export default function WelcomeScreen({ navigation }: Props) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   // Staggered entrance animations
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(24)).current;
@@ -145,113 +149,114 @@ export default function WelcomeScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  screenContent: {
-    flexGrow: 1,
-  },
-  container: {
-    flex: 1,
-    justifyContent: "space-between",
-    gap: spacing.md,
-  },
-  brandHeader: {
-    alignItems: "center",
-    gap: spacing.sm,
-    paddingTop: spacing.xs,
-  },
-  logoGlowRing: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: colors.cardGlow,
-    borderColor: colors.primaryBorder,
-    borderWidth: 1.5,
-    alignItems: "center",
-    justifyContent: "center",
-    ...shadows.glow,
-  },
-  logoBadge: {
-    width: 62,
-    height: 62,
-    borderRadius: 31,
-    backgroundColor: colors.cardElevated,
-    borderColor: colors.borderLight,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  titleGroup: {
-    alignItems: "center",
-    gap: spacing.xs,
-    paddingHorizontal: spacing.sm,
-  },
-  badgeWrapper: {
-    alignItems: "center",
-    justifyContent: "center",
-    width: "100%",
-    marginBottom: 6,
-  },
-  heroBadge: {
-    alignSelf: "center",
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: "800",
-    color: colors.text,
-    letterSpacing: -0.6,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: colors.muted,
-    textAlign: "center",
-    lineHeight: 21,
-    maxWidth: 340,
-    marginTop: 4,
-  },
-  featureCard: {
-    padding: spacing.lg,
-    gap: spacing.md,
-    marginVertical: spacing.md,
-  },
-  featureItem: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: spacing.md,
-  },
-  featureIconWrap: {
-    width: 38,
-    height: 38,
-    borderRadius: radii.md,
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 2,
-    flexShrink: 0,
-  },
-  featureTextCol: {
-    flex: 1,
-    minWidth: 0,
-    gap: 3,
-  },
-  featureTitle: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: colors.text,
-    letterSpacing: -0.1,
-  },
-  featureDesc: {
-    fontSize: 13,
-    color: colors.muted,
-    lineHeight: 18,
-    flexWrap: "wrap",
-  },
-  featureDivider: {
-    height: 1,
-    backgroundColor: colors.border,
-    marginVertical: spacing.xs,
-  },
-  actionsContainer: {
-    gap: spacing.md,
-    paddingTop: spacing.xs,
-    paddingBottom: spacing.sm,
-  },
-});
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    screenContent: {
+      flexGrow: 1,
+    },
+    container: {
+      flex: 1,
+      justifyContent: "space-between",
+      gap: spacing.md,
+    },
+    brandHeader: {
+      alignItems: "center",
+      gap: spacing.sm,
+      paddingTop: spacing.xs,
+    },
+    logoGlowRing: {
+      width: 80,
+      height: 80,
+      borderRadius: 40,
+      backgroundColor: colors.cardGlow,
+      borderColor: colors.primaryBorder,
+      borderWidth: 1.5,
+      alignItems: "center",
+      justifyContent: "center",
+      ...shadows.glow,
+    },
+    logoBadge: {
+      width: 62,
+      height: 62,
+      borderRadius: 31,
+      backgroundColor: colors.cardElevated,
+      borderColor: colors.borderLight,
+      borderWidth: 1,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    titleGroup: {
+      alignItems: "center",
+      gap: spacing.xs,
+      paddingHorizontal: spacing.sm,
+    },
+    badgeWrapper: {
+      alignItems: "center",
+      justifyContent: "center",
+      width: "100%",
+      marginBottom: 6,
+    },
+    heroBadge: {
+      alignSelf: "center",
+    },
+    title: {
+      fontSize: 32,
+      fontWeight: "800",
+      color: colors.text,
+      letterSpacing: -0.6,
+    },
+    subtitle: {
+      fontSize: 14,
+      color: colors.muted,
+      textAlign: "center",
+      lineHeight: 21,
+      maxWidth: 340,
+      marginTop: 4,
+    },
+    featureCard: {
+      padding: spacing.lg,
+      gap: spacing.md,
+      marginVertical: spacing.md,
+    },
+    featureItem: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: spacing.md,
+    },
+    featureIconWrap: {
+      width: 38,
+      height: 38,
+      borderRadius: radii.md,
+      alignItems: "center",
+      justifyContent: "center",
+      marginTop: 2,
+      flexShrink: 0,
+    },
+    featureTextCol: {
+      flex: 1,
+      minWidth: 0,
+      gap: 3,
+    },
+    featureTitle: {
+      fontSize: 15,
+      fontWeight: "700",
+      color: colors.text,
+      letterSpacing: -0.1,
+    },
+    featureDesc: {
+      fontSize: 13,
+      color: colors.muted,
+      lineHeight: 18,
+      flexWrap: "wrap",
+    },
+    featureDivider: {
+      height: 1,
+      backgroundColor: colors.border,
+      marginVertical: spacing.xs,
+    },
+    actionsContainer: {
+      gap: spacing.md,
+      paddingTop: spacing.xs,
+      paddingBottom: spacing.sm,
+    },
+  });

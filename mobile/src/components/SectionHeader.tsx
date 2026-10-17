@@ -1,8 +1,8 @@
 import React from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { colors } from "../theme/colors";
-import { spacing, typography } from "../theme/theme";
+import { useTheme } from "../context/ThemeContext";
+import { spacing } from "../theme/theme";
 
 type Props = {
   title: string;
@@ -20,13 +20,13 @@ type Props = {
 /**
  * SectionHeader Component
  * Clean, consistent section dividers with icon accents, count badges,
- * right-element slots (badges/actions), and quick-action buttons.
+ * right-element slots (badges/actions), and quick-action buttons across themes.
  */
 export default function SectionHeader({
   title,
   subtitle,
   icon,
-  iconColor = colors.primary,
+  iconColor,
   count,
   actionText,
   actionIcon,
@@ -34,26 +34,29 @@ export default function SectionHeader({
   actionLoading = false,
   rightElement,
 }: Props) {
+  const { colors } = useTheme();
+  const effectiveIconColor = iconColor || colors.primary;
+
   return (
     <View style={styles.container}>
       <View style={styles.leftCol}>
         <View style={styles.titleRow}>
           {icon && (
-            <View style={styles.iconWrap}>
-              <Ionicons name={icon} size={18} color={iconColor} />
+            <View style={[styles.iconWrap, { backgroundColor: colors.primarySubtle }]}>
+              <Ionicons name={icon} size={18} color={effectiveIconColor} />
             </View>
           )}
-          <Text style={styles.title} numberOfLines={1}>
+          <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>
             {title}
           </Text>
           {typeof count === "number" && (
-            <View style={styles.countBadge}>
-              <Text style={styles.countText}>{count}</Text>
+            <View style={[styles.countBadge, { backgroundColor: colors.cardSoft, borderColor: colors.border }]}>
+              <Text style={[styles.countText, { color: colors.primary }]}>{count}</Text>
             </View>
           )}
         </View>
         {subtitle ? (
-          <Text style={styles.subtitle} numberOfLines={2}>
+          <Text style={[styles.subtitle, { color: colors.muted }]} numberOfLines={2}>
             {subtitle}
           </Text>
         ) : null}
@@ -64,7 +67,7 @@ export default function SectionHeader({
       ) : onActionPress && (actionText || actionIcon) ? (
         <TouchableOpacity
           onPress={onActionPress}
-          style={styles.actionBtn}
+          style={[styles.actionBtn, { backgroundColor: colors.cardSoft, borderColor: colors.border }]}
           activeOpacity={0.7}
           disabled={actionLoading}
         >
@@ -76,7 +79,7 @@ export default function SectionHeader({
               style={actionLoading ? styles.spin : undefined}
             />
           )}
-          {actionText ? <Text style={styles.actionText}>{actionText}</Text> : null}
+          {actionText ? <Text style={[styles.actionText, { color: colors.primary }]}>{actionText}</Text> : null}
         </TouchableOpacity>
       ) : null}
     </View>
@@ -106,7 +109,6 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 8,
-    backgroundColor: colors.primarySubtle,
     alignItems: "center",
     justifyContent: "center",
     flexShrink: 0,
@@ -114,19 +116,15 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 17,
     fontWeight: "700",
-    color: colors.text,
     letterSpacing: -0.2,
     flexShrink: 1,
   },
   subtitle: {
     fontSize: 13,
-    color: colors.muted,
     lineHeight: 18,
     flexWrap: "wrap",
   },
   countBadge: {
-    backgroundColor: colors.cardSoft,
-    borderColor: colors.border,
     borderWidth: 1,
     paddingHorizontal: 7,
     paddingVertical: 1,
@@ -134,7 +132,6 @@ const styles = StyleSheet.create({
     flexShrink: 0,
   },
   countText: {
-    color: colors.primary,
     fontSize: 11,
     fontWeight: "700",
   },
@@ -149,13 +146,10 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 10,
     borderRadius: 8,
-    backgroundColor: colors.cardSoft,
-    borderColor: colors.border,
     borderWidth: 1,
     flexShrink: 0,
   },
   actionText: {
-    color: colors.primary,
     fontSize: 12,
     fontWeight: "700",
   },

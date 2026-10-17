@@ -35,11 +35,14 @@ export interface User {
 export interface FavoriteStore {
   _id: string;
   name?: string;
+  shopName?: string;
   email?: string;
   qrCode?: string;
+  uniqueQrCode?: string;
   businessProfile?: {
     shopName?: string;
     address?: string;
+    uniqueQrCode?: string;
     services?: ServiceItem[];
   };
   isOpen: boolean;

@@ -42,6 +42,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { QRCodeSVG as QRCode } from "qrcode.react";
 import { Label } from "@/components/ui/label";
 import { io, Socket } from "socket.io-client";
+import { useAuth } from "@/context/AuthContext";
 
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -116,6 +117,7 @@ interface AnalyticsData {
 }
 
 export default function Dashboard() {
+  const { user, status } = useAuth();
   const [services, setServices] = useState<any[]>([]);
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const [businessProfile, setBusinessProfile] = useState<BusinessProfile | null>(null);
@@ -187,30 +189,22 @@ export default function Dashboard() {
   }, [isQrModalOpen, isSettingsOpen]);
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    const storedUser = localStorage.getItem("user");
-    if (!token || !storedUser) {
-      router.push("/login");
+    if (status !== "authenticated" || user?.role !== "business") {
       return;
     }
 
-    try {
-      const parsed = JSON.parse(storedUser);
-      if (parsed.role !== "business") {
-        router.push("/");
-        return;
-      }
-    } catch {
-      router.push("/login");
-      return;
-    }
-
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
     fetchDashboardData();
 
-    // Setup Socket connection with authenticated merchant token
+    // Setup Socket connection with authenticated merchant token (polling first, then upgrade)
     const socketUrl = process.env.NEXT_PUBLIC_API_URL?.replace("/api", "") || "http://localhost:5000";
     const socketInstance = io(socketUrl, {
-      transports: ["websocket", "polling"],
+      transports: ["polling", "websocket"],
+      upgrade: true,
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1500,
+      timeout: 10000,
       auth: {
         token: token || undefined
       }
@@ -228,7 +222,7 @@ export default function Dashboard() {
     return () => {
       socketInstance.disconnect();
     };
-  }, [router]);
+  }, [status, user?.role]);
 
   // Join business room for live real-time sync
   useEffect(() => {
@@ -464,7 +458,7 @@ export default function Dashboard() {
     printWindow.document.close();
   };
 
-  if (loading) {
+  if (loading || status !== "authenticated" || user?.role !== "business") {
     return (
       <QueueFlowLoader
         variant="page"
@@ -480,27 +474,27 @@ export default function Dashboard() {
   const storeUrl = `${storeOrigin}/store/${businessProfile?.uniqueQrCode || ""}`;
 
   return (
-    <div className="min-h-screen bg-[#050B18] text-[#ECF2FF] pb-20">
+    <div className="min-h-screen bg-background text-foreground pb-20">
       <Navbar />
 
       <main className="w-full max-w-[1536px] mx-auto px-4 sm:px-6 lg:px-8 pt-24">
         {/* Dashboard Top Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8 pb-6 border-b border-[#203052]">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8 pb-6 border-b border-border">
           <div>
             <div className="flex items-center gap-3 flex-wrap">
-              <h1 className="text-2xl sm:text-3xl font-extrabold text-[#ECF2FF]">
+              <h1 className="text-2xl sm:text-3xl font-extrabold text-foreground">
                 {businessProfile?.shopName || "Store Dashboard"}
               </h1>
-              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
                 Store Live
               </span>
             </div>
-            <p className="text-xs sm:text-sm text-[#889DC2] flex items-center gap-1.5 mt-1.5">
-              <MapPin className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+            <p className="text-xs sm:text-sm text-muted-foreground flex items-center gap-1.5 mt-1.5">
+              <MapPin className="w-3.5 h-3.5 text-primary shrink-0" />
               {businessProfile?.address || "Address not provided"}
-              <span className="text-[#203052] mx-1">•</span>
-              <Clock className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+              <span className="text-border mx-1">•</span>
+              <Clock className="w-3.5 h-3.5 text-primary shrink-0" />
               {businessProfile?.workingHours?.openTime && businessProfile?.workingHours?.closeTime
                 ? `${businessProfile.workingHours.openTime} - ${businessProfile.workingHours.closeTime}`
                 : "24/7 Service"}
@@ -511,69 +505,80 @@ export default function Dashboard() {
             <Button
               onClick={() => setIsSettingsOpen(true)}
               variant="outline"
-              className="border-[#203052] bg-[#101A32] hover:bg-[#152243] text-[#ECF2FF] flex items-center gap-2"
+              className="border-border bg-card hover:bg-muted text-foreground flex items-center gap-2 shadow-sm"
             >
-              <Settings className="w-4 h-4 text-blue-400" />
+              <Settings className="w-4 h-4 text-primary" />
               Store Settings
             </Button>
           </div>
         </div>
 
-        {/* Dashboard Navigation Tabs */}
-        <div className="flex border-b border-[#203052] mb-6 overflow-x-auto no-scrollbar gap-2">
+        {/* Apple Segmented Control */}
+        <div className="inline-flex p-1 rounded-2xl bg-muted/80 border border-border/60 mb-8 backdrop-blur-md shadow-xs overflow-x-auto max-w-full">
           <button
             onClick={() => setActiveTab("live")}
-            className={`flex items-center gap-2 pb-3 px-4 text-sm font-semibold transition-colors whitespace-nowrap relative ${
+            className={`relative flex items-center gap-2 px-4 py-2 text-xs sm:text-sm font-semibold transition-all duration-200 rounded-xl cursor-pointer ${
               activeTab === "live"
-                ? "text-blue-400"
-                : "text-[#889DC2] hover:text-[#ECF2FF]"
+                ? "text-foreground"
+                : "text-muted-foreground hover:text-foreground"
             }`}
           >
-            <Users className="w-4 h-4" />
-            Live Counter ({activeQueueCount})
             {activeTab === "live" && (
               <motion.div
-                layoutId="dashboardTabUnderline"
-                className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500 rounded-full"
+                layoutId="appleDashboardSegment"
+                className="absolute inset-0 bg-card rounded-xl shadow-xs border border-border/50"
+                transition={{ type: "spring", stiffness: 380, damping: 30 }}
               />
             )}
+            <span className="relative z-10 flex items-center gap-2">
+              <Users className="w-4 h-4 text-primary" />
+              Live Counter ({activeQueueCount})
+            </span>
           </button>
+
           <button
             onClick={() => {
               setActiveTab("analytics");
               if (!analyticsData) fetchAnalytics(analyticsRange);
             }}
-            className={`flex items-center gap-2 pb-3 px-4 text-sm font-semibold transition-colors whitespace-nowrap relative ${
+            className={`relative flex items-center gap-2 px-4 py-2 text-xs sm:text-sm font-semibold transition-all duration-200 rounded-xl cursor-pointer ${
               activeTab === "analytics"
-                ? "text-emerald-400"
-                : "text-[#889DC2] hover:text-[#ECF2FF]"
+                ? "text-foreground"
+                : "text-muted-foreground hover:text-foreground"
             }`}
           >
-            <BarChart3 className="w-4 h-4" />
-            Analytics & Insights
             {activeTab === "analytics" && (
               <motion.div
-                layoutId="dashboardTabUnderline"
-                className="absolute bottom-0 left-0 right-0 h-0.5 bg-emerald-500 rounded-full"
+                layoutId="appleDashboardSegment"
+                className="absolute inset-0 bg-card rounded-xl shadow-xs border border-border/50"
+                transition={{ type: "spring", stiffness: 380, damping: 30 }}
               />
             )}
+            <span className="relative z-10 flex items-center gap-2">
+              <BarChart3 className="w-4 h-4 text-emerald-500" />
+              Analytics & Insights
+            </span>
           </button>
+
           <button
             onClick={() => setActiveTab("services")}
-            className={`flex items-center gap-2 pb-3 px-4 text-sm font-semibold transition-colors whitespace-nowrap relative ${
+            className={`relative flex items-center gap-2 px-4 py-2 text-xs sm:text-sm font-semibold transition-all duration-200 rounded-xl cursor-pointer ${
               activeTab === "services"
-                ? "text-blue-400"
-                : "text-[#889DC2] hover:text-[#ECF2FF]"
+                ? "text-foreground"
+                : "text-muted-foreground hover:text-foreground"
             }`}
           >
-            <Store className="w-4 h-4" />
-            Service Catalog ({services.length})
             {activeTab === "services" && (
               <motion.div
-                layoutId="dashboardTabUnderline"
-                className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-500 rounded-full"
+                layoutId="appleDashboardSegment"
+                className="absolute inset-0 bg-card rounded-xl shadow-xs border border-border/50"
+                transition={{ type: "spring", stiffness: 380, damping: 30 }}
               />
             )}
+            <span className="relative z-10 flex items-center gap-2">
+              <Store className="w-4 h-4 text-primary" />
+              Service Catalog ({services.length})
+            </span>
           </button>
         </div>
 
@@ -582,23 +587,23 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           {/* Left Column: Live Queue (7 cols on lg) */}
           <div className="lg:col-span-7 space-y-6">
-            <Card className="bg-[#101A32] border-[#203052] shadow-xl">
-              <CardHeader className="pb-4 border-b border-[#203052]/60">
+            <Card className="bg-card border-border shadow-md">
+              <CardHeader className="pb-4 border-b border-border">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-lg bg-blue-500/10 border border-blue-500/25 flex items-center justify-center text-blue-400">
+                    <div className="w-8 h-8 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
                       <Users className="w-4 h-4" />
                     </div>
                     <div>
-                      <CardTitle className="text-lg font-bold text-[#ECF2FF]">
+                      <CardTitle className="text-lg font-bold text-foreground">
                         Current Customer Queue
                       </CardTitle>
-                      <CardDescription className="text-xs text-[#889DC2]">
+                      <CardDescription className="text-xs text-muted-foreground">
                         Real-time visitor flow and counter caller.
                       </CardDescription>
                     </div>
                   </div>
-                  <span className="text-xs font-bold font-mono px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-400">
+                  <span className="text-xs font-bold font-mono px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary">
                     {activeQueueCount} In Line
                   </span>
                 </div>
@@ -606,12 +611,12 @@ export default function Dashboard() {
 
               <CardContent className="pt-5 space-y-3">
                 {activeQueue.length === 0 ? (
-                  <div className="text-center py-16 px-4 border border-dashed border-[#203052] rounded-xl bg-[#0A1329]/50">
-                    <Users className="w-10 h-10 text-[#889DC2]/60 mx-auto mb-3" />
-                    <h3 className="text-base font-semibold text-[#ECF2FF] mb-1">
+                  <div className="text-center py-16 px-4 border border-dashed border-border rounded-xl bg-card/50">
+                    <Users className="w-10 h-10 text-muted-foreground/60 mx-auto mb-3" />
+                    <h3 className="text-base font-semibold text-foreground mb-1">
                       No Customers in Line
                     </h3>
-                    <p className="text-xs text-[#889DC2] max-w-sm mx-auto">
+                    <p className="text-xs text-muted-foreground max-w-sm mx-auto">
                       Your queue is currently clear. Display your storefront QR code for walk-ins to scan and join.
                     </p>
                   </div>
@@ -632,43 +637,43 @@ export default function Dashboard() {
                         animate={{ opacity: 1, y: 0 }}
                         className={`p-4 rounded-xl border transition-all ${
                           isInProgress
-                            ? "bg-[#152243] border-blue-500/50 shadow-[0_0_16px_rgba(59,130,246,0.15)]"
-                            : "bg-[#0A1329] border-[#203052]"
+                            ? "bg-primary/10 border-primary/40 shadow-sm"
+                            : "bg-card border-border"
                         }`}
                       >
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                           <div className="space-y-1">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-blue-500/15 border border-blue-500/30 text-blue-400">
+                              <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-primary/10 border border-primary/20 text-primary">
                                 #{ticketNumber}
                               </span>
-                              <h3 className="font-bold text-base text-[#ECF2FF]">
+                              <h3 className="font-bold text-base text-foreground">
                                 {customerName}
                               </h3>
                               <StatusBadge status={item.status} />
                             </div>
 
                             {customerPhone && (
-                              <p className="text-xs text-[#889DC2] flex items-center gap-1">
-                                <Phone className="w-3 h-3 text-blue-400" />
+                              <p className="text-xs text-muted-foreground flex items-center gap-1">
+                                <Phone className="w-3 h-3 text-primary" />
                                 {customerPhone}
                               </p>
                             )}
 
                             {servicesString && (
-                              <p className="text-xs text-[#C5D5F5] pt-0.5">
-                                <span className="text-[#889DC2]">Services:</span> {servicesString}
+                              <p className="text-xs text-foreground/80 pt-0.5">
+                                <span className="text-muted-foreground">Services:</span> {servicesString}
                               </p>
                             )}
                           </div>
 
                           {/* Action Buttons for active tickets */}
-                          <div className="flex items-center gap-2 shrink-0 border-t sm:border-t-0 pt-2 sm:pt-0 border-[#203052]">
+                          <div className="flex items-center gap-2 shrink-0 border-t sm:border-t-0 pt-2 sm:pt-0 border-border">
                             {isWaiting && (
                               <Button
                                 size="sm"
                                 onClick={() => handleUpdateStatus(item._id, "in_progress")}
-                                className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow-sm"
+                                className="bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold flex items-center gap-1.5 shadow-sm"
                               >
                                 <Play className="w-3.5 h-3.5 fill-current" />
                                 Call Customer
@@ -690,7 +695,7 @@ export default function Dashboard() {
                               size="sm"
                               variant="outline"
                               onClick={() => handleUpdateStatus(item._id, "cancelled")}
-                              className="border-red-500/30 hover:bg-red-500/10 text-red-400 text-xs flex items-center gap-1"
+                              className="border-red-500/30 hover:bg-red-500/10 text-red-500 dark:text-red-400 text-xs flex items-center gap-1"
                               title="Cancel Ticket"
                             >
                               <XCircle className="w-3.5 h-3.5" />
@@ -706,23 +711,23 @@ export default function Dashboard() {
             </Card>
 
             {/* Processed Customers Card (Max 10, Most Recent on Top) */}
-            <Card className="bg-[#101A32] border-[#203052] shadow-xl">
-              <CardHeader className="pb-4 border-b border-[#203052]/60">
+            <Card className="bg-card border-border shadow-md">
+              <CardHeader className="pb-4 border-b border-border">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center text-emerald-400">
+                    <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
                       <CheckCircle2 className="w-4 h-4" />
                     </div>
                     <div>
-                      <CardTitle className="text-lg font-bold text-[#ECF2FF]">
+                      <CardTitle className="text-lg font-bold text-foreground">
                         Processed Customers
                       </CardTitle>
-                      <CardDescription className="text-xs text-[#889DC2]">
+                      <CardDescription className="text-xs text-muted-foreground">
                         Recently served or resolved customers (most recent 10).
                       </CardDescription>
                     </div>
                   </div>
-                  <span className="text-xs font-bold font-mono px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400">
+                  <span className="text-xs font-bold font-mono px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400">
                     {processedQueue.length} Recent
                   </span>
                 </div>
@@ -730,12 +735,12 @@ export default function Dashboard() {
 
               <CardContent className="pt-5 space-y-3">
                 {processedQueue.length === 0 ? (
-                  <div className="text-center py-10 px-4 border border-dashed border-[#203052] rounded-xl bg-[#0A1329]/50">
-                    <CheckCircle2 className="w-8 h-8 text-[#889DC2]/60 mx-auto mb-2" />
-                    <h3 className="text-sm font-semibold text-[#ECF2FF] mb-1">
+                  <div className="text-center py-10 px-4 border border-dashed border-border rounded-xl bg-card/50">
+                    <CheckCircle2 className="w-8 h-8 text-muted-foreground/60 mx-auto mb-2" />
+                    <h3 className="text-sm font-semibold text-foreground mb-1">
                       No Processed Customers Yet
                     </h3>
-                    <p className="text-xs text-[#889DC2] max-w-sm mx-auto">
+                    <p className="text-xs text-muted-foreground max-w-sm mx-auto">
                       Customers who are marked completed or cancelled will appear here in reverse chronological order.
                     </p>
                   </div>
@@ -753,38 +758,38 @@ export default function Dashboard() {
                     return (
                       <div
                         key={item._id}
-                        className="p-3.5 rounded-xl border border-[#203052] bg-[#0A1329]/70 hover:bg-[#0A1329] transition-colors"
+                        className="p-3.5 rounded-xl border border-border bg-card hover:bg-muted/40 transition-colors"
                       >
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                           <div className="space-y-1">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-blue-500/15 border border-blue-500/30 text-blue-400">
+                              <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-primary/10 border border-primary/20 text-primary">
                                 #{ticketNumber}
                               </span>
-                              <h3 className="font-bold text-sm text-[#ECF2FF]">
+                              <h3 className="font-bold text-sm text-foreground">
                                 {customerName}
                               </h3>
                               <StatusBadge status={item.status} />
                             </div>
 
                             {customerPhone && (
-                              <p className="text-xs text-[#889DC2] flex items-center gap-1">
-                                <Phone className="w-3 h-3 text-blue-400" />
+                              <p className="text-xs text-muted-foreground flex items-center gap-1">
+                                <Phone className="w-3 h-3 text-primary" />
                                 {customerPhone}
                               </p>
                             )}
 
                             {servicesString && (
-                              <p className="text-xs text-[#C5D5F5] pt-0.5">
-                                <span className="text-[#889DC2]">Services:</span> {servicesString}
+                              <p className="text-xs text-foreground/80 pt-0.5">
+                                <span className="text-muted-foreground">Services:</span> {servicesString}
                               </p>
                             )}
                           </div>
 
-                          <div className="flex items-center gap-2 shrink-0 text-xs text-[#889DC2] sm:self-center">
+                          <div className="flex items-center gap-2 shrink-0 text-xs text-muted-foreground sm:self-center">
                             {processedTimeStr && (
-                              <span className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-[#101A32] border border-[#203052]">
-                                <Clock className="w-3 h-3 text-blue-400" />
+                              <span className="flex items-center gap-1 px-2.5 py-1 rounded-md bg-muted border border-border">
+                                <Clock className="w-3 h-3 text-primary" />
                                 {processedTimeStr}
                               </span>
                             )}
@@ -801,13 +806,13 @@ export default function Dashboard() {
           {/* Right Column: Store QR (TOP) & Services (5 cols on lg) */}
           <div className="lg:col-span-5 space-y-6">
             {/* Store QR Display Card - Prominently at Top */}
-            <Card className="bg-[#101A32] border border-[#203052] shadow-xl text-center">
-              <CardHeader className="pb-3 border-b border-[#203052]/60">
-                <CardTitle className="text-base font-bold text-[#ECF2FF] flex items-center justify-center gap-2">
-                  <QrCode className="w-4 h-4 text-blue-400" />
+            <Card className="bg-card border-border shadow-sm text-center">
+              <CardHeader className="pb-3 border-b border-border/60">
+                <CardTitle className="text-base font-bold text-card-foreground flex items-center justify-center gap-2">
+                  <QrCode className="w-4 h-4 text-primary" />
                   Storefront QR Code
                 </CardTitle>
-                <CardDescription className="text-xs text-[#889DC2]">
+                <CardDescription className="text-xs text-muted-foreground">
                   Customers scan this to open your store menu and book tickets.
                 </CardDescription>
               </CardHeader>
@@ -817,7 +822,7 @@ export default function Dashboard() {
                 <button
                   type="button"
                   onClick={() => setIsQrModalOpen(true)}
-                  className="group relative bg-white p-3.5 rounded-2xl shadow-xl inline-block mb-2 cursor-pointer hover:scale-105 active:scale-95 transition-all duration-200 border-2 border-transparent hover:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="group relative bg-white p-3.5 rounded-2xl shadow-md inline-block mb-2 cursor-pointer hover:scale-105 active:scale-95 transition-all duration-200 border-2 border-transparent hover:border-primary focus:outline-none focus:ring-2 focus:ring-primary"
                   title="Click to view enlarged QR code"
                 >
                   {businessProfile?.uniqueQrCode ? (
@@ -833,18 +838,18 @@ export default function Dashboard() {
                     </div>
                   )}
                   <div className="absolute inset-0 bg-black/55 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center text-white font-semibold text-xs gap-1 backdrop-blur-[1px]">
-                    <Maximize2 className="w-5 h-5 text-blue-400" />
+                    <Maximize2 className="w-5 h-5 text-primary" />
                     <span>Enlarge QR</span>
                   </div>
                 </button>
 
-                <p className="text-[11px] text-[#889DC2] flex items-center justify-center gap-1 mb-3">
-                  <Maximize2 className="w-3 h-3 text-blue-400" />
+                <p className="text-[11px] text-muted-foreground flex items-center justify-center gap-1 mb-3">
+                  <Maximize2 className="w-3 h-3 text-primary" />
                   <span>Click QR code to view enlarged</span>
                 </p>
 
                 <div className="w-full max-w-xs space-y-2 mb-4">
-                  <p className="text-xs font-mono text-[#889DC2] bg-[#0A1329] px-3 py-1.5 rounded-lg border border-[#203052] truncate">
+                  <p className="text-xs font-mono text-muted-foreground bg-muted/50 px-3 py-1.5 rounded-lg border border-border truncate">
                     Code: {businessProfile?.uniqueQrCode || "..."}
                   </p>
                 </div>
@@ -853,14 +858,14 @@ export default function Dashboard() {
                   <Button
                     onClick={handleCopyStoreLink}
                     variant="outline"
-                    className="border-[#203052] hover:bg-[#152243] text-xs text-[#ECF2FF] flex items-center justify-center gap-1.5"
+                    className="text-xs flex items-center justify-center gap-1.5"
                   >
-                    <Copy className="w-3.5 h-3.5 text-blue-400" />
+                    <Copy className="w-3.5 h-3.5 text-primary" />
                     Copy Link
                   </Button>
                   <Button
                     onClick={handlePrintQR}
-                    className="bg-blue-600 hover:bg-blue-500 text-xs text-white font-medium flex items-center justify-center gap-1.5"
+                    className="text-xs font-medium flex items-center justify-center gap-1.5"
                   >
                     <Printer className="w-3.5 h-3.5" />
                     Print Sign
@@ -870,13 +875,13 @@ export default function Dashboard() {
             </Card>
 
             {/* Services Management Card - Located below QR */}
-            <Card className="bg-[#101A32] border-[#203052] shadow-xl">
-              <CardHeader className="pb-3 border-b border-[#203052]/60">
-                <CardTitle className="text-base font-bold text-[#ECF2FF] flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-blue-400" />
+            <Card className="bg-card border-border shadow-sm">
+              <CardHeader className="pb-3 border-b border-border/60">
+                <CardTitle className="text-base font-bold text-card-foreground flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-primary" />
                   Offered Services
                 </CardTitle>
-                <CardDescription className="text-xs text-[#889DC2]">
+                <CardDescription className="text-xs text-muted-foreground">
                   Customers select from these when scanning your QR.
                 </CardDescription>
               </CardHeader>
@@ -885,26 +890,26 @@ export default function Dashboard() {
                 {/* Services List */}
                 <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
                   {services.length === 0 ? (
-                    <p className="text-xs text-[#889DC2] text-center py-4">
+                    <p className="text-xs text-muted-foreground text-center py-4">
                       No services added yet. Add at least one below.
                     </p>
                   ) : (
                     services.map((service, idx) => (
                       <div
                         key={idx}
-                        className="flex items-center justify-between p-3 rounded-xl bg-[#0A1329] border border-[#203052] text-sm"
+                        className="flex items-center justify-between p-3 rounded-xl bg-muted/40 border border-border text-sm"
                       >
                         <div>
-                          <div className="font-semibold text-[#ECF2FF] text-xs sm:text-sm">
+                          <div className="font-semibold text-foreground text-xs sm:text-sm">
                             {service.name}
                           </div>
-                          <div className="text-[11px] text-[#889DC2] mt-0.5">
+                          <div className="text-[11px] text-muted-foreground mt-0.5">
                             {service.durationMin} mins • ${service.cost}
                           </div>
                         </div>
                         <button
                           onClick={() => handleRemoveService(idx)}
-                          className="p-1.5 rounded-lg text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 transition-colors"
+                          className="p-1.5 rounded-lg text-rose-500 hover:text-rose-600 hover:bg-rose-500/10 transition-colors"
                           aria-label={`Remove service ${service.name}`}
                         >
                           <Trash2 className="w-4 h-4" />
@@ -915,12 +920,12 @@ export default function Dashboard() {
                 </div>
 
                 {/* Add Service Inline Form */}
-                <form onSubmit={handleAddService} className="pt-3 border-t border-[#203052] space-y-2">
+                <form onSubmit={handleAddService} className="pt-3 border-t border-border space-y-2">
                   <Input
                     placeholder="Service Name (e.g. Haircut)"
                     value={newService.name}
                     onChange={(e) => setNewService({ ...newService, name: e.target.value })}
-                    className="bg-[#0A1329] border-[#203052] text-xs text-[#ECF2FF]"
+                    className="bg-background border-border text-xs text-foreground"
                     required
                   />
 
@@ -930,7 +935,7 @@ export default function Dashboard() {
                       placeholder="Duration (mins)"
                       value={newService.durationMin}
                       onChange={(e) => setNewService({ ...newService, durationMin: e.target.value })}
-                      className="bg-[#0A1329] border-[#203052] text-xs text-[#ECF2FF]"
+                      className="bg-background border-border text-xs text-foreground"
                       min="1"
                       required
                     />
@@ -939,7 +944,7 @@ export default function Dashboard() {
                       placeholder="Price ($)"
                       value={newService.cost}
                       onChange={(e) => setNewService({ ...newService, cost: e.target.value })}
-                      className="bg-[#0A1329] border-[#203052] text-xs text-[#ECF2FF]"
+                      className="bg-background border-border text-xs text-foreground"
                       min="0"
                       required
                     />
@@ -950,7 +955,7 @@ export default function Dashboard() {
                     loading={isAddingService}
                     loadingText="Adding Service..."
                     icon={<Plus className="w-4 h-4" />}
-                    className="w-full bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold"
+                    className="w-full text-xs font-semibold"
                   >
                     Add Service
                   </LoadingButton>
@@ -965,20 +970,20 @@ export default function Dashboard() {
         {activeTab === "analytics" && (
           <div className="space-y-6">
             {/* Header Controls */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-2xl bg-[#101A32] border border-[#203052]">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-2xl bg-card border border-border shadow-sm">
               <div>
-                <h2 className="text-lg font-bold text-[#ECF2FF] flex items-center gap-2">
-                  <BarChart3 className="w-5 h-5 text-emerald-400" />
+                <h2 className="text-lg font-bold text-foreground flex items-center gap-2">
+                  <BarChart3 className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
                   Counter Intelligence & Operational Analytics
                 </h2>
-                <p className="text-xs text-[#889DC2] mt-0.5">
+                <p className="text-xs text-muted-foreground mt-0.5">
                   Real-time aggregation from completed tickets, service durations, and customer throughput.
                 </p>
               </div>
 
               {/* Time Range Selector & Refresh */}
               <div className="flex items-center gap-2">
-                <div className="flex p-1 bg-[#0A1329] border border-[#203052] rounded-xl text-xs font-semibold">
+                <div className="flex p-1 bg-muted/50 border border-border rounded-xl text-xs font-semibold">
                   {(["today", "7d", "30d", "all"] as const).map((r) => (
                     <button
                       key={r}
@@ -988,8 +993,8 @@ export default function Dashboard() {
                       }}
                       className={`px-3 py-1.5 rounded-lg transition-all ${
                         analyticsRange === r
-                          ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 shadow-sm"
-                          : "text-[#889DC2] hover:text-[#ECF2FF]"
+                          ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 shadow-sm"
+                          : "text-muted-foreground hover:text-foreground"
                       }`}
                     >
                       {r === "today" ? "Today" : r === "7d" ? "7 Days" : r === "30d" ? "30 Days" : "All Time"}
@@ -1000,11 +1005,11 @@ export default function Dashboard() {
                 <button
                   onClick={() => fetchAnalytics(analyticsRange)}
                   disabled={loadingAnalytics}
-                  className="p-2 rounded-xl border border-[#203052] bg-[#0A1329] text-[#889DC2] hover:text-[#ECF2FF] hover:bg-[#152243] transition-colors"
+                  className="p-2 rounded-xl border border-border bg-card text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
                   title="Refresh analytics data"
                   aria-label="Refresh analytics data"
                 >
-                  <RefreshCw className={`w-4 h-4 ${loadingAnalytics ? "animate-spin text-emerald-400" : ""}`} />
+                  <RefreshCw className={`w-4 h-4 ${loadingAnalytics ? "animate-spin text-emerald-500" : ""}`} />
                 </button>
               </div>
             </div>
@@ -1019,80 +1024,80 @@ export default function Dashboard() {
                 />
               </div>
             ) : !analyticsData ? (
-              <div className="text-center py-16 px-4 border border-dashed border-[#203052] rounded-2xl bg-[#0A1329]/50">
-                <p className="text-sm text-[#889DC2]">Unable to load analytics data at this time.</p>
+              <div className="text-center py-16 px-4 border border-dashed border-border rounded-2xl bg-muted/30">
+                <p className="text-sm text-muted-foreground">Unable to load analytics data at this time.</p>
               </div>
             ) : (
               <>
                 {/* 4 Summary KPI Cards */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <Card className="bg-[#101A32] border-[#203052] p-5 shadow-xl hover:border-emerald-500/30 transition-all">
+                  <Card className="bg-card border-border p-5 shadow-sm hover:border-emerald-500/30 transition-all">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold text-[#889DC2]">Completed Customers</span>
-                      <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center text-emerald-400">
+                      <span className="text-xs font-semibold text-muted-foreground">Completed Customers</span>
+                      <div className="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
                         <CheckCircle2 className="w-4 h-4" />
                       </div>
                     </div>
-                    <div className="mt-3 text-3xl font-extrabold text-[#ECF2FF]">
+                    <div className="mt-3 text-3xl font-extrabold text-foreground">
                       {analyticsData.summary.totalCompleted}
-                      <span className="text-xs font-medium text-[#889DC2] ml-2">served</span>
+                      <span className="text-xs font-medium text-muted-foreground ml-2">served</span>
                     </div>
                     <div className="mt-2.5 flex items-center gap-2">
-                      <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                      <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
                         {analyticsData.summary.completionRate}% completion
                       </span>
-                      <span className="text-[11px] text-[#889DC2]">
+                      <span className="text-[11px] text-muted-foreground">
                         {analyticsData.summary.totalCancelled} cancelled
                       </span>
                     </div>
                   </Card>
 
-                  <Card className="bg-[#101A32] border-[#203052] p-5 shadow-xl hover:border-blue-500/30 transition-all">
+                  <Card className="bg-card border-border p-5 shadow-sm hover:border-primary/30 transition-all">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold text-[#889DC2]">Estimated Revenue</span>
-                      <div className="w-8 h-8 rounded-lg bg-blue-500/10 border border-blue-500/25 flex items-center justify-center text-blue-400">
+                      <span className="text-xs font-semibold text-muted-foreground">Estimated Revenue</span>
+                      <div className="w-8 h-8 rounded-lg bg-primary/10 border border-primary/25 flex items-center justify-center text-primary">
                         <DollarSign className="w-4 h-4" />
                       </div>
                     </div>
-                    <div className="mt-3 text-3xl font-extrabold text-[#ECF2FF]">
+                    <div className="mt-3 text-3xl font-extrabold text-foreground">
                       ${analyticsData.summary.totalRevenue.toLocaleString()}
                     </div>
-                    <p className="mt-2.5 text-[11px] text-[#889DC2]">
+                    <p className="mt-2.5 text-[11px] text-muted-foreground">
                       From {analyticsData.summary.totalCompleted} completed service orders
                     </p>
                   </Card>
 
-                  <Card className="bg-[#101A32] border-[#203052] p-5 shadow-xl hover:border-amber-500/30 transition-all">
+                  <Card className="bg-card border-border p-5 shadow-sm hover:border-amber-500/30 transition-all">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold text-[#889DC2]">Avg Customer Wait</span>
-                      <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/25 flex items-center justify-center text-amber-400">
+                      <span className="text-xs font-semibold text-muted-foreground">Avg Customer Wait</span>
+                      <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/25 flex items-center justify-center text-amber-600 dark:text-amber-400">
                         <Clock className="w-4 h-4" />
                       </div>
                     </div>
-                    <div className="mt-3 text-3xl font-extrabold text-[#ECF2FF]">
+                    <div className="mt-3 text-3xl font-extrabold text-foreground">
                       ~{analyticsData.summary.avgWaitTimeMin} mins
                     </div>
-                    <p className="mt-2.5 text-[11px] text-[#889DC2]">
+                    <p className="mt-2.5 text-[11px] text-muted-foreground">
                       Mean wait before being called to counter
                     </p>
                   </Card>
 
-                  <Card className="bg-[#101A32] border-[#203052] p-5 shadow-xl hover:border-purple-500/30 transition-all">
+                  <Card className="bg-card border-border p-5 shadow-sm hover:border-purple-500/30 transition-all">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold text-[#889DC2]">Avg Service Duration</span>
-                      <div className="w-8 h-8 rounded-lg bg-purple-500/10 border border-purple-500/25 flex items-center justify-center text-purple-400">
+                      <span className="text-xs font-semibold text-muted-foreground">Avg Service Duration</span>
+                      <div className="w-8 h-8 rounded-lg bg-purple-500/10 border border-purple-500/25 flex items-center justify-center text-purple-600 dark:text-purple-400">
                         <Zap className="w-4 h-4" />
                       </div>
                     </div>
-                    <div className="mt-3 text-3xl font-extrabold text-[#ECF2FF]">
+                    <div className="mt-3 text-3xl font-extrabold text-foreground">
                       ~{analyticsData.summary.avgServiceDurationMin} mins
                     </div>
                     <div className="mt-2.5">
                       <span
                         className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold border ${
                           analyticsData.summary.serviceSpeedRatio <= 1.0
-                            ? "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
-                            : "bg-amber-500/15 text-amber-400 border-amber-500/30"
+                            ? "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30"
+                            : "bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30"
                         }`}
                       >
                         <Activity className="w-3 h-3" />
@@ -1105,19 +1110,19 @@ export default function Dashboard() {
                 </div>
 
                 {/* Daily Volume Throughput Chart */}
-                <Card className="bg-[#101A32] border-[#203052] shadow-xl p-6">
+                <Card className="bg-card border-border shadow-sm p-6">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-6">
                     <div>
-                      <h3 className="text-base font-bold text-[#ECF2FF] flex items-center gap-2">
-                        <TrendingUp className="w-4 h-4 text-emerald-400" />
+                      <h3 className="text-base font-bold text-foreground flex items-center gap-2">
+                        <TrendingUp className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                         Daily Customer Volume Throughput
                       </h3>
-                      <p className="text-xs text-[#889DC2] mt-0.5">
+                      <p className="text-xs text-muted-foreground mt-0.5">
                         Breakdown of completed customers, cancellations, and daily revenue.
                       </p>
                     </div>
 
-                    <div className="flex items-center gap-4 text-xs font-medium text-[#889DC2]">
+                    <div className="flex items-center gap-4 text-xs font-medium text-muted-foreground">
                       <div className="flex items-center gap-1.5">
                         <span className="w-3 h-3 rounded bg-emerald-500 inline-block" />
                         <span>Completed</span>
@@ -1130,7 +1135,7 @@ export default function Dashboard() {
                   </div>
 
                   {analyticsData.dailyThroughput.length === 0 ? (
-                    <p className="text-xs text-[#889DC2] text-center py-10">No daily ticket records in this time period.</p>
+                    <p className="text-xs text-muted-foreground text-center py-10">No daily ticket records in this time period.</p>
                   ) : (
                     <div className="pt-4">
                       {/* Responsive Visual Bar Chart */}
@@ -1142,7 +1147,7 @@ export default function Dashboard() {
 
                         return (
                           <div className="space-y-3">
-                            <div className="grid grid-cols-7 sm:grid-cols-7 lg:grid-cols-7 gap-2 sm:gap-4 items-end h-48 border-b border-[#203052] pb-2">
+                            <div className="grid grid-cols-7 sm:grid-cols-7 lg:grid-cols-7 gap-2 sm:gap-4 items-end h-48 border-b border-border pb-2">
                               {analyticsData.dailyThroughput.map((day, idx) => {
                                 const total = day.completed + day.cancelled;
                                 const completedPct = Math.round((day.completed / maxVol) * 100);
@@ -1151,14 +1156,14 @@ export default function Dashboard() {
                                 return (
                                   <div key={idx} className="flex flex-col items-center h-full justify-end group relative">
                                     {/* Tooltip on hover */}
-                                    <div className="absolute -top-12 z-20 hidden group-hover:flex flex-col items-center bg-[#050B18] border border-[#203052] text-[10px] text-[#ECF2FF] px-2 py-1 rounded-lg shadow-xl whitespace-nowrap pointer-events-none">
+                                    <div className="absolute -top-12 z-20 hidden group-hover:flex flex-col items-center bg-popover border border-border text-[10px] text-popover-foreground px-2 py-1 rounded-lg shadow-xl whitespace-nowrap pointer-events-none">
                                       <span className="font-bold">{day.label}</span>
-                                      <span className="text-emerald-400">{day.completed} completed (${day.revenue})</span>
-                                      {day.cancelled > 0 && <span className="text-rose-400">{day.cancelled} cancelled</span>}
+                                      <span className="text-emerald-600 dark:text-emerald-400">{day.completed} completed (${day.revenue})</span>
+                                      {day.cancelled > 0 && <span className="text-rose-500">{day.cancelled} cancelled</span>}
                                     </div>
 
                                     {/* Stacked bar */}
-                                    <div className="w-full max-w-[42px] bg-[#0A1329] rounded-t-lg overflow-hidden flex flex-col justify-end border border-[#203052]/80 h-full">
+                                    <div className="w-full max-w-[42px] bg-muted/40 rounded-t-lg overflow-hidden flex flex-col justify-end border border-border/80 h-full">
                                       {cancelledPct > 0 && (
                                         <div
                                           style={{ height: `${cancelledPct}%` }}
@@ -1167,11 +1172,11 @@ export default function Dashboard() {
                                       )}
                                       <div
                                         style={{ height: `${Math.max(completedPct, total > 0 ? 6 : 0)}%` }}
-                                        className="bg-gradient-to-t from-emerald-600 to-emerald-400 w-full transition-all shadow-[0_0_8px_rgba(16,185,129,0.3)]"
+                                        className="bg-emerald-500 w-full transition-all"
                                       />
                                     </div>
-                                    <span className="text-[10px] font-bold text-[#ECF2FF] mt-1.5">{total}</span>
-                                    <span className="text-[10px] text-[#889DC2] truncate max-w-full">{day.label.slice(0, 3)}</span>
+                                    <span className="text-[10px] font-bold text-foreground mt-1.5">{total}</span>
+                                    <span className="text-[10px] text-muted-foreground truncate max-w-full">{day.label.slice(0, 3)}</span>
                                   </div>
                                 );
                               })}
@@ -1187,14 +1192,14 @@ export default function Dashboard() {
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
                   {/* Left Column (7 cols): Peak Hours Heatmap / Bars */}
                   <div className="lg:col-span-7">
-                    <Card className="bg-[#101A32] border-[#203052] shadow-xl p-6 h-full">
+                    <Card className="bg-card border-border shadow-sm p-6 h-full">
                       <div className="flex items-center justify-between mb-4">
                         <div>
-                          <h3 className="text-base font-bold text-[#ECF2FF] flex items-center gap-2">
-                            <Clock className="w-4 h-4 text-blue-400" />
+                          <h3 className="text-base font-bold text-foreground flex items-center gap-2">
+                            <Clock className="w-4 h-4 text-primary" />
                             Counter Peak Hours
                           </h3>
-                          <p className="text-xs text-[#889DC2] mt-0.5">
+                          <p className="text-xs text-muted-foreground mt-0.5">
                             Customer arrival density throughout the business day.
                           </p>
                         </div>
@@ -1203,7 +1208,7 @@ export default function Dashboard() {
                           const peak = [...analyticsData.peakHours].sort((a, b) => b.count - a.count)[0];
                           if (peak && peak.count > 0) {
                             return (
-                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-500/15 border border-amber-500/30 text-amber-400">
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-500/15 border border-amber-500/30 text-amber-600 dark:text-amber-400">
                                 <Flame className="w-3.5 h-3.5 fill-amber-500" />
                                 Peak: {peak.label} ({peak.count})
                               </span>
@@ -1226,20 +1231,20 @@ export default function Dashboard() {
 
                             return (
                               <div key={hourItem.hour} className="flex items-center gap-3 text-xs">
-                                <span className="w-14 text-[#889DC2] font-mono text-[11px] shrink-0">
+                                <span className="w-14 text-muted-foreground font-mono text-[11px] shrink-0">
                                   {hourItem.label}
                                 </span>
-                                <div className="flex-1 h-5 bg-[#0A1329] rounded-md overflow-hidden border border-[#203052] p-0.5">
+                                <div className="flex-1 h-5 bg-muted/40 rounded-md overflow-hidden border border-border p-0.5">
                                   <div
                                     style={{ width: `${Math.max(pct, hourItem.count > 0 ? 8 : 0)}%` }}
                                     className={`h-full rounded transition-all ${
                                       isPeak
-                                        ? "bg-gradient-to-r from-amber-500 to-orange-400 shadow-[0_0_8px_rgba(245,158,11,0.4)]"
-                                        : "bg-blue-600/80"
+                                        ? "bg-amber-500"
+                                        : "bg-primary/80"
                                     }`}
                                   />
                                 </div>
-                                <span className={`w-8 text-right font-bold text-[11px] ${isPeak ? "text-amber-400" : "text-[#ECF2FF]"}`}>
+                                <span className={`w-8 text-right font-bold text-[11px] ${isPeak ? "text-amber-600 dark:text-amber-400" : "text-foreground"}`}>
                                   {hourItem.count}
                                 </span>
                               </div>
@@ -1252,48 +1257,48 @@ export default function Dashboard() {
 
                   {/* Right Column (5 cols): Service Popularity Distribution */}
                   <div className="lg:col-span-5">
-                    <Card className="bg-[#101A32] border-[#203052] shadow-xl p-6 h-full">
+                    <Card className="bg-card border-border shadow-sm p-6 h-full">
                       <div className="mb-4">
-                        <h3 className="text-base font-bold text-[#ECF2FF] flex items-center gap-2">
-                          <Sparkles className="w-4 h-4 text-purple-400" />
+                        <h3 className="text-base font-bold text-foreground flex items-center gap-2">
+                          <Sparkles className="w-4 h-4 text-purple-500" />
                           Service Popularity Distribution
                         </h3>
-                        <p className="text-xs text-[#889DC2] mt-0.5">
+                        <p className="text-xs text-muted-foreground mt-0.5">
                           Most requested catalog offerings by volume and revenue.
                         </p>
                       </div>
 
                       {analyticsData.servicePopularity.length === 0 ? (
-                        <p className="text-xs text-[#889DC2] text-center py-10">
+                        <p className="text-xs text-muted-foreground text-center py-10">
                           No service bookings on record for this period.
                         </p>
                       ) : (
                         <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
                           {analyticsData.servicePopularity.map((service, idx) => (
-                            <div key={idx} className="p-3 rounded-xl bg-[#0A1329] border border-[#203052] text-xs">
+                            <div key={idx} className="p-3 rounded-xl bg-muted/40 border border-border text-xs">
                               <div className="flex items-center justify-between mb-1.5">
                                 <div className="flex items-center gap-2">
-                                  <span className="w-5 h-5 rounded-md bg-purple-500/15 border border-purple-500/30 text-purple-400 font-bold text-[10px] flex items-center justify-center">
+                                  <span className="w-5 h-5 rounded-md bg-purple-500/15 border border-purple-500/30 text-purple-600 dark:text-purple-400 font-bold text-[10px] flex items-center justify-center">
                                     #{idx + 1}
                                   </span>
-                                  <span className="font-semibold text-[#ECF2FF] text-sm">
+                                  <span className="font-semibold text-foreground text-sm">
                                     {service.name}
                                   </span>
                                 </div>
-                                <span className="font-bold text-emerald-400">
+                                <span className="font-bold text-emerald-600 dark:text-emerald-400">
                                   ${service.revenue}
                                 </span>
                               </div>
 
-                              <div className="flex items-center justify-between text-[11px] text-[#889DC2] mb-1.5">
+                              <div className="flex items-center justify-between text-[11px] text-muted-foreground mb-1.5">
                                 <span>{service.count} {service.count === 1 ? "booking" : "bookings"}</span>
                                 <span>{service.percentage}% of volume</span>
                               </div>
 
-                              <div className="h-1.5 bg-[#101A32] rounded-full overflow-hidden">
+                              <div className="h-1.5 bg-muted rounded-full overflow-hidden">
                                 <div
                                   style={{ width: `${service.percentage}%` }}
-                                  className="h-full bg-gradient-to-r from-purple-500 to-blue-500 rounded-full"
+                                  className="h-full bg-primary rounded-full"
                                 />
                               </div>
                             </div>
@@ -1311,13 +1316,13 @@ export default function Dashboard() {
         {/* Tab 3: Dedicated Service Catalog Management View */}
         {activeTab === "services" && (
           <div className="max-w-3xl mx-auto space-y-6">
-            <Card className="bg-[#101A32] border-[#203052] shadow-xl">
-              <CardHeader className="pb-4 border-b border-[#203052]/60">
-                <CardTitle className="text-lg font-bold text-[#ECF2FF] flex items-center gap-2">
-                  <Store className="w-5 h-5 text-blue-400" />
+            <Card className="bg-card border-border shadow-sm">
+              <CardHeader className="pb-4 border-b border-border/60">
+                <CardTitle className="text-lg font-bold text-foreground flex items-center gap-2">
+                  <Store className="w-5 h-5 text-primary" />
                   Service Catalog & Pricing
                 </CardTitle>
-                <CardDescription className="text-xs text-[#889DC2]">
+                <CardDescription className="text-xs text-muted-foreground">
                   Manage the services, estimated turnaround times, and prices displayed to customers.
                 </CardDescription>
               </CardHeader>
@@ -1325,32 +1330,32 @@ export default function Dashboard() {
               <CardContent className="pt-5 space-y-6">
                 <div className="space-y-3">
                   {services.length === 0 ? (
-                    <div className="text-center py-12 px-4 border border-dashed border-[#203052] rounded-xl bg-[#0A1329]/50">
-                      <Store className="w-8 h-8 text-[#889DC2]/60 mx-auto mb-2" />
-                      <p className="text-sm font-semibold text-[#ECF2FF]">No Services Configured</p>
-                      <p className="text-xs text-[#889DC2]">Add services below so customers can select what they need.</p>
+                    <div className="text-center py-12 px-4 border border-dashed border-border rounded-xl bg-muted/30">
+                      <Store className="w-8 h-8 text-muted-foreground/60 mx-auto mb-2" />
+                      <p className="text-sm font-semibold text-foreground">No Services Configured</p>
+                      <p className="text-xs text-muted-foreground">Add services below so customers can select what they need.</p>
                     </div>
                   ) : (
                     services.map((service, idx) => (
                       <div
                         key={idx}
-                        className="flex items-center justify-between p-4 rounded-xl bg-[#0A1329] border border-[#203052] shadow-sm"
+                        className="flex items-center justify-between p-4 rounded-xl bg-muted/40 border border-border shadow-sm"
                       >
                         <div>
-                          <div className="font-semibold text-sm text-[#ECF2FF]">{service.name}</div>
-                          <div className="text-xs text-[#889DC2] mt-1 flex items-center gap-3">
+                          <div className="font-semibold text-sm text-foreground">{service.name}</div>
+                          <div className="text-xs text-muted-foreground mt-1 flex items-center gap-3">
                             <span className="flex items-center gap-1">
-                              <Clock className="w-3.5 h-3.5 text-blue-400" />
+                              <Clock className="w-3.5 h-3.5 text-primary" />
                               {service.durationMin} mins
                             </span>
                             <span>•</span>
-                            <span className="font-bold text-emerald-400">${service.cost}</span>
+                            <span className="font-bold text-emerald-600 dark:text-emerald-400">${service.cost}</span>
                           </div>
                         </div>
 
                         <button
                           onClick={() => handleRemoveService(idx)}
-                          className="p-2 rounded-xl text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 transition-colors"
+                          className="p-2 rounded-xl text-rose-500 hover:text-rose-600 hover:bg-rose-500/10 transition-colors"
                           aria-label={`Remove service ${service.name}`}
                         >
                           <Trash2 className="w-4 h-4" />
@@ -1361,13 +1366,13 @@ export default function Dashboard() {
                 </div>
 
                 {/* Add Service Form */}
-                <form onSubmit={handleAddService} className="p-4 rounded-xl bg-[#0A1329] border border-[#203052] space-y-3">
-                  <h4 className="text-xs font-bold uppercase tracking-wider text-[#889DC2]">Add New Service</h4>
+                <form onSubmit={handleAddService} className="p-4 rounded-xl bg-muted/30 border border-border space-y-3">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Add New Service</h4>
                   <Input
                     placeholder="Service Name (e.g. Deluxe Beard Trim)"
                     value={newService.name}
                     onChange={(e) => setNewService({ ...newService, name: e.target.value })}
-                    className="bg-[#101A32] border-[#203052] text-xs text-[#ECF2FF]"
+                    className="bg-background border-border text-xs text-foreground"
                     required
                   />
                   <div className="grid grid-cols-2 gap-3">
@@ -1376,7 +1381,7 @@ export default function Dashboard() {
                       placeholder="Duration (Minutes)"
                       value={newService.durationMin}
                       onChange={(e) => setNewService({ ...newService, durationMin: e.target.value })}
-                      className="bg-[#101A32] border-[#203052] text-xs text-[#ECF2FF]"
+                      className="bg-background border-border text-xs text-foreground"
                       min="1"
                       required
                     />
@@ -1385,7 +1390,7 @@ export default function Dashboard() {
                       placeholder="Price ($)"
                       value={newService.cost}
                       onChange={(e) => setNewService({ ...newService, cost: e.target.value })}
-                      className="bg-[#101A32] border-[#203052] text-xs text-[#ECF2FF]"
+                      className="bg-background border-border text-xs text-foreground"
                       min="0"
                       required
                     />
@@ -1395,7 +1400,7 @@ export default function Dashboard() {
                     loading={isAddingService}
                     loadingText="Adding Service..."
                     icon={<Plus className="w-4 h-4" />}
-                    className="w-full bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold"
+                    className="w-full text-xs font-semibold"
                   >
                     Add Service to Catalog
                   </LoadingButton>
@@ -1409,32 +1414,38 @@ export default function Dashboard() {
       {/* Store Settings Modal */}
       <AnimatePresence>
         {isSettingsOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
+          <motion.div
+            key="settings-modal-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18, ease: "easeOut" }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 transform-gpu"
+          >
+            <div
               onClick={() => setIsSettingsOpen(false)}
-              className="fixed inset-0 bg-black/80 backdrop-blur-sm"
+              className="fixed inset-0 bg-black/60 dark:bg-black/80 backdrop-blur-sm"
               aria-hidden="true"
             />
             <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 16 }}
+              key="settings-modal-dialog"
+              initial={{ opacity: 0, scale: 0.95, y: 12 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 16 }}
-              className="relative z-50 w-full max-w-lg rounded-2xl border border-[#203052] bg-[#101A32] p-6 shadow-2xl"
+              exit={{ opacity: 0, scale: 0.95, y: 12 }}
+              transition={{ duration: 0.18, ease: "easeOut" }}
+              className="relative z-50 w-full max-w-lg rounded-2xl border border-border bg-card p-6 shadow-2xl transform-gpu"
               role="dialog"
               aria-modal="true"
               aria-labelledby="settings-dialog-title"
             >
-              <div className="flex items-center justify-between pb-4 border-b border-[#203052]">
-                <h2 id="settings-dialog-title" className="text-lg font-bold text-[#ECF2FF] flex items-center gap-2">
-                  <Settings className="w-4 h-4 text-blue-400" />
+              <div className="flex items-center justify-between pb-4 border-b border-border">
+                <h2 id="settings-dialog-title" className="text-lg font-bold text-foreground flex items-center gap-2">
+                  <Settings className="w-4 h-4 text-primary" />
                   Store Configuration
                 </h2>
                 <button
                   onClick={() => setIsSettingsOpen(false)}
-                  className="p-1 rounded-lg text-[#889DC2] hover:text-[#ECF2FF] hover:bg-[#152243]"
+                  className="p-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted"
                   aria-label="Close dialog"
                 >
                   <X className="w-5 h-5" />
@@ -1443,35 +1454,35 @@ export default function Dashboard() {
 
               <form onSubmit={handleSaveSettings} className="space-y-4 pt-4">
                 <div className="space-y-1.5">
-                  <Label htmlFor="shop-name" className="text-xs text-[#C5D5F5] font-medium">
+                  <Label htmlFor="shop-name" className="text-xs text-foreground font-medium">
                     Store / Shop Name *
                   </Label>
                   <Input
                     id="shop-name"
                     value={settingsForm.shopName}
                     onChange={(e) => setSettingsForm({ ...settingsForm, shopName: e.target.value })}
-                    className="bg-[#0A1329] border-[#203052] text-[#ECF2FF]"
+                    className="bg-background border-border text-foreground"
                     placeholder="e.g. Modern Barber & Spa"
                     required
                   />
                 </div>
 
                 <div className="space-y-1.5">
-                  <Label htmlFor="shop-address" className="text-xs text-[#C5D5F5] font-medium">
+                  <Label htmlFor="shop-address" className="text-xs text-foreground font-medium">
                     Store Address / Location
                   </Label>
                   <Input
                     id="shop-address"
                     value={settingsForm.address}
                     onChange={(e) => setSettingsForm({ ...settingsForm, address: e.target.value })}
-                    className="bg-[#0A1329] border-[#203052] text-[#ECF2FF]"
+                    className="bg-background border-border text-foreground"
                     placeholder="e.g. 124 Market Street, Suite 400"
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1.5">
-                    <Label htmlFor="open-time" className="text-xs text-[#C5D5F5] font-medium">
+                    <Label htmlFor="open-time" className="text-xs text-foreground font-medium">
                       Opening Time
                     </Label>
                     <Input
@@ -1479,11 +1490,11 @@ export default function Dashboard() {
                       type="time"
                       value={settingsForm.openTime}
                       onChange={(e) => setSettingsForm({ ...settingsForm, openTime: e.target.value })}
-                      className="bg-[#0A1329] border-[#203052] text-[#ECF2FF]"
+                      className="bg-background border-border text-foreground"
                     />
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="close-time" className="text-xs text-[#C5D5F5] font-medium">
+                    <Label htmlFor="close-time" className="text-xs text-foreground font-medium">
                       Closing Time
                     </Label>
                     <Input
@@ -1491,13 +1502,13 @@ export default function Dashboard() {
                       type="time"
                       value={settingsForm.closeTime}
                       onChange={(e) => setSettingsForm({ ...settingsForm, closeTime: e.target.value })}
-                      className="bg-[#0A1329] border-[#203052] text-[#ECF2FF]"
+                      className="bg-background border-border text-foreground"
                     />
                   </div>
                 </div>
 
                 <div className="space-y-2 pt-1">
-                  <Label className="text-xs text-[#C5D5F5] font-medium">
+                  <Label className="text-xs text-foreground font-medium">
                     Closed Days (Check days when store is closed)
                   </Label>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -1510,8 +1521,8 @@ export default function Dashboard() {
                           onClick={() => toggleClosedDay(idx)}
                           className={`px-2.5 py-1.5 rounded-lg text-xs font-medium border text-center transition-colors ${
                             isChecked
-                              ? "bg-rose-500/15 border-rose-500/40 text-rose-300"
-                              : "bg-[#0A1329] border-[#203052] text-[#889DC2] hover:text-[#ECF2FF]"
+                              ? "bg-rose-500/15 border-rose-500/40 text-rose-600 dark:text-rose-300"
+                              : "bg-muted/40 border-border text-muted-foreground hover:text-foreground"
                           }`}
                         >
                           {dayName.slice(0, 3)} {isChecked ? "✗" : ""}
@@ -1521,12 +1532,11 @@ export default function Dashboard() {
                   </div>
                 </div>
 
-                <div className="flex items-center justify-end gap-3 pt-4 border-t border-[#203052]">
+                <div className="flex items-center justify-end gap-3 pt-4 border-t border-border">
                   <Button
                     type="button"
                     variant="outline"
                     onClick={() => setIsSettingsOpen(false)}
-                    className="border-[#203052] hover:bg-[#152243] text-[#ECF2FF]"
                   >
                     Cancel
                   </Button>
@@ -1534,39 +1544,43 @@ export default function Dashboard() {
                     type="submit"
                     loading={isSavingSettings}
                     loadingText="Saving Settings..."
-                    className="bg-blue-600 hover:bg-blue-500 text-white min-w-[140px]"
+                    className="min-w-[140px]"
                   >
                     Save Settings
                   </LoadingButton>
                 </div>
               </form>
             </motion.div>
-          </div>
+          </motion.div>
         )}
       </AnimatePresence>
 
       {/* Enlarged QR Code Centered Modal */}
       <AnimatePresence>
         {isQrModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <motion.div
+            key="qr-modal-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.18, ease: "easeOut" }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 transform-gpu"
+          >
             {/* Dimmed backdrop with fade animation */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.2 }}
+            <div
               onClick={() => setIsQrModalOpen(false)}
-              className="fixed inset-0 bg-black/85 backdrop-blur-md"
+              className="fixed inset-0 bg-black/70 dark:bg-black/85 backdrop-blur-sm"
               aria-hidden="true"
             />
 
             {/* Centered Modal Window with spring popup animation - Landscape Layout on Web */}
             <motion.div
-              initial={{ opacity: 0, scale: 0.88, y: 16 }}
+              key="qr-modal-dialog"
+              initial={{ opacity: 0, scale: 0.94, y: 12 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.88, y: 16 }}
-              transition={{ type: "spring", damping: 26, stiffness: 320 }}
-              className="relative z-50 w-full max-w-3xl lg:max-w-4xl rounded-3xl border border-[#203052] bg-[#101A32] p-6 sm:p-8 shadow-2xl"
+              exit={{ opacity: 0, scale: 0.94, y: 12 }}
+              transition={{ duration: 0.18, ease: "easeOut" }}
+              className="relative z-50 w-full max-w-3xl lg:max-w-4xl rounded-3xl border border-border bg-card p-6 sm:p-8 shadow-2xl transform-gpu"
               role="dialog"
               aria-modal="true"
               aria-labelledby="enlarged-qr-title"
@@ -1574,7 +1588,7 @@ export default function Dashboard() {
               {/* Cross / Close button to minimize/close */}
               <button
                 onClick={() => setIsQrModalOpen(false)}
-                className="absolute top-4 right-4 z-10 p-2 rounded-xl text-[#889DC2] hover:text-[#ECF2FF] hover:bg-[#152243] border border-[#203052] transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="absolute top-4 right-4 z-10 p-2 rounded-xl text-muted-foreground hover:text-foreground hover:bg-muted border border-border transition-colors focus:outline-none focus:ring-2 focus:ring-primary"
                 aria-label="Close enlarged QR modal"
               >
                 <X className="w-5 h-5" />
@@ -1583,8 +1597,8 @@ export default function Dashboard() {
               {/* Landscape 2-Column Content Layout */}
               <div className="flex flex-col md:flex-row items-center md:items-stretch gap-6 sm:gap-8">
                 {/* Left Column: QR Code Display Frame */}
-                <div className="w-full md:w-auto flex flex-col items-center justify-center p-6 sm:p-8 bg-[#0A1329] border border-[#203052] rounded-2xl shrink-0">
-                  <div className="bg-white p-4 sm:p-5 rounded-2xl shadow-2xl border-4 border-blue-500/25">
+                <div className="w-full md:w-auto flex flex-col items-center justify-center p-6 sm:p-8 bg-muted/30 border border-border rounded-2xl shrink-0">
+                  <div className="bg-white p-4 sm:p-5 rounded-2xl shadow-xl border-4 border-primary/25">
                     <QRCode
                       id="enlarged-store-qr-code-svg"
                       value={storeUrl}
@@ -1592,8 +1606,8 @@ export default function Dashboard() {
                       level="H"
                     />
                   </div>
-                  <div className="mt-3.5 flex items-center gap-1.5 text-xs text-[#889DC2] font-medium">
-                    <Sparkles className="w-3.5 h-3.5 text-blue-400" />
+                  <div className="mt-3.5 flex items-center gap-1.5 text-xs text-muted-foreground font-medium">
+                    <Sparkles className="w-3.5 h-3.5 text-primary" />
                     <span>Scan with any smartphone camera</span>
                   </div>
                 </div>
@@ -1602,46 +1616,46 @@ export default function Dashboard() {
                 <div className="flex-1 flex flex-col justify-between text-left w-full py-1">
                   <div>
                     <div className="flex items-center gap-2 mb-2.5">
-                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-blue-500/10 border border-blue-500/25 text-blue-400">
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-primary/10 border border-primary/25 text-primary">
                         <QrCode className="w-3 h-3" />
                         Storefront Counter Poster
                       </span>
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                         Active
                       </span>
                     </div>
 
-                    <h2 id="enlarged-qr-title" className="text-2xl sm:text-3xl font-extrabold text-[#ECF2FF]">
+                    <h2 id="enlarged-qr-title" className="text-2xl sm:text-3xl font-extrabold text-foreground">
                       {businessProfile?.shopName || "Storefront QR Code"}
                     </h2>
 
-                    <p className="text-xs text-[#889DC2] flex items-center gap-1.5 mt-1.5">
-                      <MapPin className="w-3.5 h-3.5 text-blue-400 shrink-0" />
+                    <p className="text-xs text-muted-foreground flex items-center gap-1.5 mt-1.5">
+                      <MapPin className="w-3.5 h-3.5 text-primary shrink-0" />
                       {businessProfile?.address || "Address not provided"}
                     </p>
 
-                    <p className="text-xs sm:text-sm text-[#C5D5F5] mt-3.5 leading-relaxed">
+                    <p className="text-xs sm:text-sm text-muted-foreground mt-3.5 leading-relaxed">
                       Display this code at your counter, entrance, or waiting lounge. Visitors scan to view wait times, browse services, and hold their spot in the digital queue without downloading any app.
                     </p>
 
                     {/* Store Identifier Pill with Copy Helper */}
-                    <div className="w-full bg-[#0A1329] border border-[#203052] p-3.5 rounded-xl mt-4">
-                      <div className="flex items-center justify-between text-[11px] font-semibold text-[#889DC2]">
+                    <div className="w-full bg-muted/40 border border-border p-3.5 rounded-xl mt-4">
+                      <div className="flex items-center justify-between text-[11px] font-semibold text-muted-foreground">
                         <span>STORE CODE IDENTIFIER</span>
-                        <span className="text-[10px] text-blue-400">Direct booking</span>
+                        <span className="text-[10px] text-primary">Direct booking</span>
                       </div>
-                      <p className="text-xs font-mono text-[#ECF2FF] select-all truncate mt-1">
+                      <p className="text-xs font-mono text-foreground select-all truncate mt-1">
                         {businessProfile?.uniqueQrCode || "..."}
                       </p>
                     </div>
                   </div>
 
                   {/* Landscape Modal Actions */}
-                  <div className="flex flex-col sm:flex-row items-center gap-3 mt-6 pt-4 border-t border-[#203052]/60">
+                  <div className="flex flex-col sm:flex-row items-center gap-3 mt-6 pt-4 border-t border-border/60">
                     <Button
                       onClick={handlePrintQR}
-                      className="w-full sm:flex-1 bg-blue-600 hover:bg-blue-500 text-xs sm:text-sm text-white font-semibold flex items-center justify-center gap-2 py-2.5 shadow-[0_0_16px_rgba(59,130,246,0.3)]"
+                      className="w-full sm:flex-1 text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 py-2.5 shadow-sm"
                     >
                       <Printer className="w-4 h-4" />
                       Print Sign / Poster
@@ -1649,16 +1663,16 @@ export default function Dashboard() {
                     <Button
                       onClick={handleCopyStoreLink}
                       variant="outline"
-                      className="w-full sm:flex-1 border-[#203052] bg-[#0A1329] hover:bg-[#152243] text-xs sm:text-sm text-[#ECF2FF] flex items-center justify-center gap-2 py-2.5"
+                      className="w-full sm:flex-1 text-xs sm:text-sm flex items-center justify-center gap-2 py-2.5"
                     >
-                      <Copy className="w-4 h-4 text-blue-400" />
+                      <Copy className="w-4 h-4 text-primary" />
                       Copy Direct Link
                     </Button>
                   </div>
                 </div>
               </div>
             </motion.div>
-          </div>
+          </motion.div>
         )}
       </AnimatePresence>
     </div>

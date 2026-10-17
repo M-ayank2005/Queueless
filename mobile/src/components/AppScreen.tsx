@@ -9,7 +9,7 @@ import {
   ViewStyle,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { colors } from "../theme/colors";
+import { useTheme } from "../context/ThemeContext";
 import { spacing } from "../theme/theme";
 
 type Props = PropsWithChildren<{
@@ -25,6 +25,7 @@ type Props = PropsWithChildren<{
 /**
  * AppScreen
  * Master screen wrapper providing:
+ * - Dynamic theme background color
  * - Proper Android edge-to-edge status bar & notch inset handling
  * - Android gesture bar & iOS home indicator clearance
  * - Consistent maximum width for tablet/web responsive layouts
@@ -41,14 +42,17 @@ export default function AppScreen({
   keyboardOffset = 0,
 }: Props) {
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
 
-  // On Android edge-to-edge, insets.top correctly accounts for status bar/camera cutouts.
-  // Fallback to RNStatusBar.currentHeight ensures status bar is never overlapped.
-  const rawTop = insets.top > 0 ? insets.top : Platform.OS === "android" ? (RNStatusBar.currentHeight || 24) : 0;
+  const defaultTop =
+    Platform.OS === "ios"
+      ? 44
+      : Platform.OS === "android"
+      ? (RNStatusBar.currentHeight || 28)
+      : 24;
+  const rawTop = insets.top > 0 ? insets.top : defaultTop;
   const paddingTop = safeTop ? rawTop + spacing.sm : spacing.md;
 
-  // Bottom clearance: screens with bottom tab bar clear the tab bar (~56px + insets.bottom).
-  // Single screens (auth, detail) clear only the safe bottom inset/gesture bar.
   const bottomPadding = hasTabBar
     ? Math.max(insets.bottom + 76, 92)
     : safeBottom
@@ -83,7 +87,7 @@ export default function AppScreen({
   );
 
   return (
-    <View style={styles.root}>
+    <View style={[styles.root, { backgroundColor: colors.bg }]}>
       <KeyboardAvoidingView
         style={styles.keyboardAvoid}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -99,7 +103,6 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     width: "100%",
-    backgroundColor: colors.bg,
   },
   keyboardAvoid: {
     flex: 1,
@@ -125,4 +128,3 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
   },
 });
-

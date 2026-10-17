@@ -151,18 +151,25 @@ export default function StatusPage() {
 
     fetchStatus();
 
-    // Establish isolated socket connection with auth token
+    // Establish isolated socket connection with auth token (polling first, then upgrade)
     const socketUrl = process.env.NEXT_PUBLIC_API_URL?.replace("/api", "") || "http://localhost:5000";
     const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
     const socket = io(socketUrl, {
-      transports: ["websocket", "polling"],
+      transports: ["polling", "websocket"],
+      upgrade: true,
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1500,
+      timeout: 10000,
       auth: {
         token: token || undefined
       }
     });
     socketRef.current = socket;
 
-    socket.emit("join_queue", queueId);
+    socket.on("connect", () => {
+      socket.emit("join_queue", queueId);
+    });
 
     // Dedicated Phase 4 Turn-Approaching & Your-Turn Notification Listener
     socket.on("customer_notification", (notif: any) => {
@@ -282,18 +289,18 @@ export default function StatusPage() {
 
   if (!queueData) {
     return (
-      <div className="min-h-screen bg-[#050B18] text-[#ECF2FF] flex flex-col">
+      <div className="min-h-screen bg-background text-foreground flex flex-col">
         <Navbar />
         <div className="flex-1 flex items-center justify-center p-4">
-          <Card className="max-w-md w-full bg-[#101A32] border-[#203052] text-center p-6">
-            <CardTitle className="text-lg font-bold text-[#ECF2FF] mb-2">
+          <Card className="max-w-md w-full bg-card border-border text-center p-6 shadow-md">
+            <CardTitle className="text-lg font-bold text-foreground mb-2">
               Queue Ticket Not Found
             </CardTitle>
-            <CardDescription className="text-xs text-[#889DC2] mb-6">
+            <CardDescription className="text-xs text-muted-foreground mb-6">
               This ticket may have expired, or the ID is invalid.
             </CardDescription>
             <Link href="/">
-              <Button className="w-full bg-blue-600 hover:bg-blue-500 text-white text-xs">
+              <Button className="w-full bg-primary hover:bg-primary/90 text-primary-foreground text-xs shadow-sm">
                 Back to Home
               </Button>
             </Link>
@@ -321,14 +328,14 @@ export default function StatusPage() {
   const isWaiting = queueData.status === "waiting";
 
   return (
-    <div className="min-h-screen bg-[#050B18] text-[#ECF2FF] pb-16 flex flex-col">
+    <div className="min-h-screen bg-background text-foreground pb-16 flex flex-col">
       <Navbar />
 
       <main className="container mx-auto max-w-md px-4 pt-24 flex-1 flex flex-col justify-center">
         <div className="mb-4">
           <Link
             href="/"
-            className="inline-flex items-center gap-1.5 text-xs text-[#889DC2] hover:text-[#ECF2FF] transition-colors"
+            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
             Back to My Queues
@@ -343,11 +350,11 @@ export default function StatusPage() {
         >
           {/* Header Card */}
           <div className="text-center mb-2">
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-500/10 border border-blue-500/30 text-xs font-semibold text-blue-400 mb-2">
-              <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse" />
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs font-semibold text-primary mb-2">
+              <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
               Live Connected
             </div>
-            <h1 className="text-2xl font-extrabold text-[#ECF2FF]">
+            <h1 className="text-2xl font-extrabold text-foreground">
               {isCompleted
                 ? "Service Completed"
                 : isCancelled
@@ -356,7 +363,7 @@ export default function StatusPage() {
                 ? "You are Being Served!"
                 : "You're in the Queue!"}
             </h1>
-            <p className="text-xs text-[#889DC2] mt-1">
+            <p className="text-xs text-muted-foreground mt-1">
               {isCompleted
                 ? "Thank you for visiting."
                 : isCancelled
@@ -369,20 +376,20 @@ export default function StatusPage() {
 
           {/* Turn Notification Permission Banner */}
           {!notificationsEnabled && isWaiting && (
-            <div className="p-3 rounded-2xl bg-gradient-to-r from-blue-950/60 to-indigo-950/40 border border-blue-500/30 flex items-center justify-between gap-3 text-xs">
+            <div className="p-3 rounded-2xl bg-primary/5 border border-primary/20 flex items-center justify-between gap-3 text-xs shadow-sm">
               <div className="flex items-center gap-2.5">
-                <div className="w-7 h-7 rounded-lg bg-blue-500/20 border border-blue-500/40 flex items-center justify-center text-blue-400 shrink-0">
+                <div className="w-7 h-7 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0">
                   <Bell className="w-3.5 h-3.5" />
                 </div>
                 <div>
-                  <p className="font-semibold text-[#ECF2FF] text-xs">Turn Alerts</p>
-                  <p className="text-[11px] text-[#889DC2]">Notify me when 2 or fewer are ahead</p>
+                  <p className="font-semibold text-foreground text-xs">Turn Alerts</p>
+                  <p className="text-[11px] text-muted-foreground">Notify me when 2 or fewer are ahead</p>
                 </div>
               </div>
               <Button
                 size="sm"
                 onClick={handleRequestNotification}
-                className="h-7 text-xs px-3 bg-blue-600 hover:bg-blue-500 text-white font-medium shadow-md shadow-blue-500/20"
+                className="h-7 text-xs px-3 bg-primary hover:bg-primary/90 text-primary-foreground font-medium shadow-sm"
               >
                 Enable
               </Button>
@@ -390,58 +397,58 @@ export default function StatusPage() {
           )}
 
           {/* Stepper Timeline */}
-          <div className="p-4 rounded-2xl bg-[#0A1329] border border-[#203052] flex items-center justify-between text-xs">
-            <div className="flex flex-col items-center gap-1">
+          <div className="p-4 rounded-2xl bg-card border border-border/70 flex items-center justify-between text-xs shadow-xs">
+            <div className="flex flex-col items-center gap-1.5">
               <div
-                className={`w-7 h-7 rounded-full flex items-center justify-center font-bold transition-colors ${
+                className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs transition-colors ${
                   isWaiting || isInProgress || isCompleted
-                    ? "bg-blue-600 text-white"
-                    : "bg-[#152243] text-[#889DC2]"
+                    ? "bg-primary text-white shadow-xs"
+                    : "bg-muted/80 text-muted-foreground"
                 }`}
               >
                 1
               </div>
-              <span className="font-medium text-[10px] text-[#C5D5F5]">In Line</span>
+              <span className="font-semibold text-[11px] text-muted-foreground">In Line</span>
             </div>
 
             <div
-              className={`h-0.5 flex-1 mx-2 transition-colors ${
-                isInProgress || isCompleted ? "bg-blue-600" : "bg-[#203052]"
+              className={`h-0.5 flex-1 mx-3 transition-colors ${
+                isInProgress || isCompleted ? "bg-primary" : "bg-border/60"
               }`}
             />
 
-            <div className="flex flex-col items-center gap-1">
+            <div className="flex flex-col items-center gap-1.5">
               <div
-                className={`w-7 h-7 rounded-full flex items-center justify-center font-bold transition-colors ${
+                className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs transition-colors ${
                   isInProgress || isCompleted
-                    ? "bg-blue-600 text-white"
+                    ? "bg-primary text-white shadow-xs"
                     : peopleAhead <= 1 && !isCancelled
-                    ? "bg-blue-500/30 border border-blue-500 text-blue-300"
-                    : "bg-[#152243] text-[#889DC2]"
+                    ? "bg-primary/20 border border-primary text-primary"
+                    : "bg-muted/80 text-muted-foreground"
                 }`}
               >
                 2
               </div>
-              <span className="font-medium text-[10px] text-[#C5D5F5]">Next Up</span>
+              <span className="font-semibold text-[11px] text-muted-foreground">Next Up</span>
             </div>
 
             <div
-              className={`h-0.5 flex-1 mx-2 transition-colors ${
-                isCompleted ? "bg-emerald-500" : "bg-[#203052]"
+              className={`h-0.5 flex-1 mx-3 transition-colors ${
+                isCompleted ? "bg-emerald-500" : "bg-border/60"
               }`}
             />
 
-            <div className="flex flex-col items-center gap-1">
+            <div className="flex flex-col items-center gap-1.5">
               <div
-                className={`w-7 h-7 rounded-full flex items-center justify-center font-bold transition-colors ${
+                className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs transition-colors ${
                   isCompleted
-                    ? "bg-emerald-500 text-white"
-                    : "bg-[#152243] text-[#889DC2]"
+                    ? "bg-emerald-500 text-white shadow-xs"
+                    : "bg-muted/80 text-muted-foreground"
                 }`}
               >
                 3
               </div>
-              <span className="font-medium text-[10px] text-[#C5D5F5]">Served</span>
+              <span className="font-semibold text-[11px] text-muted-foreground">Served</span>
             </div>
           </div>
 
@@ -452,18 +459,18 @@ export default function StatusPage() {
                 initial={{ opacity: 0, y: -8, scale: 0.98 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: -8, scale: 0.98 }}
-                className={`p-4 rounded-2xl border shadow-xl relative overflow-hidden ${
+                className={`p-4 rounded-2xl border shadow-xs relative overflow-hidden ${
                   activeNotification.type === "YOUR_TURN"
-                    ? "bg-gradient-to-r from-emerald-500/20 via-blue-500/10 to-emerald-500/20 border-emerald-500/60 shadow-emerald-500/15"
-                    : "bg-gradient-to-r from-amber-500/20 via-blue-500/10 to-amber-500/20 border-amber-500/60 shadow-amber-500/15"
+                    ? "bg-emerald-500/10 border-emerald-500/35"
+                    : "bg-amber-500/10 border-amber-500/35"
                 }`}
               >
-                <div className="flex items-start gap-3">
+                <div className="flex items-start gap-3.5">
                   <div
                     className={`w-9 h-9 rounded-xl border flex items-center justify-center shrink-0 mt-0.5 ${
                       activeNotification.type === "YOUR_TURN"
-                        ? "bg-emerald-500/20 border-emerald-500/50 text-emerald-400 animate-bounce"
-                        : "bg-amber-500/20 border-amber-500/50 text-amber-400 animate-pulse"
+                        ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-600 dark:text-emerald-400 animate-pulse"
+                        : "bg-amber-500/20 border-amber-500/40 text-amber-600 dark:text-amber-400 animate-pulse"
                     }`}
                   >
                     {activeNotification.type === "YOUR_TURN" ? (
@@ -477,28 +484,28 @@ export default function StatusPage() {
                       <span
                         className={`text-[10px] font-extrabold uppercase tracking-wider ${
                           activeNotification.type === "YOUR_TURN"
-                            ? "text-emerald-400"
-                            : "text-amber-400"
+                            ? "text-emerald-600 dark:text-emerald-400"
+                            : "text-amber-600 dark:text-amber-400"
                         }`}
                       >
                         {activeNotification.type === "YOUR_TURN" ? "Counter Ready" : "Turn Approaching"}
                       </span>
                       <span
                         className={`w-1.5 h-1.5 rounded-full animate-ping ${
-                          activeNotification.type === "YOUR_TURN" ? "bg-emerald-400" : "bg-amber-400"
+                          activeNotification.type === "YOUR_TURN" ? "bg-emerald-500" : "bg-amber-500"
                         }`}
                       />
                     </div>
-                    <h4 className="text-sm font-bold text-[#ECF2FF]">
+                    <h4 className="text-sm font-bold text-foreground">
                       {activeNotification.title}
                     </h4>
-                    <p className="text-xs text-[#C5D5F5] mt-1 leading-relaxed">
+                    <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
                       {activeNotification.message}
                     </p>
                   </div>
                   <button
                     onClick={() => setIsAlertDismissed(true)}
-                    className="absolute top-3 right-3 text-[#889DC2] hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors"
+                    className="absolute top-3 right-3 text-muted-foreground hover:text-foreground p-1 rounded-lg hover:bg-muted/60 transition-colors"
                     title="Dismiss notification"
                   >
                     ✕
@@ -508,27 +515,27 @@ export default function StatusPage() {
             </AnimatePresence>
           )}
 
-          {/* Main Ticket Card */}
-          <Card className="bg-[#101A32] border-[#203052] shadow-2xl overflow-hidden">
-            <CardHeader className="text-center pb-4 border-b border-[#203052]/60">
+          {/* Main Ticket Card (Apple Squircle Container) */}
+          <Card className="bg-card border-border/70 shadow-xs rounded-3xl overflow-hidden">
+            <CardHeader className="text-center pb-5 pt-6 border-b border-border/60">
               <div className="flex items-center justify-center gap-2 mb-1">
-                <Store className="w-4 h-4 text-blue-400" />
-                <h3 className="text-sm font-semibold text-[#ECF2FF]">{shopName}</h3>
+                <Store className="w-4 h-4 text-primary" />
+                <h3 className="text-sm font-semibold text-foreground tracking-tight">{shopName}</h3>
               </div>
               {address && (
-                <p className="text-[11px] text-[#889DC2] flex items-center justify-center gap-1">
-                  <MapPin className="w-3 h-3 text-blue-400" />
+                <p className="text-[11px] text-muted-foreground flex items-center justify-center gap-1">
+                  <MapPin className="w-3 h-3 text-primary" />
                   {address}
                 </p>
               )}
-              <div className="pt-3">
-                <span className="text-[10px] uppercase font-bold tracking-widest text-[#889DC2] block mb-1">
+              <div className="pt-3.5">
+                <span className="text-[10px] uppercase font-bold tracking-widest text-muted-foreground block mb-1">
                   Your Digital Ticket
                 </span>
-                <div className="text-5xl font-extrabold font-mono text-blue-400 tracking-wider">
+                <div className="text-5xl font-extrabold font-mono text-primary tracking-tight">
                   #{ticketId}
                 </div>
-                <div className="mt-2">
+                <div className="mt-2.5">
                   <StatusBadge status={queueData.status} />
                 </div>
               </div>
@@ -537,22 +544,22 @@ export default function StatusPage() {
             <CardContent className="pt-6 pb-6">
               {!isCompleted && !isCancelled ? (
                 <div>
-                  <div className="grid grid-cols-2 gap-4 text-center">
-                    <div className="p-3 rounded-xl bg-[#0A1329] border border-[#203052]">
-                      <Users className="w-5 h-5 mx-auto mb-1 text-blue-400" />
-                      <div className="text-2xl font-bold text-[#ECF2FF]">{peopleAhead}</div>
-                      <div className="text-[11px] text-[#889DC2] uppercase mt-0.5">
+                  <div className="grid grid-cols-2 gap-3.5 text-center">
+                    <div className="p-4 rounded-2xl bg-secondary/50 border border-border/60 shadow-xs">
+                      <Users className="w-5 h-5 mx-auto mb-1.5 text-primary" />
+                      <div className="text-2xl font-bold text-foreground tracking-tight">{peopleAhead}</div>
+                      <div className="text-[11px] font-medium text-muted-foreground uppercase mt-0.5">
                         {peopleAhead === 1 ? "Person Ahead" : "People Ahead"}
                       </div>
                     </div>
-                    <div className="p-3 rounded-xl bg-[#0A1329] border border-[#203052]">
-                      <Clock className="w-5 h-5 mx-auto mb-1 text-sky-400" />
-                      <div className="text-2xl font-bold text-[#ECF2FF]">
+                    <div className="p-4 rounded-2xl bg-secondary/50 border border-border/60 shadow-xs">
+                      <Clock className="w-5 h-5 mx-auto mb-1.5 text-primary" />
+                      <div className="text-2xl font-bold text-foreground tracking-tight">
                         {queueData.prediction?.rangeDisplay 
                           ? `~${queueData.prediction.rangeDisplay}` 
                           : waitTime > 0 ? `~${waitTime} Mins` : "Next in Line"}
                       </div>
-                      <div className="text-[11px] text-[#889DC2] uppercase mt-0.5">
+                      <div className="text-[11px] font-medium text-muted-foreground uppercase mt-0.5">
                         Estimated Wait
                       </div>
                     </div>
@@ -560,13 +567,13 @@ export default function StatusPage() {
 
                   {/* Smart Prediction Telemetry Pill */}
                   {queueData.prediction?.confidenceLabel && (
-                    <div className="mt-3 py-2 px-3 rounded-xl bg-[#081023] border border-[#203052] flex items-center justify-between text-[11px]">
-                      <span className="text-[#889DC2] flex items-center gap-1.5 font-medium">
-                        <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                    <div className="mt-3.5 py-2.5 px-3.5 rounded-2xl bg-secondary/40 border border-border/60 flex items-center justify-between text-[11px]">
+                      <span className="text-muted-foreground flex items-center gap-1.5 font-medium">
+                        <Sparkles className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400 shrink-0" />
                         <span>{queueData.prediction.confidenceLabel}</span>
                       </span>
                       {queueData.estimatedServiceStartTime && waitTime > 0 && (
-                        <span className="text-blue-400 font-semibold shrink-0">
+                        <span className="text-primary font-semibold shrink-0">
                           Est. {new Date(queueData.estimatedServiceStartTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                         </span>
                       )}
@@ -574,20 +581,20 @@ export default function StatusPage() {
                   )}
                 </div>
               ) : isCompleted ? (
-                <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-center text-emerald-300 text-xs">
-                  <CheckCircle2 className="w-6 h-6 text-emerald-400 mx-auto mb-1.5" />
+                <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-center text-emerald-600 dark:text-emerald-300 text-xs">
+                  <CheckCircle2 className="w-6 h-6 text-emerald-500 mx-auto mb-1.5" />
                   This service ticket has been completed by the counter.
                 </div>
               ) : (
-                <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/30 text-center text-rose-300 text-xs">
-                  <XCircle className="w-6 h-6 text-rose-400 mx-auto mb-1.5" />
+                <div className="p-4 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-center text-rose-600 dark:text-rose-300 text-xs">
+                  <XCircle className="w-6 h-6 text-rose-500 mx-auto mb-1.5" />
                   This queue spot was cancelled.
                 </div>
               )}
 
               {servicesList && (
-                <div className="mt-4 pt-3 border-t border-[#203052]/60 text-xs text-[#889DC2]">
-                  <span className="text-[#ECF2FF] font-medium">Requested Services:</span>{" "}
+                <div className="mt-4 pt-3.5 border-t border-border/50 text-xs text-muted-foreground">
+                  <span className="text-foreground font-medium">Requested Services:</span>{" "}
                   {servicesList}
                 </div>
               )}
@@ -602,9 +609,9 @@ export default function StatusPage() {
                 variant="outline"
                 onClick={handleGenerateShare}
                 disabled={isGeneratingShare}
-                className="w-full border-blue-500/30 bg-blue-600/10 hover:bg-blue-600/20 text-xs text-blue-300 hover:text-white flex items-center justify-center gap-2 py-5"
+                className="w-full border-border/70 bg-card hover:bg-muted/50 text-xs text-foreground flex items-center justify-center gap-2 h-11 rounded-xl shadow-xs transition-transform active:scale-[0.98]"
               >
-                <Share2 className="w-4 h-4 text-blue-400" />
+                <Share2 className="w-4 h-4 text-primary" />
                 <span>{isGeneratingShare ? "Generating Link..." : "Share Live Ticket"}</span>
               </Button>
             )}
@@ -614,16 +621,16 @@ export default function StatusPage() {
               <Button
                 variant="outline"
                 onClick={handleRequestNotification}
-                className="w-full border-[#203052] bg-[#101A32] hover:bg-[#152243] text-xs text-[#ECF2FF] flex items-center justify-center gap-2"
+                className="w-full border-border/70 bg-card hover:bg-muted/50 text-xs text-foreground flex items-center justify-center gap-2 h-11 rounded-xl shadow-xs transition-transform active:scale-[0.98]"
               >
-                <Bell className="w-4 h-4 text-blue-400" />
+                <Bell className="w-4 h-4 text-primary" />
                 Enable Turn Alerts
               </Button>
             )}
 
             {notificationsEnabled && !isCompleted && !isCancelled && (
-              <div className="p-2.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-center text-xs text-blue-300 flex items-center justify-center gap-1.5">
-                <BellRing className="w-3.5 h-3.5 text-blue-400" />
+              <div className="p-2.5 rounded-xl bg-primary/10 border border-primary/20 text-center text-xs text-primary flex items-center justify-center gap-1.5">
+                <BellRing className="w-3.5 h-3.5 text-primary" />
                 Turn alerts enabled on this device
               </div>
             )}
@@ -633,7 +640,7 @@ export default function StatusPage() {
               <Button
                 variant="outline"
                 onClick={() => setIsCancelModalOpen(true)}
-                className="w-full border-rose-500/30 text-rose-400 hover:bg-rose-500/10 text-xs"
+                className="w-full border-rose-500/30 text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 text-xs h-11 rounded-xl transition-transform active:scale-[0.98]"
               >
                 Cancel My Spot
               </Button>
@@ -651,27 +658,27 @@ export default function StatusPage() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsCancelModalOpen(false)}
-              className="fixed inset-0 bg-black/80 backdrop-blur-sm"
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm"
               aria-hidden="true"
             />
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 16 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 16 }}
-              className="relative z-50 w-full max-w-sm rounded-2xl border border-rose-500/40 bg-[#101A32] p-6 shadow-2xl"
+              className="relative z-50 w-full max-w-sm rounded-2xl border border-rose-500/40 bg-card p-6 shadow-xl"
               role="alertdialog"
               aria-modal="true"
               aria-labelledby="cancel-title"
               aria-describedby="cancel-desc"
             >
-              <div className="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400 mb-3">
+              <div className="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-500 dark:text-rose-400 mb-3">
                 <AlertTriangle className="w-5 h-5" />
               </div>
 
-              <h2 id="cancel-title" className="text-base font-bold text-[#ECF2FF]">
+              <h2 id="cancel-title" className="text-base font-bold text-foreground">
                 Leave the queue?
               </h2>
-              <p id="cancel-desc" className="text-xs text-[#889DC2] mt-1.5 leading-relaxed">
+              <p id="cancel-desc" className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
                 If you leave now, you will lose your spot in line (Ticket #{ticketId}). You will need to join again from the end of the line.
               </p>
 
@@ -680,7 +687,7 @@ export default function StatusPage() {
                   variant="outline"
                   size="sm"
                   onClick={() => setIsCancelModalOpen(false)}
-                  className="border-[#203052] text-xs text-[#ECF2FF]"
+                  className="border-border text-xs text-foreground"
                   disabled={isCancelling}
                 >
                   Stay in Line
@@ -690,7 +697,7 @@ export default function StatusPage() {
                   onClick={handleCancelSpot}
                   loading={isCancelling}
                   loadingText="Leaving..."
-                  className="bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold"
+                  className="bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold shadow-sm"
                 >
                   Leave Queue
                 </LoadingButton>
@@ -709,53 +716,53 @@ export default function StatusPage() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsShareModalOpen(false)}
-              className="fixed inset-0 bg-black/80 backdrop-blur-sm"
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm"
               aria-hidden="true"
             />
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 16 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 16 }}
-              className="relative w-full max-w-md bg-[#101A32] border border-[#203052] rounded-3xl p-6 shadow-2xl z-50 space-y-5"
+              className="relative w-full max-w-md bg-card border border-border rounded-3xl p-6 shadow-xl z-50 space-y-5"
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
-                  <div className="w-9 h-9 rounded-xl bg-blue-600/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
+                  <div className="w-9 h-9 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
                     <Share2 className="w-5 h-5" />
                   </div>
                   <div>
-                    <h3 className="text-base font-bold text-white">Share Live Ticket</h3>
-                    <p className="text-xs text-[#889DC2]">Public live queue tracking</p>
+                    <h3 className="text-base font-bold text-foreground">Share Live Ticket</h3>
+                    <p className="text-xs text-muted-foreground">Public live queue tracking</p>
                   </div>
                 </div>
                 <button
                   onClick={() => setIsShareModalOpen(false)}
-                  className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition"
+                  className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition"
                 >
                   ✕
                 </button>
               </div>
 
-              <div className="p-3.5 rounded-2xl bg-blue-950/40 border border-blue-500/30 text-xs text-blue-200/90 leading-relaxed">
-                🛡️ <span className="font-semibold text-white">Zero Personal Data:</span> Anyone with this link can track your live queue position and estimated turn in real-time, but your name, phone, and account details are strictly private.
+              <div className="p-3.5 rounded-2xl bg-primary/5 border border-primary/20 text-xs text-muted-foreground leading-relaxed">
+                🛡️ <span className="font-semibold text-foreground">Zero Personal Data:</span> Anyone with this link can track your live queue position and estimated turn in real-time, but your name, phone, and account details are strictly private.
               </div>
 
               {shareToken && (
                 <div className="space-y-2">
-                  <label className="text-[11px] font-bold tracking-wider text-slate-400 uppercase">
+                  <label className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase">
                     Public Share Link
                   </label>
-                  <div className="flex items-center gap-2 p-2.5 rounded-xl bg-[#0A1329] border border-[#203052]">
+                  <div className="flex items-center gap-2 p-2.5 rounded-xl bg-muted/40 border border-border">
                     <input
                       type="text"
                       readOnly
                       value={typeof window !== "undefined" ? `${window.location.origin}/shared/${shareToken}` : ""}
-                      className="bg-transparent text-xs text-slate-200 font-mono flex-1 outline-none truncate"
+                      className="bg-transparent text-xs text-foreground font-mono flex-1 outline-none truncate"
                     />
                     <Button
                       size="sm"
                       onClick={copyShareUrl}
-                      className="h-8 px-3 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold shrink-0"
+                      className="h-8 px-3 bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold shrink-0"
                     >
                       {shareCopied ? (
                         <>
@@ -778,14 +785,14 @@ export default function StatusPage() {
                   variant="outline"
                   onClick={handleRevokeShare}
                   disabled={isRevokingShare}
-                  className="border-rose-500/30 text-rose-400 hover:bg-rose-500/10 text-xs h-9"
+                  className="border-rose-500/30 text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 text-xs h-9"
                 >
                   {isRevokingShare ? "Revoking..." : "Revoke Share Link"}
                 </Button>
 
                 <Button
                   onClick={() => setIsShareModalOpen(false)}
-                  className="bg-slate-800 hover:bg-slate-700 text-white text-xs h-9 px-4"
+                  className="bg-primary hover:bg-primary/90 text-primary-foreground text-xs h-9 px-4 shadow-sm"
                 >
                   Done
                 </Button>

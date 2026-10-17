@@ -1,9 +1,11 @@
 import axios from "axios";
+import { normalizeApiError, NormalizedApiError } from "./errors";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
 
 const api = axios.create({
   baseURL: API_URL,
+  timeout: 15000, // 15-second timeout for reliable network error handling
   headers: {
     "Content-Type": "application/json",
   },
@@ -18,18 +20,36 @@ api.interceptors.request.use(
     }
     return config;
   },
-  (error) => Promise.reject(error)
+  (error) => Promise.reject(normalizeApiError(error))
 );
 
-// Add a response interceptor to handle token expiration/unauthorized errors
+// Prevent simultaneous 401 cascades from multiple failing concurrent requests
+let isHandlingUnauthorized = false;
+
+// Add a response interceptor to handle token expiration/unauthorized errors and normalize errors
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401 && typeof window !== "undefined") {
-      localStorage.removeItem("token");
-      localStorage.removeItem("user");
-      window.dispatchEvent(new Event("auth_logout"));
+    const normalized = normalizeApiError(error);
+
+    // Attach normalized error directly to the error instance for easy downstream consumption
+    (error as any).normalized = normalized;
+
+    // Handle authentication expiration on 401
+    if (normalized.isUnauthorized && typeof window !== "undefined") {
+      const hasToken = !!localStorage.getItem("token");
+      // Only clear and dispatch logout if a user token was actually present
+      if (hasToken && !isHandlingUnauthorized) {
+        isHandlingUnauthorized = true;
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+        window.dispatchEvent(new Event("auth_logout"));
+        setTimeout(() => {
+          isHandlingUnauthorized = false;
+        }, 2000);
+      }
     }
+
     return Promise.reject(error);
   }
 );

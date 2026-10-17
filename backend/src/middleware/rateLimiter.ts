@@ -1,4 +1,24 @@
-import rateLimit from "express-rate-limit";
+import { Request, Response, NextFunction } from "express";
+import rateLimit, { Options } from "express-rate-limit";
+
+const createRateLimitHandler = (defaultMessage: string) => {
+  return (req: Request, res: Response, _next: NextFunction, options: Options) => {
+    const retryAfter = Math.ceil(options.windowMs / 1000);
+    const message = typeof options.message === "string" ? options.message : (options.message?.message || defaultMessage);
+    res.status(options.statusCode).json({
+      success: false,
+      message,
+      error: {
+        code: "RATE_LIMITED",
+        message,
+        details: [],
+        requestId: req.requestId,
+        retryAfter
+      },
+      requestId: req.requestId
+    });
+  };
+};
 
 /**
  * Rate limiter for sensitive authentication endpoints (login, register).
@@ -14,6 +34,7 @@ export const authRateLimiter = rateLimit({
     success: false,
     message: "Too many authentication attempts. Please try again after 15 minutes.",
   },
+  handler: createRateLimitHandler("Too many authentication attempts. Please try again after 15 minutes.")
 });
 
 /**
@@ -30,6 +51,7 @@ export const queueMutationRateLimiter = rateLimit({
     success: false,
     message: "Queue mutation rate limit exceeded. Please slow down and wait a minute.",
   },
+  handler: createRateLimitHandler("Queue mutation rate limit exceeded. Please slow down and wait a minute.")
 });
 
 /**
@@ -46,6 +68,7 @@ export const sharedTicketRateLimiter = rateLimit({
     success: false,
     message: "Too many requests to public shared tickets. Please slow down.",
   },
+  handler: createRateLimitHandler("Too many requests to public shared tickets. Please slow down.")
 });
 
 /**
@@ -61,4 +84,5 @@ export const generalApiRateLimiter = rateLimit({
     success: false,
     message: "Too many requests. Please slow down.",
   },
+  handler: createRateLimitHandler("Too many requests. Please slow down.")
 });

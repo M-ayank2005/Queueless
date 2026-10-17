@@ -1,7 +1,8 @@
 import React, { useEffect, useRef } from "react";
 import { Animated, StyleProp, StyleSheet, Text, View, ViewStyle } from "react-native";
-import { colors } from "../theme/colors";
-import { radii, spacing } from "../theme/theme";
+import { useTheme } from "../context/ThemeContext";
+import { ThemeColors } from "../theme/colors";
+import { radii } from "../theme/theme";
 
 export type BadgeStatus =
   | "waiting"
@@ -33,6 +34,7 @@ export default function StatusBadge({
   size = "md",
   style,
 }: Props) {
+  const { colors } = useTheme();
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
   const normalized = (status || "").toLowerCase().trim();
@@ -60,7 +62,7 @@ export default function StatusBadge({
     return () => animation.stop();
   }, [pulse, isActive]);
 
-  const config = getStatusConfig(normalized, size);
+  const config = getStatusConfig(normalized, colors, size);
   const displayText = label || config.text;
 
   return (
@@ -97,7 +99,7 @@ export default function StatusBadge({
   );
 }
 
-function getStatusConfig(status: string, size: "sm" | "md" = "md") {
+function getStatusConfig(status: string, colors: ThemeColors, size: "sm" | "md" = "md") {
   switch (status) {
     case "completed":
       return {
@@ -132,8 +134,8 @@ function getStatusConfig(status: string, size: "sm" | "md" = "md") {
       return {
         text: "CLOSED",
         color: colors.muted,
-        bg: "rgba(148, 163, 184, 0.12)",
-        border: "rgba(148, 163, 184, 0.3)",
+        bg: colors.bgSecondary,
+        border: colors.border,
       };
     case "waiting":
     default:

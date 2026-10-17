@@ -1,6 +1,5 @@
 import React, { useRef } from "react";
 import {
-  ActivityIndicator,
   Animated,
   Pressable,
   StyleProp,
@@ -10,9 +9,8 @@ import {
   ViewStyle,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { colors } from "../theme/colors";
-import { radii, shadows, spacing } from "../theme/theme";
-
+import { useTheme } from "../context/ThemeContext";
+import { radii, spacing } from "../theme/theme";
 import QueueFlowInline from "./loading/QueueFlowInline";
 
 type Props = {
@@ -32,7 +30,7 @@ type Props = {
 /**
  * AppButton Component
  * Tactile button with animated spring feedback, QueueFlow micro-loader,
- * and high-contrast typography.
+ * and high-contrast typography across light and dark modes.
  */
 export default function AppButton({
   title,
@@ -47,6 +45,7 @@ export default function AppButton({
   style,
   fullWidth = true,
 }: Props) {
+  const { colors, isDark } = useTheme();
   const scale = useRef(new Animated.Value(1)).current;
 
   const handlePressIn = () => {
@@ -98,7 +97,50 @@ export default function AppButton({
       ? colors.text
       : variant === "outline"
       ? colors.primary
+      : variant === "danger"
+      ? colors.danger
       : "#FFFFFF";
+
+  const dynamicVariants = {
+    primary: {
+      backgroundColor: colors.primary,
+      borderColor: colors.primaryHover,
+      shadowColor: colors.primary,
+      shadowOpacity: isDark ? 0.35 : 0.2,
+      shadowOffset: { width: 0, height: 3 },
+      shadowRadius: 8,
+      elevation: 4,
+    },
+    secondary: {
+      backgroundColor: colors.cardElevated,
+      borderColor: colors.borderLight,
+    },
+    outline: {
+      backgroundColor: colors.card,
+      borderColor: colors.border,
+    },
+    ghost: {
+      backgroundColor: "transparent",
+      borderColor: "transparent",
+    },
+    danger: {
+      backgroundColor: colors.dangerSubtle,
+      borderColor: colors.dangerBorder,
+    },
+    success: {
+      backgroundColor: colors.success,
+      borderColor: colors.successLight,
+    },
+  }[variant];
+
+  const dynamicLabelColors = {
+    primary: "#FFFFFF",
+    secondary: colors.text,
+    outline: colors.primary,
+    ghost: colors.muted,
+    danger: colors.danger,
+    success: "#FFFFFF",
+  }[variant];
 
   return (
     <Animated.View
@@ -115,7 +157,7 @@ export default function AppButton({
         style={({ pressed }) => [
           styles.base,
           sizeStyles,
-          styles[variant],
+          dynamicVariants,
           (disabled || loading) && styles.disabled,
           style,
         ]}
@@ -123,7 +165,7 @@ export default function AppButton({
         {loading ? (
           <View style={styles.contentRow}>
             <QueueFlowInline
-              color={spinnerColor}
+              color={variant === "primary" || variant === "success" ? "white" : "primary"}
               text={loadingText || (size === "sm" ? undefined : title)}
             />
           </View>
@@ -136,10 +178,7 @@ export default function AppButton({
               style={[
                 styles.label,
                 labelSizeStyles,
-                variant === "ghost" && styles.ghostLabel,
-                variant === "secondary" && styles.secondaryLabel,
-                variant === "outline" && styles.outlineLabel,
-                variant === "danger" && styles.dangerLabel,
+                { color: dynamicLabelColors },
               ]}
               numberOfLines={1}
             >
@@ -189,7 +228,6 @@ const styles = StyleSheet.create({
   },
   label: {
     fontWeight: "700",
-    color: "#FFFFFF",
     letterSpacing: 0.2,
     flexShrink: 1,
   },
@@ -202,44 +240,7 @@ const styles = StyleSheet.create({
   labelLg: {
     fontSize: 16,
   },
-  primary: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primaryHover,
-    ...shadows.glow,
-  },
-  secondary: {
-    backgroundColor: colors.cardElevated,
-    borderColor: colors.borderLight,
-  },
-  outline: {
-    backgroundColor: "transparent",
-    borderColor: colors.primary,
-  },
-  ghost: {
-    backgroundColor: "transparent",
-    borderColor: "transparent",
-  },
-  danger: {
-    backgroundColor: "rgba(239, 68, 68, 0.15)",
-    borderColor: colors.dangerBorder,
-  },
-  success: {
-    backgroundColor: colors.success,
-    borderColor: colors.successLight,
-  },
   disabled: {
     opacity: 0.5,
-  },
-  ghostLabel: {
-    color: colors.muted,
-  },
-  secondaryLabel: {
-    color: colors.text,
-  },
-  outlineLabel: {
-    color: colors.primary,
-  },
-  dangerLabel: {
-    color: colors.danger,
   },
 });

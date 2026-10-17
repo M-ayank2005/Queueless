@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   AccessibilityInfo,
   Animated,
@@ -10,7 +10,8 @@ import {
   ViewStyle,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { colors } from "../../theme/colors";
+import { useTheme } from "../../context/ThemeContext";
+import { ThemeColors } from "../../theme/colors";
 import { radii, spacing, typography } from "../../theme/theme";
 
 export type QueueFlowLoaderProps = {
@@ -60,6 +61,8 @@ export default function QueueFlowLoader({
   showMessage = true,
   style,
 }: QueueFlowLoaderProps) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [reduceMotion, setReduceMotion] = useState(false);
   const animProgress = useRef(new Animated.Value(0)).current;
 
@@ -347,7 +350,8 @@ export default function QueueFlowLoader({
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   baseContainer: {
     alignItems: "center",
     justifyContent: "center",

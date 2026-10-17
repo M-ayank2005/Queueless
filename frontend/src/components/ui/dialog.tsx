@@ -4,9 +4,6 @@ import * as React from "react"
 import { X } from "lucide-react"
 import { cn } from "@/lib/utils"
 
-// Simplified Dialog implementation to avoid Radix UI dependencies if missing
-// This provides the same API surface as Shadcn's Dialog but uses standard React portals/state
-
 const DialogContext = React.createContext<{
   open: boolean
   setOpen: (open: boolean) => void
@@ -46,19 +43,22 @@ const DialogContent = ({ children, className }: any) => {
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="fixed inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setOpen(false)} />
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div 
+        className="fixed inset-0 bg-slate-950/60 dark:bg-black/80 backdrop-blur-sm transition-opacity" 
+        onClick={() => setOpen(false)} 
+      />
       <div className={cn(
-        "z-50 grid w-full max-w-lg gap-4 border p-6 shadow-2xl duration-200 sm:rounded-2xl bg-[#101A32] border-[#203052] text-[#ECF2FF]",
+        "z-50 relative grid w-full max-w-lg gap-4 border border-border p-6 shadow-2xl duration-200 rounded-2xl bg-card text-foreground",
         className
       )}>
         {children}
         <button
-          className="absolute right-4 top-4 rounded-lg p-1 text-[#889DC2] hover:text-[#ECF2FF] hover:bg-[#152243] transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="absolute right-4 top-4 rounded-lg p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors focus:outline-none focus:ring-2 focus:ring-primary"
           onClick={() => setOpen(false)}
+          aria-label="Close dialog"
         >
           <X className="h-4 w-4" />
-          <span className="sr-only">Close</span>
         </button>
       </div>
     </div>
@@ -71,7 +71,7 @@ const DialogHeader = ({ className, ...props }: any) => (
 const DialogFooter = ({ className, ...props }: any) => (
   <div
     className={cn(
-      "flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2",
+      "flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2 gap-2 mt-2",
       className
     )}
     {...props}
@@ -83,7 +83,7 @@ const DialogTitle = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <h3
     ref={ref}
-    className={cn("text-lg font-semibold leading-none tracking-tight", className)}
+    className={cn("text-lg font-bold leading-none tracking-tight text-foreground", className)}
     {...props}
   />
 ))

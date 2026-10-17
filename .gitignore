@@ -38,7 +38,7 @@ yarn-error.log*
 # Expo
 .expo/
 
-# IDEs
+# IDEs & Agents
 .vscode
 .idea
 *.suo
@@ -46,3 +46,4 @@ yarn-error.log*
 *.njsproj
 *.sln
 *.sw?
+.agents/

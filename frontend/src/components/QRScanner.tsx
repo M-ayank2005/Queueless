@@ -75,34 +75,34 @@ export default function QRScanner() {
   }, [scanKey]);
 
   return (
-    <Card className="w-full bg-[#101A32] border-[#203052] shadow-xl overflow-hidden">
+    <Card className="w-full bg-card border-border shadow-md overflow-hidden">
       <CardHeader className="text-center pb-2">
-        <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/25 flex items-center justify-center text-blue-400 mx-auto mb-2">
+        <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary mx-auto mb-2">
           <Camera className="w-5 h-5" />
         </div>
-        <CardTitle className="text-base font-bold text-[#ECF2FF]">
+        <CardTitle className="text-base font-bold text-foreground">
           Point Camera at QR
         </CardTitle>
-        <CardDescription className="text-xs text-[#889DC2]">
+        <CardDescription className="text-xs text-muted-foreground">
           Hold steady inside the viewfinder frame.
         </CardDescription>
       </CardHeader>
 
       <CardContent className="pt-2">
         {hasCameraError ? (
-          <div className="p-6 text-center rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300">
-            <AlertCircle className="w-8 h-8 text-rose-400 mx-auto mb-2" />
-            <h4 className="text-sm font-bold text-[#ECF2FF] mb-1">
+          <div className="p-6 text-center rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-300">
+            <AlertCircle className="w-8 h-8 text-rose-500 dark:text-rose-400 mx-auto mb-2" />
+            <h4 className="text-sm font-bold text-foreground mb-1">
               Camera Access Required
             </h4>
-            <p className="text-xs text-[#889DC2] mb-4">
+            <p className="text-xs text-muted-foreground mb-4">
               Please grant camera permissions in your browser or switch to manual store code entry above.
             </p>
             <Button
               size="sm"
               onClick={() => setScanKey(prev => prev + 1)}
               variant="outline"
-              className="border-rose-500/40 text-rose-300 hover:bg-rose-500/20 text-xs"
+              className="border-rose-500/40 text-rose-600 dark:text-rose-300 hover:bg-rose-500/10 text-xs"
             >
               <RefreshCw className="w-3.5 h-3.5 mr-1" />
               Retry Camera
@@ -112,10 +112,10 @@ export default function QRScanner() {
           <div className="relative">
             <div
               id="reader"
-              className="w-full overflow-hidden rounded-xl bg-[#050B18] border border-[#203052]"
+              className="w-full overflow-hidden rounded-xl bg-muted border border-border"
             />
             {scanResult && (
-              <p className="text-center text-xs font-semibold text-emerald-400 mt-3">
+              <p className="text-center text-xs font-semibold text-emerald-600 dark:text-emerald-400 mt-3">
                 Detected: {scanResult}
               </p>
             )}

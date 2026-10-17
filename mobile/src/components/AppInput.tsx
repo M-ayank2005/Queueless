@@ -9,8 +9,8 @@ import {
   ViewStyle,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { colors } from "../theme/colors";
-import { radii, spacing, typography } from "../theme/theme";
+import { useTheme } from "../context/ThemeContext";
+import { radii, spacing } from "../theme/theme";
 
 type Props = {
   label: string;
@@ -33,7 +33,7 @@ type Props = {
 /**
  * AppInput Component
  * Polished text field with leading icon support, focus highlights,
- * password visibility toggling, and contextual error messages.
+ * password visibility toggling, and contextual error messages across themes.
  */
 export default function AppInput({
   label,
@@ -52,6 +52,7 @@ export default function AppInput({
   style,
   editable = true,
 }: Props) {
+  const { colors } = useTheme();
   const [isFocused, setIsFocused] = useState(false);
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
 
@@ -61,15 +62,20 @@ export default function AppInput({
   return (
     <View style={[styles.wrapper, style]}>
       <View style={styles.labelRow}>
-        <Text style={[styles.label, isFocused && styles.labelFocused]}>{label}</Text>
-        {error ? <Text style={styles.errorLabel}>{error}</Text> : null}
+        <Text style={[styles.label, { color: colors.textSecondary }, isFocused && { color: colors.primary }]}>
+          {label}
+        </Text>
+        {error ? <Text style={[styles.errorLabel, { color: colors.danger }]}>{error}</Text> : null}
       </View>
 
       <View
         style={[
           styles.inputContainer,
-          isFocused && styles.inputFocused,
-          Boolean(error) && styles.inputError,
+          {
+            backgroundColor: isFocused ? colors.card : colors.cardSoft,
+            borderColor: error ? colors.danger : isFocused ? colors.primary : colors.border,
+            borderWidth: isFocused ? 1.5 : 1,
+          },
           !editable && styles.inputDisabled,
           multiline && styles.inputMultiline,
         ]}
@@ -88,7 +94,11 @@ export default function AppInput({
           onChangeText={onChangeText}
           placeholder={placeholder}
           placeholderTextColor={colors.muted}
-          style={[styles.input, multiline && styles.inputFieldMultiline]}
+          style={[
+            styles.input,
+            { color: colors.text },
+            multiline && styles.inputFieldMultiline,
+          ]}
           onFocus={() => setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
           secureTextEntry={effectiveSecure}
@@ -117,7 +127,7 @@ export default function AppInput({
       </View>
 
       {helperText && !error ? (
-        <Text style={styles.helperText}>{helperText}</Text>
+        <Text style={[styles.helperText, { color: colors.muted }]}>{helperText}</Text>
       ) : null}
     </View>
   );
@@ -134,18 +144,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   label: {
-    color: colors.textSecondary,
     fontSize: 13,
     fontWeight: "600",
     letterSpacing: 0.2,
     flexShrink: 1,
     marginRight: spacing.xs,
   },
-  labelFocused: {
-    color: colors.primaryHover,
-  },
   errorLabel: {
-    color: colors.danger,
     fontSize: 12,
     fontWeight: "500",
     flexShrink: 0,
@@ -153,20 +158,9 @@ const styles = StyleSheet.create({
   inputContainer: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: colors.cardSoft,
-    borderColor: colors.border,
-    borderWidth: 1,
     borderRadius: radii.md,
     minHeight: 50,
     paddingHorizontal: spacing.md,
-  },
-  inputFocused: {
-    borderColor: colors.primary,
-    backgroundColor: colors.card,
-    borderWidth: 1.5,
-  },
-  inputError: {
-    borderColor: colors.danger,
   },
   inputDisabled: {
     opacity: 0.6,
@@ -182,7 +176,6 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     minWidth: 0,
-    color: colors.text,
     fontSize: 15,
     paddingVertical: 10,
   },
@@ -194,7 +187,6 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   helperText: {
-    color: colors.muted,
     fontSize: 12,
     marginTop: 2,
   },

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
   Animated,
@@ -25,16 +25,19 @@ import SectionHeader from "../../components/SectionHeader";
 import { QueueCardSkeleton, HistoryItemSkeleton } from "../../components/SkeletonLoader";
 import StatusBadge from "../../components/StatusBadge";
 import { useAuth } from "../../context/AuthContext";
+import { useTheme } from "../../context/ThemeContext";
 import { api } from "../../lib/api";
 import { CustomerTabParamList, RootStackParamList } from "../../navigation/types";
 import { QueueEntry, FavoriteStore } from "../../types";
-import { colors } from "../../theme/colors";
+import { ThemeColors } from "../../theme/colors";
 import { radii, shadows, spacing, typography } from "../../theme/theme";
 
 type Props = BottomTabScreenProps<CustomerTabParamList, "Home">;
 
 export default function CustomerHomeScreen({ navigation }: Props) {
   const { user } = useAuth();
+  const { colors, isDark } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const rootNavigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const insets = useSafeAreaInsets();
   const [permission, requestPermission] = useCameraPermissions();
@@ -51,16 +54,26 @@ export default function CustomerHomeScreen({ navigation }: Props) {
 
   const fetchData = async () => {
     try {
-      const [activeRes, historyRes, favRes] = await Promise.all([
-        api.get("/queue/my-queues"),
+      // 1. Priority HTTP Fetch: Load active queues first for immediate screen rendering
+      const activeRes = await api.get("/queue/my-queues");
+      setActiveQueues(activeRes.data || []);
+      setLoading(false);
+
+      // 2. Background Fetch: Load history and favorites in parallel
+      const [historyRes, favRes] = await Promise.allSettled([
         api.get("/queue/history"),
         api.get("/queue/favorites"),
       ]);
-      setActiveQueues(activeRes.data || []);
-      setHistory(historyRes.data || []);
-      setFavorites(favRes.data || []);
+      if (historyRes.status === "fulfilled") {
+        setHistory(historyRes.value.data || []);
+      }
+      if (favRes.status === "fulfilled") {
+        setFavorites(favRes.value.data || []);
+      }
     } catch {
       // non-blocking
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -215,6 +228,28 @@ export default function CustomerHomeScreen({ navigation }: Props) {
         </TouchableOpacity>
       </View>
 
+      {/* Quick QR Check-In Action Card - Placed above Live/Saved/History strip */}
+      <Card variant="subtle" style={styles.quickActionCard}>
+        <View style={styles.quickActionHeader}>
+          <View style={styles.quickActionIconWrap}>
+            <Ionicons name="qr-code-outline" size={22} color={colors.primary} />
+          </View>
+          <View style={styles.quickActionTextCol}>
+            <Text style={styles.quickActionTitle}>Join a Virtual Queue</Text>
+            <Text style={styles.quickActionSubtitle}>
+              Scan the counter QR poster at any store or enter the store code manually to take a live ticket without physically waiting in line.
+            </Text>
+          </View>
+        </View>
+
+        <AppButton
+          title="Open Camera Scanner"
+          onPress={handleOpenScanner}
+          icon="camera-outline"
+          size="md"
+        />
+      </Card>
+
       {/* Segmented Switcher for Live Tickets vs Saved vs History */}
       <View style={styles.segmentContainer}>
         <Pressable
@@ -324,19 +359,23 @@ export default function CustomerHomeScreen({ navigation }: Props) {
                             {
                               backgroundColor:
                                 entry.alert.type === "YOUR_TURN"
-                                  ? "rgba(16, 185, 129, 0.2)"
-                                  : "rgba(245, 158, 11, 0.2)",
+                                  ? (isDark ? "rgba(16, 185, 129, 0.25)" : "#DCFCE7")
+                                  : (isDark ? "rgba(245, 158, 11, 0.25)" : "#FEF3C7"),
                               borderColor:
                                 entry.alert.type === "YOUR_TURN"
-                                  ? "rgba(16, 185, 129, 0.5)"
-                                  : "rgba(245, 158, 11, 0.5)",
+                                  ? (isDark ? "rgba(16, 185, 129, 0.5)" : "#86EFAC")
+                                  : (isDark ? "rgba(245, 158, 11, 0.5)" : "#FDE68A"),
                             },
                           ]}
                         >
                           <Ionicons
                             name={entry.alert.type === "YOUR_TURN" ? "sparkles" : "notifications"}
                             size={10}
-                            color={entry.alert.type === "YOUR_TURN" ? colors.success : colors.warning}
+                            color={
+                              entry.alert.type === "YOUR_TURN"
+                                ? (isDark ? "#34D399" : "#15803D")
+                                : (isDark ? "#FBBF24" : "#B45309")
+                            }
                           />
                           <Text
                             style={[
@@ -344,8 +383,8 @@ export default function CustomerHomeScreen({ navigation }: Props) {
                               {
                                 color:
                                   entry.alert.type === "YOUR_TURN"
-                                    ? colors.success
-                                    : colors.warning,
+                                    ? (isDark ? "#34D399" : "#15803D")
+                                    : (isDark ? "#FBBF24" : "#B45309"),
                               },
                             ]}
                           >
@@ -452,7 +491,10 @@ export default function CustomerHomeScreen({ navigation }: Props) {
 
                     <TouchableOpacity
                       style={styles.queueUpBtn}
-                      onPress={() => navigation.navigate("ScanJoin", { qrCode: fav.qrCode || fav._id })}
+                      onPress={() => {
+                        const targetCode = fav.uniqueQrCode || fav.qrCode || fav.businessProfile?.uniqueQrCode || fav._id;
+                        navigation.navigate("ScanJoin", { qrCode: targetCode });
+                      }}
                       activeOpacity={0.8}
                     >
                       <Text style={styles.queueUpBtnText}>Queue Up</Text>
@@ -539,28 +581,6 @@ export default function CustomerHomeScreen({ navigation }: Props) {
           )
         )}
       </View>
-
-      {/* Quick QR Check-In Action Card */}
-      <Card variant="subtle" style={styles.quickActionCard}>
-        <View style={styles.quickActionHeader}>
-          <View style={styles.quickActionIconWrap}>
-            <Ionicons name="qr-code-outline" size={22} color={colors.primary} />
-          </View>
-          <View style={styles.quickActionTextCol}>
-            <Text style={styles.quickActionTitle}>Join a Virtual Queue</Text>
-            <Text style={styles.quickActionSubtitle}>
-              Scan the counter QR poster at any store or enter the store code manually to take a live ticket without physically waiting in line.
-            </Text>
-          </View>
-        </View>
-
-        <AppButton
-          title="Open Camera Scanner"
-          onPress={handleOpenScanner}
-          icon="camera-outline"
-          size="md"
-        />
-      </Card>
 
       {/* Direct Full-Screen QR Scanner Modal */}
       <Modal
@@ -667,7 +687,8 @@ export default function CustomerHomeScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   headerRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -902,9 +923,9 @@ const styles = StyleSheet.create({
     color: colors.primary,
   },
   quickActionCard: {
-    padding: spacing.lg,
-    gap: spacing.md,
-    marginTop: spacing.xs,
+    padding: spacing.md,
+    gap: spacing.sm,
+    marginBottom: spacing.sm,
   },
   quickActionHeader: {
     flexDirection: "row",

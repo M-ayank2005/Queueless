@@ -23,7 +23,8 @@ import StatusBadge from "../../components/StatusBadge";
 import { api } from "../../lib/api";
 import { BusinessTabParamList } from "../../navigation/types";
 import { BusinessAnalytics, QueueEntry, ServiceItem } from "../../types";
-import { colors } from "../../theme/colors";
+import { useTheme } from "../../context/ThemeContext";
+import { ThemeColors } from "../../theme/colors";
 import { radii, shadows, spacing, typography } from "../../theme/theme";
 
 type BusinessProfileResponse = {
@@ -43,6 +44,8 @@ const RANGE_OPTIONS = [
 ];
 
 export default function BusinessDashboardScreen(_: Props) {
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [profile, setProfile] = useState<BusinessProfileResponse | null>(null);
@@ -896,7 +899,8 @@ export default function BusinessDashboardScreen(_: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
   header: {
     paddingBottom: spacing.xs,
   },

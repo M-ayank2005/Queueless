@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from "react";
 import { Animated, StyleProp, StyleSheet, View, ViewStyle } from "react-native";
-import { colors } from "../../theme/colors";
+import { useTheme } from "../../context/ThemeContext";
 import { radii, spacing } from "../../theme/theme";
 
 type BoxProps = {
@@ -16,6 +16,7 @@ export function SkeletonBox({
   borderRadius = radii.sm,
   style,
 }: BoxProps) {
+  const { colors } = useTheme();
   const opacity = useRef(new Animated.Value(0.3)).current;
 
   useEffect(() => {
@@ -42,6 +43,7 @@ export function SkeletonBox({
       style={[
         styles.skeletonBox,
         {
+          backgroundColor: colors.cardElevated,
           width: width as any,
           height,
           borderRadius,
@@ -54,8 +56,9 @@ export function SkeletonBox({
 }
 
 export function QueueCardSkeleton() {
+  const { colors } = useTheme();
   return (
-    <View style={styles.cardSkeleton}>
+    <View style={[styles.cardSkeleton, { backgroundColor: colors.card, borderColor: colors.border }]}>
       <View style={styles.rowBetween}>
         <View style={styles.col}>
           <SkeletonBox width={160} height={18} />
@@ -64,7 +67,7 @@ export function QueueCardSkeleton() {
         <SkeletonBox width={90} height={24} borderRadius={radii.full} />
       </View>
 
-      <View style={styles.divider} />
+      <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
       <View style={styles.rowBetween}>
         <SkeletonBox width={90} height={28} borderRadius={radii.sm} />
@@ -76,8 +79,9 @@ export function QueueCardSkeleton() {
 }
 
 export function StoreCardSkeleton() {
+  const { colors } = useTheme();
   return (
-    <View style={styles.cardSkeleton}>
+    <View style={[styles.cardSkeleton, { backgroundColor: colors.card, borderColor: colors.border }]}>
       <View style={styles.storeHeader}>
         <SkeletonBox width={46} height={46} borderRadius={12} />
         <View style={[styles.col, { flex: 1 }]}>
@@ -91,7 +95,7 @@ export function StoreCardSkeleton() {
         <SkeletonBox width={110} height={22} borderRadius={radii.full} />
       </View>
 
-      <View style={styles.divider} />
+      <View style={[styles.divider, { backgroundColor: colors.border }]} />
 
       <View style={styles.rowBetween}>
         <SkeletonBox width={90} height={16} />
@@ -102,14 +106,15 @@ export function StoreCardSkeleton() {
 }
 
 export function MetricsRowSkeleton() {
+  const { colors } = useTheme();
   return (
     <View style={styles.metricsRow}>
-      <View style={styles.metricCard}>
+      <View style={[styles.metricCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <SkeletonBox width={36} height={36} borderRadius={18} />
         <SkeletonBox width={50} height={28} style={{ marginTop: 8 }} />
         <SkeletonBox width={80} height={14} style={{ marginTop: 6 }} />
       </View>
-      <View style={styles.metricCard}>
+      <View style={[styles.metricCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <SkeletonBox width={36} height={36} borderRadius={18} />
         <SkeletonBox width={60} height={28} style={{ marginTop: 8 }} />
         <SkeletonBox width={90} height={14} style={{ marginTop: 6 }} />
@@ -119,8 +124,9 @@ export function MetricsRowSkeleton() {
 }
 
 export function HistoryItemSkeleton() {
+  const { colors } = useTheme();
   return (
-    <View style={styles.historyCard}>
+    <View style={[styles.historyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
       <View style={styles.col}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
           <SkeletonBox width={60} height={16} borderRadius={radii.sm} />
@@ -134,9 +140,10 @@ export function HistoryItemSkeleton() {
 }
 
 export function ProfileSkeleton() {
+  const { colors } = useTheme();
   return (
     <View style={{ gap: spacing.md, width: "100%" }}>
-      <View style={styles.cardSkeleton}>
+      <View style={[styles.cardSkeleton, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
           <SkeletonBox width={56} height={56} borderRadius={28} />
           <View style={{ flex: 1, gap: 6 }}>
@@ -146,7 +153,7 @@ export function ProfileSkeleton() {
         </View>
       </View>
 
-      <View style={styles.cardSkeleton}>
+      <View style={[styles.cardSkeleton, { backgroundColor: colors.card, borderColor: colors.border }]}>
         <SkeletonBox width={120} height={16} style={{ marginBottom: 12 }} />
         <SkeletonBox width="100%" height={44} borderRadius={radii.md} style={{ marginBottom: 10 }} />
         <SkeletonBox width="100%" height={44} borderRadius={radii.md} style={{ marginBottom: 10 }} />
@@ -157,12 +164,8 @@ export function ProfileSkeleton() {
 }
 
 const styles = StyleSheet.create({
-  skeletonBox: {
-    backgroundColor: colors.cardElevated,
-  },
+  skeletonBox: {},
   cardSkeleton: {
-    backgroundColor: colors.card,
-    borderColor: colors.border,
     borderWidth: 1,
     borderRadius: radii.lg,
     padding: spacing.lg,
@@ -184,7 +187,6 @@ const styles = StyleSheet.create({
   },
   divider: {
     height: 1,
-    backgroundColor: colors.border,
     marginVertical: 2,
   },
   metricsRow: {
@@ -194,8 +196,6 @@ const styles = StyleSheet.create({
   },
   metricCard: {
     flex: 1,
-    backgroundColor: colors.card,
-    borderColor: colors.border,
     borderWidth: 1,
     borderRadius: radii.lg,
     padding: spacing.lg,
@@ -203,8 +203,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   historyCard: {
-    backgroundColor: colors.card,
-    borderColor: colors.border,
     borderWidth: 1,
     borderRadius: radii.md,
     padding: spacing.md,

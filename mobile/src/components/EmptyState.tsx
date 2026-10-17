@@ -2,7 +2,7 @@ import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import AppButton from "./AppButton";
-import { colors } from "../theme/colors";
+import { useTheme } from "../context/ThemeContext";
 import { radii, spacing } from "../theme/theme";
 
 type Props = {
@@ -21,21 +21,24 @@ type Props = {
  */
 export default function EmptyState({
   icon = "cube-outline",
-  iconColor = colors.primary,
+  iconColor,
   title,
   description,
   actionTitle,
   onActionPress,
   actionIcon,
 }: Props) {
+  const { colors } = useTheme();
+  const effectiveIconColor = iconColor || colors.primary;
+
   return (
-    <View style={styles.container}>
-      <View style={styles.iconCircle}>
-        <Ionicons name={icon} size={32} color={iconColor} />
+    <View style={[styles.container, { backgroundColor: colors.card, borderColor: colors.border }]}>
+      <View style={[styles.iconCircle, { backgroundColor: colors.cardSoft, borderColor: colors.borderLight }]}>
+        <Ionicons name={icon} size={32} color={effectiveIconColor} />
       </View>
       <View style={styles.textWrap}>
-        <Text style={styles.title}>{title}</Text>
-        <Text style={styles.description}>{description}</Text>
+        <Text style={[styles.title, { color: colors.text }]}>{title}</Text>
+        <Text style={[styles.description, { color: colors.muted }]}>{description}</Text>
       </View>
       {actionTitle && onActionPress && (
         <View style={styles.buttonWrap}>
@@ -54,8 +57,6 @@ export default function EmptyState({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: colors.card,
-    borderColor: colors.border,
     borderWidth: 1,
     borderRadius: radii.lg,
     paddingVertical: spacing.xxl,
@@ -69,8 +70,6 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 32,
-    backgroundColor: colors.cardSoft,
-    borderColor: colors.borderLight,
     borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
@@ -83,12 +82,10 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 16,
     fontWeight: "700",
-    color: colors.text,
     textAlign: "center",
   },
   description: {
     fontSize: 13,
-    color: colors.muted,
     textAlign: "center",
     lineHeight: 18,
   },

@@ -483,15 +483,15 @@ export default function QueueFlowLoader({
       {/* Contextual Messaging & Accessible Status */}
       {showMessage && (
         <div className="mt-3.5 text-center px-4 max-w-sm min-h-[50px] flex flex-col items-center justify-center">
-          <p className={cn("font-bold text-[#ECF2FF] tracking-tight", sizeConfig.msgSize)}>
+          <p className={cn("font-bold text-foreground tracking-tight", sizeConfig.msgSize)}>
             {message}
           </p>
           {submessage ? (
-            <p className={cn("text-[#889DC2] mt-1 font-normal leading-relaxed", sizeConfig.subSize)}>
+            <p className={cn("text-muted-foreground mt-1 font-normal leading-relaxed", sizeConfig.subSize)}>
               {submessage}
             </p>
           ) : (
-            <p className="text-[11px] text-[#576B91] mt-0.5 tracking-wide uppercase font-semibold">
+            <p className="text-[11px] text-muted-foreground/75 mt-0.5 tracking-wide uppercase font-semibold">
               QueueLess • Live Counter Flow
             </p>
           )}
@@ -503,18 +503,18 @@ export default function QueueFlowLoader({
   // Variant Wrappers
   if (variant === "page") {
     return (
-      <div className="min-h-screen bg-[#050B18] text-[#ECF2FF] flex flex-col items-center justify-center p-4">
+      <div className="min-h-screen bg-background text-foreground flex flex-col items-center justify-center p-4">
         {/* Top Brand Logo Accent */}
         <div className="mb-6 flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl bg-blue-600/20 border border-blue-500/30 flex items-center justify-center text-blue-400">
+          <div className="w-9 h-9 rounded-xl bg-primary/10 border border-primary/30 flex items-center justify-center text-primary">
             <Store className="w-5 h-5" />
           </div>
-          <span className="text-xl font-black tracking-tight text-[#ECF2FF]">
-            Queue<span className="text-blue-500">Less</span>
+          <span className="text-xl font-black tracking-tight text-foreground">
+            Queue<span className="text-primary">Less</span>
           </span>
         </div>
 
-        <div className="bg-[#101A32] border border-[#203052] rounded-3xl p-8 sm:p-10 shadow-2xl shadow-black/60 max-w-md w-full flex flex-col items-center">
+        <div className="bg-card border border-border rounded-3xl p-8 sm:p-10 shadow-xl max-w-md w-full flex flex-col items-center">
           {animationContent}
         </div>
       </div>
@@ -523,8 +523,8 @@ export default function QueueFlowLoader({
 
   if (variant === "overlay") {
     return (
-      <div className="fixed inset-0 z-50 bg-[#050B18]/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
-        <div className="bg-[#101A32] border border-[#203052] rounded-2xl p-6 shadow-2xl max-w-sm w-full flex flex-col items-center">
+      <div className="fixed inset-0 z-50 bg-slate-950/60 dark:bg-black/80 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
+        <div className="bg-card border border-border rounded-2xl p-6 shadow-2xl max-w-sm w-full flex flex-col items-center">
           {animationContent}
         </div>
       </div>
@@ -535,7 +535,7 @@ export default function QueueFlowLoader({
     return (
       <div
         className={cn(
-          "w-full rounded-2xl border border-[#203052] bg-[#101A32]/60 backdrop-blur-sm flex flex-col items-center justify-center shadow-lg",
+          "w-full rounded-2xl border border-border bg-card/80 backdrop-blur-sm flex flex-col items-center justify-center shadow-xs",
           sizeConfig.containerPadding,
           className
         )}

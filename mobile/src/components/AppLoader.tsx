@@ -1,7 +1,7 @@
 import React from "react";
 import { StyleSheet, View } from "react-native";
 import QueueFlowLoader from "./loading/QueueFlowLoader";
-import { colors } from "../theme/colors";
+import { useTheme } from "../context/ThemeContext";
 
 type Props = {
   message?: string;
@@ -22,9 +22,11 @@ export default function AppLoader({
   fullScreen = false,
   inline = false,
 }: Props) {
+  const { colors } = useTheme();
+
   if (fullScreen) {
     return (
-      <View style={styles.fullScreen}>
+      <View style={[styles.fullScreen, { backgroundColor: colors.bg }]}>
         <QueueFlowLoader
           variant="screen"
           size="lg"
@@ -52,7 +54,6 @@ const styles = StyleSheet.create({
     flex: 1,
     width: "100%",
     height: "100%",
-    backgroundColor: colors.bg,
     alignItems: "center",
     justifyContent: "center",
   },

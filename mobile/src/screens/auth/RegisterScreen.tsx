@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { Alert, Platform, Pressable, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Ionicons } from "@expo/vector-icons";
@@ -8,13 +8,16 @@ import AppScreen from "../../components/AppScreen";
 import Card from "../../components/Card";
 import { useAuth } from "../../context/AuthContext";
 import { AuthStackParamList } from "../../navigation/types";
-import { colors } from "../../theme/colors";
+import { useTheme } from "../../context/ThemeContext";
+import { ThemeColors } from "../../theme/colors";
 import { radii, shadows, spacing, typography } from "../../theme/theme";
 
 type Props = NativeStackScreenProps<AuthStackParamList, "Register">;
 
 export default function RegisterScreen({ navigation }: Props) {
   const { register } = useAuth();
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [role, setRole] = useState<"customer" | "business">("customer");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -257,7 +260,8 @@ export default function RegisterScreen({ navigation }: Props) {
 );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
 screenContent: {
   flexGrow: 1,
 },

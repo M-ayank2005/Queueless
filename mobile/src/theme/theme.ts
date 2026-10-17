@@ -66,30 +66,30 @@ export const shadows = {
   subtle: Platform.select({
     ios: {
       shadowColor: "#000",
-      shadowOffset: { width: 0, height: 2 },
-      shadowOpacity: 0.25,
-      shadowRadius: 6,
+      shadowOffset: { width: 0, height: 1 },
+      shadowOpacity: 0.06,
+      shadowRadius: 5,
     },
     android: {
       elevation: 2,
     },
     web: {
-      boxShadow: "0 2px 8px rgba(0, 0, 0, 0.25)",
+      boxShadow: "0 1px 4px rgba(0, 0, 0, 0.06)",
     },
     default: {},
   }),
   card: Platform.select({
     ios: {
-      shadowColor: "#020617",
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.35,
+      shadowColor: "#000",
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.08,
       shadowRadius: 10,
     },
     android: {
-      elevation: 4,
+      elevation: 3,
     },
     web: {
-      boxShadow: "0 4px 14px rgba(2, 6, 23, 0.35)",
+      boxShadow: "0 2px 10px rgba(0, 0, 0, 0.08)",
     },
     default: {},
   }),
@@ -97,14 +97,14 @@ export const shadows = {
     ios: {
       shadowColor: colors.primary,
       shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: 0.3,
+      shadowOpacity: 0.18,
       shadowRadius: 12,
     },
     android: {
-      elevation: 6,
+      elevation: 4,
     },
     web: {
-      boxShadow: `0 4px 16px rgba(59, 130, 246, 0.3)`,
+      boxShadow: `0 4px 16px rgba(0, 113, 227, 0.18)`,
     },
     default: {},
   }),

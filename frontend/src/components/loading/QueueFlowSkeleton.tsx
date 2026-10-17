@@ -15,8 +15,8 @@ export function Skeleton({ className, ...props }: SkeletonProps) {
     <div
       aria-hidden="true"
       className={cn(
-        "animate-pulse rounded-lg bg-[#152243]/80 border border-[#203052]/40 relative overflow-hidden",
-        "before:absolute before:inset-0 before:-translate-x-full before:animate-[shimmer_2s_infinite] before:bg-gradient-to-r before:from-transparent before:via-white/[0.04] before:to-transparent",
+        "animate-pulse rounded-lg bg-muted/80 border border-border/40 relative overflow-hidden",
+        "before:absolute before:inset-0 before:-translate-x-full before:animate-[shimmer_2s_infinite] before:bg-gradient-to-r before:from-transparent before:via-foreground/[0.04] before:to-transparent",
         className
       )}
       {...props}
@@ -32,7 +32,7 @@ export function QueueCardSkeleton() {
     <div
       role="status"
       aria-label="Loading queue tickets"
-      className="rounded-2xl border border-[#203052] bg-[#101A32] p-5 sm:p-6 shadow-xl space-y-4"
+      className="rounded-2xl border border-border bg-card p-5 sm:p-6 shadow-xs space-y-4"
     >
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="space-y-2.5 flex-1">
@@ -45,7 +45,7 @@ export function QueueCardSkeleton() {
           <Skeleton className="h-6 w-56 rounded-md mt-1" />
         </div>
 
-        <div className="flex sm:flex-col items-start sm:items-end gap-2 shrink-0 border-t sm:border-t-0 pt-3 sm:pt-0 border-[#203052]">
+        <div className="flex sm:flex-col items-start sm:items-end gap-2 shrink-0 border-t sm:border-t-0 pt-3 sm:pt-0 border-border">
           <Skeleton className="h-8 w-28 rounded-lg" />
           <Skeleton className="h-4 w-32 rounded-md" />
           <Skeleton className="h-9 w-32 rounded-xl mt-2" />
@@ -68,7 +68,7 @@ export function DashboardQueueSkeleton({ count = 3 }: { count?: number }) {
       {Array.from({ length: count }).map((_, i) => (
         <div
           key={i}
-          className="p-4 rounded-xl border border-[#203052] bg-[#0A1329] flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+          className="p-4 rounded-xl border border-border bg-card flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs"
         >
           <div className="space-y-2 flex-1">
             <div className="flex items-center gap-2">
@@ -101,7 +101,7 @@ export function StoreMenuSkeleton() {
       className="space-y-6"
     >
       {/* Store Header Banner Skeleton */}
-      <div className="rounded-2xl border border-[#203052] bg-[#101A32] p-6 space-y-3">
+      <div className="rounded-2xl border border-border bg-card p-6 space-y-3 shadow-xs">
         <Skeleton className="h-8 w-60 rounded-lg" />
         <Skeleton className="h-4 w-44 rounded-md" />
         <div className="flex gap-4 pt-2">
@@ -111,13 +111,13 @@ export function StoreMenuSkeleton() {
       </div>
 
       {/* Services List Skeleton */}
-      <div className="rounded-2xl border border-[#203052] bg-[#101A32] p-6 space-y-4">
+      <div className="rounded-2xl border border-border bg-card p-6 space-y-4 shadow-xs">
         <Skeleton className="h-6 w-36 rounded-md" />
         <div className="space-y-2.5">
           {Array.from({ length: 4 }).map((_, i) => (
             <div
               key={i}
-              className="p-3.5 rounded-xl border border-[#203052] bg-[#0A1329] flex items-center justify-between"
+              className="p-3.5 rounded-xl border border-border bg-secondary/50 flex items-center justify-between"
             >
               <div className="flex items-center gap-3">
                 <Skeleton className="w-5 h-5 rounded" />
@@ -149,7 +149,7 @@ export function HistorySkeleton({ count = 3 }: { count?: number }) {
       {Array.from({ length: count }).map((_, i) => (
         <div
           key={i}
-          className="rounded-xl border border-[#203052] bg-[#101A32] p-4 flex items-center justify-between gap-3"
+          className="rounded-xl border border-border bg-card p-4 flex items-center justify-between gap-3 shadow-xs"
         >
           <div className="space-y-1.5 flex-1">
             <div className="flex items-center gap-2">
@@ -176,7 +176,7 @@ export function ProfileSkeleton() {
       aria-label="Loading profile details"
       className="space-y-6 max-w-2xl mx-auto"
     >
-      <div className="rounded-2xl border border-[#203052] bg-[#101A32] p-6 space-y-4">
+      <div className="rounded-2xl border border-border bg-card p-6 space-y-4 shadow-xs">
         <div className="flex items-center gap-4">
           <Skeleton className="w-16 h-16 rounded-2xl" />
           <div className="space-y-2 flex-1">
@@ -186,7 +186,7 @@ export function ProfileSkeleton() {
         </div>
       </div>
 
-      <div className="rounded-2xl border border-[#203052] bg-[#101A32] p-6 space-y-4">
+      <div className="rounded-2xl border border-border bg-card p-6 space-y-4 shadow-xs">
         <Skeleton className="h-5 w-32 rounded" />
         <Skeleton className="h-10 w-full rounded-xl" />
         <Skeleton className="h-10 w-full rounded-xl" />

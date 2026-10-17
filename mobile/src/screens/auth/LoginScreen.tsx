@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { Alert, Platform, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
 import { Ionicons } from "@expo/vector-icons";
@@ -8,8 +8,9 @@ import AppScreen from "../../components/AppScreen";
 import Card from "../../components/Card";
 import { useAuth } from "../../context/AuthContext";
 import { AuthStackParamList } from "../../navigation/types";
-import { colors } from "../../theme/colors";
-import { radii, spacing, typography } from "../../theme/theme";
+import { useTheme } from "../../context/ThemeContext";
+import { ThemeColors } from "../../theme/colors";
+import { radii, spacing } from "../../theme/theme";
 
 type Props = NativeStackScreenProps<AuthStackParamList, "Login">;
 
@@ -17,12 +18,15 @@ type Props = NativeStackScreenProps<AuthStackParamList, "Login">;
  * LoginScreen
  * Handles user authentication with:
  * - Client-side validation
- * - Quick-fill demo shortcuts for frictionless interview presentation
  * - Global session state updates via AuthContext
+ * - Dynamic theme color support
  * - Cross-platform feedback
  */
 export default function LoginScreen({ navigation }: Props) {
   const { login } = useAuth();
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -132,94 +136,95 @@ export default function LoginScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  screenContent: {
-    flexGrow: 1,
-  },
-  container: {
-    flex: 1,
-    justifyContent: "space-between",
-    gap: spacing.lg,
-  },
-  topSection: {
-    gap: spacing.md,
-    paddingTop: spacing.xs,
-  },
-  backBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    alignSelf: "flex-start",
-    paddingVertical: spacing.xs,
-  },
-  backIconCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.cardSoft,
-    borderColor: colors.border,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  backText: {
-    color: colors.textSecondary,
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  header: {
-    gap: spacing.xs,
-    marginTop: spacing.xs,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: "800",
-    color: colors.text,
-    letterSpacing: -0.5,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: colors.muted,
-    lineHeight: 21,
-    marginTop: 2,
-  },
-  formCard: {
-    gap: spacing.lg,
-    padding: spacing.xl,
-    marginVertical: spacing.md,
-  },
-  errorBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: colors.dangerSubtle,
-    borderWidth: 1,
-    borderColor: colors.dangerBorder,
-    borderRadius: radii.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    gap: spacing.sm,
-  },
-  errorText: {
-    color: colors.danger,
-    fontSize: 13,
-    fontWeight: "600",
-    flex: 1,
-  },
-  footerRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: spacing.xs,
-    paddingVertical: spacing.md,
-  },
-  footerText: {
-    color: colors.muted,
-    fontSize: 14,
-  },
-  registerLink: {
-    color: colors.primary,
-    fontSize: 14,
-    fontWeight: "700",
-  },
-});
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    screenContent: {
+      flexGrow: 1,
+    },
+    container: {
+      flex: 1,
+      justifyContent: "space-between",
+      gap: spacing.lg,
+    },
+    topSection: {
+      gap: spacing.md,
+      paddingTop: spacing.xs,
+    },
+    backBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: spacing.sm,
+      alignSelf: "flex-start",
+      paddingVertical: spacing.xs,
+    },
+    backIconCircle: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: colors.cardSoft,
+      borderColor: colors.border,
+      borderWidth: 1,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    backText: {
+      color: colors.textSecondary,
+      fontSize: 14,
+      fontWeight: "600",
+    },
+    header: {
+      gap: spacing.xs,
+      marginTop: spacing.xs,
+    },
+    title: {
+      fontSize: 28,
+      fontWeight: "800",
+      color: colors.text,
+      letterSpacing: -0.5,
+    },
+    subtitle: {
+      fontSize: 14,
+      color: colors.muted,
+      lineHeight: 21,
+      marginTop: 2,
+    },
+    formCard: {
+      gap: spacing.lg,
+      padding: spacing.xl,
+      marginVertical: spacing.md,
+    },
+    errorBox: {
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: colors.dangerSubtle,
+      borderWidth: 1,
+      borderColor: colors.dangerBorder,
+      borderRadius: radii.md,
+      paddingHorizontal: spacing.md,
+      paddingVertical: spacing.sm,
+      gap: spacing.sm,
+    },
+    errorText: {
+      color: colors.danger,
+      fontSize: 13,
+      fontWeight: "600",
+      flex: 1,
+    },
+    footerRow: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: spacing.xs,
+      paddingVertical: spacing.md,
+    },
+    footerText: {
+      color: colors.muted,
+      fontSize: 14,
+    },
+    registerLink: {
+      color: colors.primary,
+      fontSize: 14,
+      fontWeight: "700",
+    },
+  });

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Platform,
@@ -19,12 +19,15 @@ import StatusBadge from "../../components/StatusBadge";
 import { api } from "../../lib/api";
 import { RootStackParamList } from "../../navigation/types";
 import { QueueEntry } from "../../types";
-import { colors } from "../../theme/colors";
+import { useTheme } from "../../context/ThemeContext";
+import { ThemeColors } from "../../theme/colors";
 import { radii, shadows, spacing, typography } from "../../theme/theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "QueueStatus">;
 
 export default function QueueStatusScreen({ route, navigation }: Props) {
+  const { colors, isDark } = useTheme();
+  const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [cancelling, setCancelling] = useState(false);
@@ -254,8 +257,7 @@ export default function QueueStatusScreen({ route, navigation }: Props) {
 
       {/* Turn Approaching / Your Turn Notification Banner */}
       {entry.alert?.active && !isAlertDismissed && (
-        <Card
-          variant="elevated"
+        <View
           style={[
             styles.notifAlertCard,
             entry.alert.type === "YOUR_TURN"
@@ -275,32 +277,52 @@ export default function QueueStatusScreen({ route, navigation }: Props) {
               <Ionicons
                 name={entry.alert.type === "YOUR_TURN" ? "sparkles" : "notifications"}
                 size={18}
-                color={entry.alert.type === "YOUR_TURN" ? colors.success : colors.warning}
+                color={
+                  entry.alert.type === "YOUR_TURN"
+                    ? (isDark ? "#34D399" : "#15803D")
+                    : (isDark ? "#FBBF24" : "#B45309")
+                }
               />
             </View>
             <View style={styles.notifAlertTextCol}>
               <View style={styles.notifPillRow}>
-                <Text
+                <View
                   style={[
-                    styles.notifBadgeTag,
-                    { color: entry.alert.type === "YOUR_TURN" ? colors.success : colors.warning }
+                    styles.notifBadgeTagPill,
+                    entry.alert.type === "YOUR_TURN"
+                      ? styles.notifBadgeTagPillYourTurn
+                      : styles.notifBadgeTagPillApproaching
                   ]}
                 >
-                  {entry.alert.type === "YOUR_TURN" ? "COUNTER READY" : "TURN APPROACHING"}
-                </Text>
+                  <Text
+                    style={[
+                      styles.notifBadgeTag,
+                      {
+                        color:
+                          entry.alert.type === "YOUR_TURN"
+                            ? (isDark ? "#34D399" : "#15803D")
+                            : (isDark ? "#FBBF24" : "#B45309")
+                      }
+                    ]}
+                  >
+                    {entry.alert.type === "YOUR_TURN" ? "COUNTER READY" : "YOUR TURN IS NEXT"}
+                  </Text>
+                </View>
               </View>
               <Text style={styles.notifAlertTitle}>{entry.alert.title}</Text>
               <Text style={styles.notifAlertBody}>{entry.alert.message}</Text>
             </View>
             <TouchableOpacity
               onPress={() => setIsAlertDismissed(true)}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
               style={styles.notifDismissBtn}
+              accessibilityRole="button"
+              accessibilityLabel="Dismiss notification"
             >
               <Ionicons name="close" size={16} color={colors.muted} />
             </TouchableOpacity>
           </View>
-        </Card>
+        </View>
       )}
 
       {/* Hero Boarding Pass Ticket Card */}
@@ -499,7 +521,8 @@ export default function QueueStatusScreen({ route, navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (colors: ThemeColors, isDark: boolean = false) =>
+  StyleSheet.create({
   topRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -819,12 +842,12 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
   notifAlertCardYourTurn: {
-    backgroundColor: "rgba(16, 185, 129, 0.12)",
-    borderColor: "rgba(16, 185, 129, 0.4)",
+    backgroundColor: isDark ? "rgba(16, 185, 129, 0.16)" : "#F0FDF4",
+    borderColor: isDark ? "rgba(16, 185, 129, 0.4)" : "#86EFAC",
   },
   notifAlertCardApproaching: {
-    backgroundColor: "rgba(245, 158, 11, 0.12)",
-    borderColor: "rgba(245, 158, 11, 0.4)",
+    backgroundColor: isDark ? "rgba(245, 158, 11, 0.16)" : "#FFFBEB",
+    borderColor: isDark ? "rgba(245, 158, 11, 0.4)" : "#FDE68A",
   },
   notifAlertHeader: {
     flexDirection: "row",
@@ -839,10 +862,14 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   notifIconCircleYourTurn: {
-    backgroundColor: "rgba(16, 185, 129, 0.2)",
+    backgroundColor: isDark ? "rgba(16, 185, 129, 0.25)" : "#FFFFFF",
+    borderColor: isDark ? "transparent" : "#BBF7D0",
+    borderWidth: isDark ? 0 : 1,
   },
   notifIconCircleApproaching: {
-    backgroundColor: "rgba(245, 158, 11, 0.2)",
+    backgroundColor: isDark ? "rgba(245, 158, 11, 0.25)" : "#FFFFFF",
+    borderColor: isDark ? "transparent" : "#FDE68A",
+    borderWidth: isDark ? 0 : 1,
   },
   notifAlertTextCol: {
     flex: 1,
@@ -850,7 +877,18 @@ const styles = StyleSheet.create({
   notifPillRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 2,
+    marginBottom: 4,
+  },
+  notifBadgeTagPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 2.5,
+    borderRadius: radii.full,
+  },
+  notifBadgeTagPillYourTurn: {
+    backgroundColor: isDark ? "rgba(16, 185, 129, 0.25)" : "#DCFCE7",
+  },
+  notifBadgeTagPillApproaching: {
+    backgroundColor: isDark ? "rgba(245, 158, 11, 0.25)" : "#FEF3C7",
   },
   notifBadgeTag: {
     fontSize: 10,

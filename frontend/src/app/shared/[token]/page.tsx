@@ -131,7 +131,7 @@ export default function SharedTicketPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-slate-950 flex flex-col justify-center items-center">
+      <div className="min-h-screen bg-background flex flex-col justify-center items-center">
         <QueueFlowLoader
           variant="page"
           message="Loading Shared Ticket..."
@@ -143,22 +143,22 @@ export default function SharedTicketPage() {
 
   if (isRevoked) {
     return (
-      <div className="min-h-screen bg-slate-950 text-white flex flex-col justify-center items-center px-4">
-        <div className="max-w-md w-full bg-slate-900/80 border border-amber-500/30 rounded-3xl p-8 text-center backdrop-blur-xl shadow-2xl space-y-6">
-          <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mx-auto text-amber-400">
+      <div className="min-h-screen bg-background text-foreground flex flex-col justify-center items-center px-4">
+        <div className="max-w-md w-full bg-card border border-amber-500/30 rounded-3xl p-8 text-center shadow-lg space-y-6">
+          <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mx-auto text-amber-500 dark:text-amber-400">
             <AlertTriangle className="w-8 h-8" />
           </div>
           <div className="space-y-2">
-            <h1 className="text-2xl font-bold text-white tracking-tight">
+            <h1 className="text-2xl font-bold text-foreground tracking-tight">
               Share Link Revoked
             </h1>
-            <p className="text-slate-400 text-sm leading-relaxed">
+            <p className="text-muted-foreground text-sm leading-relaxed">
               The ticket holder has revoked public sharing for this queue ticket. For status updates, please check with them directly.
             </p>
           </div>
           <Button
             asChild
-            className="w-full bg-slate-800 hover:bg-slate-700 text-white border border-slate-700/60"
+            className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
           >
             <Link href="/">Return to QueueLess Home</Link>
           </Button>
@@ -169,22 +169,22 @@ export default function SharedTicketPage() {
 
   if (error || !ticketData) {
     return (
-      <div className="min-h-screen bg-slate-950 text-white flex flex-col justify-center items-center px-4">
-        <div className="max-w-md w-full bg-slate-900/80 border border-red-500/30 rounded-3xl p-8 text-center backdrop-blur-xl shadow-2xl space-y-6">
-          <div className="w-16 h-16 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto text-red-400">
+      <div className="min-h-screen bg-background text-foreground flex flex-col justify-center items-center px-4">
+        <div className="max-w-md w-full bg-card border border-rose-500/30 rounded-3xl p-8 text-center shadow-lg space-y-6">
+          <div className="w-16 h-16 rounded-2xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center mx-auto text-rose-500 dark:text-rose-400">
             <XCircle className="w-8 h-8" />
           </div>
           <div className="space-y-2">
-            <h1 className="text-2xl font-bold text-white tracking-tight">
+            <h1 className="text-2xl font-bold text-foreground tracking-tight">
               Ticket Not Found
             </h1>
-            <p className="text-slate-400 text-sm leading-relaxed">
+            <p className="text-muted-foreground text-sm leading-relaxed">
               {error || "This shared ticket link is invalid or has expired."}
             </p>
           </div>
           <Button
             asChild
-            className="w-full bg-slate-800 hover:bg-slate-700 text-white border border-slate-700/60"
+            className="w-full bg-primary hover:bg-primary/90 text-primary-foreground"
           >
             <Link href="/">Go to QueueLess Home</Link>
           </Button>
@@ -204,35 +204,32 @@ export default function SharedTicketPage() {
   );
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col relative overflow-hidden font-sans selection:bg-blue-600 selection:text-white">
-      {/* Background glow effects */}
-      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[350px] bg-gradient-to-b from-blue-600/15 via-indigo-600/5 to-transparent blur-3xl pointer-events-none" />
-
+    <div className="min-h-screen bg-background text-foreground flex flex-col relative overflow-hidden font-sans">
       {/* Top guest bar */}
-      <header className="border-b border-slate-800/80 bg-slate-950/70 backdrop-blur-md sticky top-0 z-40">
+      <header className="border-b border-border bg-card/80 backdrop-blur-md sticky top-0 z-40">
         <div className="max-w-4xl mx-auto px-4 h-16 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-blue-600 flex items-center justify-center font-black text-white text-base shadow-lg shadow-blue-600/30">
+            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center font-black text-primary-foreground text-base shadow-sm">
               Q
             </div>
-            <span className="font-extrabold text-lg tracking-tight bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">
+            <span className="font-extrabold text-lg tracking-tight text-foreground">
               QueueLess
             </span>
           </Link>
 
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20 text-blue-400 text-xs font-semibold">
-              <ShieldCheck className="w-3.5 h-3.5 text-blue-400" />
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-primary text-xs font-semibold">
+              <ShieldCheck className="w-3.5 h-3.5 text-primary" />
               <span>Live Guest View</span>
             </div>
 
             <button
               onClick={() => fetchSharedTicket(true)}
               disabled={isRefreshing}
-              className="p-2 rounded-xl text-slate-400 hover:text-white bg-slate-900 border border-slate-800 hover:border-slate-700 transition"
+              className="p-2 rounded-xl text-muted-foreground hover:text-foreground bg-card border border-border hover:bg-muted transition"
               title="Refresh status"
             >
-              <RefreshCw className={`w-4 h-4 ${isRefreshing ? "animate-spin text-blue-400" : ""}`} />
+              <RefreshCw className={`w-4 h-4 ${isRefreshing ? "animate-spin text-primary" : ""}`} />
             </button>
           </div>
         </div>
@@ -241,18 +238,18 @@ export default function SharedTicketPage() {
       {/* Main container */}
       <main className="flex-1 max-w-2xl w-full mx-auto px-4 py-8 space-y-6">
         {/* Store Info Card */}
-        <div className="bg-slate-900/60 border border-slate-800/90 rounded-2xl p-5 backdrop-blur-xl flex items-center justify-between">
+        <div className="bg-card border border-border rounded-2xl p-5 shadow-sm flex items-center justify-between">
           <div className="flex items-center gap-3.5">
-            <div className="w-12 h-12 rounded-xl bg-blue-600/10 border border-blue-500/20 flex items-center justify-center text-blue-400 shrink-0">
+            <div className="w-12 h-12 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0">
               <Store className="w-6 h-6" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-white tracking-tight leading-snug">
+              <h2 className="text-lg font-bold text-foreground tracking-tight leading-snug">
                 {ticketData.shopName}
               </h2>
               {ticketData.shopAddress ? (
-                <p className="text-xs text-slate-400 flex items-center gap-1.5 mt-0.5">
-                  <MapPin className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                <p className="text-xs text-muted-foreground flex items-center gap-1.5 mt-0.5">
+                  <MapPin className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
                   <span className="truncate max-w-xs">{ticketData.shopAddress}</span>
                 </p>
               ) : null}
@@ -263,13 +260,13 @@ export default function SharedTicketPage() {
         </div>
 
         {/* Hero Live Ticket Card */}
-        <div className="relative bg-gradient-to-b from-slate-900/90 to-slate-950/90 border border-slate-800 rounded-3xl p-6 md:p-8 backdrop-blur-2xl shadow-2xl space-y-6">
-          <div className="flex items-center justify-between border-b border-slate-800/80 pb-5">
+        <div className="relative bg-card border border-border rounded-3xl p-6 md:p-8 shadow-md space-y-6">
+          <div className="flex items-center justify-between border-b border-border pb-5">
             <div>
-              <span className="text-[11px] font-bold tracking-wider text-slate-400 uppercase">
+              <span className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase">
                 Queue Ticket
               </span>
-              <h1 className="text-3xl font-extrabold text-white tracking-tight mt-0.5">
+              <h1 className="text-3xl font-extrabold text-foreground tracking-tight mt-0.5">
                 Ticket #{ticketData.ticketNumber}
               </h1>
             </div>
@@ -279,7 +276,7 @@ export default function SharedTicketPage() {
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
               </span>
-              <span className="text-xs text-emerald-400 font-semibold tracking-wide">
+              <span className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold tracking-wide">
                 Live Sync
               </span>
             </div>
@@ -288,41 +285,41 @@ export default function SharedTicketPage() {
           {/* Status Specific Hero Display */}
           {isServing && (
             <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-5 text-center space-y-2 animate-pulse">
-              <div className="w-10 h-10 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center mx-auto">
+              <div className="w-10 h-10 rounded-full bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto">
                 <CheckCircle2 className="w-6 h-6" />
               </div>
-              <h3 className="text-xl font-bold text-emerald-400">
+              <h3 className="text-xl font-bold text-emerald-600 dark:text-emerald-400">
                 At the Counter Right Now!
               </h3>
-              <p className="text-xs text-emerald-200/80 max-w-sm mx-auto">
+              <p className="text-xs text-emerald-700/80 dark:text-emerald-200/80 max-w-sm mx-auto">
                 This customer is currently at the service desk being attended to.
               </p>
             </div>
           )}
 
           {isCompleted && (
-            <div className="bg-blue-500/10 border border-blue-500/30 rounded-2xl p-5 text-center space-y-2">
-              <div className="w-10 h-10 rounded-full bg-blue-500/20 text-blue-400 flex items-center justify-center mx-auto">
+            <div className="bg-primary/10 border border-primary/20 rounded-2xl p-5 text-center space-y-2">
+              <div className="w-10 h-10 rounded-full bg-primary/20 text-primary flex items-center justify-center mx-auto">
                 <CheckCircle2 className="w-6 h-6" />
               </div>
-              <h3 className="text-xl font-bold text-white">
+              <h3 className="text-xl font-bold text-foreground">
                 Service Completed
               </h3>
-              <p className="text-xs text-slate-400 max-w-sm mx-auto">
+              <p className="text-xs text-muted-foreground max-w-sm mx-auto">
                 This ticket has been completed by {ticketData.shopName}.
               </p>
             </div>
           )}
 
           {isCancelled && (
-            <div className="bg-red-500/10 border border-red-500/30 rounded-2xl p-5 text-center space-y-2">
-              <div className="w-10 h-10 rounded-full bg-red-500/20 text-red-400 flex items-center justify-center mx-auto">
+            <div className="bg-rose-500/10 border border-rose-500/30 rounded-2xl p-5 text-center space-y-2">
+              <div className="w-10 h-10 rounded-full bg-rose-500/20 text-rose-600 dark:text-rose-400 flex items-center justify-center mx-auto">
                 <XCircle className="w-6 h-6" />
               </div>
-              <h3 className="text-xl font-bold text-red-400">
+              <h3 className="text-xl font-bold text-rose-600 dark:text-rose-400">
                 Ticket Cancelled
               </h3>
-              <p className="text-xs text-red-300/80 max-w-sm mx-auto">
+              <p className="text-xs text-rose-600/80 dark:text-rose-300/80 max-w-sm mx-auto">
                 This ticket has been cancelled.
               </p>
             </div>
@@ -332,18 +329,18 @@ export default function SharedTicketPage() {
           {isWaiting && (
             <div className="grid grid-cols-2 gap-4">
               {/* People ahead */}
-              <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 md:p-5 flex flex-col justify-between">
-                <div className="flex items-center justify-between text-slate-400 mb-2">
+              <div className="bg-card border border-border rounded-2xl p-4 md:p-5 flex flex-col justify-between shadow-sm">
+                <div className="flex items-center justify-between text-muted-foreground mb-2">
                   <span className="text-xs font-semibold uppercase tracking-wider">
                     People Ahead
                   </span>
-                  <Users className="w-4 h-4 text-blue-400" />
+                  <Users className="w-4 h-4 text-primary" />
                 </div>
                 <div>
-                  <div className="text-3xl md:text-4xl font-extrabold text-white tracking-tight">
+                  <div className="text-3xl md:text-4xl font-extrabold text-foreground tracking-tight">
                     {ticketData.peopleAhead}
                   </div>
-                  <div className="text-xs text-slate-400 mt-1 font-medium">
+                  <div className="text-xs text-muted-foreground mt-1 font-medium">
                     {ticketData.peopleAhead === 0
                       ? "Next in line!"
                       : ticketData.peopleAhead === 1
@@ -354,18 +351,18 @@ export default function SharedTicketPage() {
               </div>
 
               {/* Estimated wait */}
-              <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 md:p-5 flex flex-col justify-between">
-                <div className="flex items-center justify-between text-slate-400 mb-2">
+              <div className="bg-card border border-border rounded-2xl p-4 md:p-5 flex flex-col justify-between shadow-sm">
+                <div className="flex items-center justify-between text-muted-foreground mb-2">
                   <span className="text-xs font-semibold uppercase tracking-wider">
                     Est. Wait
                   </span>
-                  <Clock className="w-4 h-4 text-amber-400" />
+                  <Clock className="w-4 h-4 text-amber-500 dark:text-amber-400" />
                 </div>
                 <div>
-                  <div className="text-3xl md:text-4xl font-extrabold text-white tracking-tight">
+                  <div className="text-3xl md:text-4xl font-extrabold text-foreground tracking-tight">
                     ~{ticketData.currentEstimatedWait}m
                   </div>
-                  <div className="text-xs text-slate-400 mt-1 font-medium">
+                  <div className="text-xs text-muted-foreground mt-1 font-medium">
                     {ticketData.estimatedServiceStartTime
                       ? `Turn: ${new Date(ticketData.estimatedServiceStartTime).toLocaleTimeString([], {
                           hour: "2-digit",
@@ -380,22 +377,22 @@ export default function SharedTicketPage() {
 
           {/* Smart Prediction Banner */}
           {isWaiting && ticketData.prediction?.rangeDisplay && (
-            <div className="bg-blue-950/40 border border-blue-600/30 rounded-2xl p-4 flex items-center justify-between">
+            <div className="bg-primary/5 border border-primary/20 rounded-2xl p-4 flex items-center justify-between">
               <div className="flex items-center gap-3">
-                <div className="w-8 h-8 rounded-lg bg-blue-500/20 text-blue-400 flex items-center justify-center shrink-0">
+                <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
                   <Sparkles className="w-4 h-4" />
                 </div>
                 <div>
-                  <div className="text-xs font-bold text-blue-200">
+                  <div className="text-xs font-bold text-foreground">
                     Smart Prediction Window
                   </div>
-                  <div className="text-xs text-blue-300/80 mt-0.5">
+                  <div className="text-xs text-muted-foreground mt-0.5">
                     {ticketData.prediction.rangeDisplay} ({ticketData.prediction.confidenceLabel})
                   </div>
                 </div>
               </div>
 
-              <div className="px-2.5 py-1 rounded-full bg-blue-500/10 border border-blue-500/30 text-blue-400 text-[10px] font-bold uppercase tracking-wider">
+              <div className="px-2.5 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary text-[10px] font-bold uppercase tracking-wider">
                 {ticketData.prediction.confidence} Confidence
               </div>
             </div>
@@ -403,7 +400,7 @@ export default function SharedTicketPage() {
 
           {/* Services List */}
           <div className="space-y-3 pt-2">
-            <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-slate-400">
+            <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-muted-foreground">
               <span>Selected Services</span>
               <span>Total ~{totalDuration} mins</span>
             </div>
@@ -412,13 +409,13 @@ export default function SharedTicketPage() {
               {ticketData.selectedServices.map((service, idx) => (
                 <div
                   key={`${service.name}_${idx}`}
-                  className="bg-slate-900/50 border border-slate-800/80 rounded-xl px-4 py-3 flex items-center justify-between text-sm"
+                  className="bg-muted/50 border border-border rounded-xl px-4 py-3 flex items-center justify-between text-sm"
                 >
-                  <span className="font-semibold text-slate-200">{service.name}</span>
-                  <div className="flex items-center gap-3 text-xs text-slate-400">
+                  <span className="font-semibold text-foreground">{service.name}</span>
+                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
                     <span>⏱ {service.durationMin} mins</span>
                     {service.cost !== undefined && service.cost > 0 && (
-                      <span className="text-emerald-400 font-bold">${service.cost}</span>
+                      <span className="text-emerald-600 dark:text-emerald-400 font-bold">${service.cost}</span>
                     )}
                   </div>
                 </div>
@@ -430,16 +427,16 @@ export default function SharedTicketPage() {
           <div className="pt-2">
             <button
               onClick={handleCopyLink}
-              className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-slate-900 hover:bg-slate-800/90 text-slate-300 hover:text-white border border-slate-800 hover:border-slate-700 font-semibold text-sm transition"
+              className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-card hover:bg-muted text-foreground border border-border font-semibold text-sm transition shadow-sm"
             >
               {copied ? (
                 <>
-                  <Check className="w-4 h-4 text-emerald-400" />
-                  <span className="text-emerald-400 font-bold">Link Copied to Clipboard!</span>
+                  <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                  <span className="text-emerald-600 dark:text-emerald-400 font-bold">Link Copied to Clipboard!</span>
                 </>
               ) : (
                 <>
-                  <Copy className="w-4 h-4 text-blue-400" />
+                  <Copy className="w-4 h-4 text-primary" />
                   <span>Copy Live Tracking Link</span>
                 </>
               )}
@@ -449,13 +446,13 @@ export default function SharedTicketPage() {
 
         {/* Footer info & branding */}
         <footer className="text-center space-y-4 pt-4 pb-12">
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-muted-foreground">
             Guest tracking link strictly protects privacy. No customer personal information is accessible via this URL.
           </p>
 
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-900/60 border border-slate-800 text-xs text-slate-400">
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-card border border-border text-xs text-muted-foreground shadow-sm">
             <span>Powered by</span>
-            <Link href="/" className="font-bold text-blue-400 hover:text-blue-300 flex items-center gap-1">
+            <Link href="/" className="font-bold text-primary hover:underline flex items-center gap-1">
               QueueLess
               <ArrowRight className="w-3 h-3" />
             </Link>

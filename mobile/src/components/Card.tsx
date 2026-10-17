@@ -7,7 +7,7 @@ import {
   View,
   ViewStyle,
 } from "react-native";
-import { colors } from "../theme/colors";
+import { useTheme } from "../context/ThemeContext";
 import { radii, shadows, spacing } from "../theme/theme";
 
 type Props = PropsWithChildren<{
@@ -28,6 +28,7 @@ export default function Card({
   onPress,
   variant = "default",
 }: Props) {
+  const { colors, isDark } = useTheme();
   const scale = useRef(new Animated.Value(1)).current;
 
   const handlePressIn = () => {
@@ -50,12 +51,48 @@ export default function Card({
     }).start();
   };
 
-  const variantStyles = {
-    default: styles.cardDefault,
-    elevated: styles.cardElevated,
-    glow: styles.cardGlow,
-    subtle: styles.cardSubtle,
-  }[variant];
+  const dynamicStyles = {
+    cardBase: {
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: radii.lg,
+      padding: spacing.lg,
+      gap: spacing.md,
+      minWidth: 0,
+    },
+    default: {
+      shadowColor: "#000",
+      shadowOpacity: isDark ? 0.25 : 0.05,
+      shadowOffset: { width: 0, height: 1 },
+      shadowRadius: 6,
+      elevation: 2,
+    },
+    elevated: {
+      backgroundColor: colors.cardElevated,
+      borderColor: colors.borderLight,
+      shadowColor: "#000",
+      shadowOpacity: isDark ? 0.35 : 0.08,
+      shadowOffset: { width: 0, height: 3 },
+      shadowRadius: 10,
+      elevation: 3,
+    },
+    glow: {
+      borderColor: colors.primaryBorder,
+      backgroundColor: colors.card,
+      shadowColor: colors.primary,
+      shadowOpacity: isDark ? 0.25 : 0.12,
+      shadowOffset: { width: 0, height: 4 },
+      shadowRadius: 12,
+      elevation: 4,
+    },
+    subtle: {
+      backgroundColor: colors.bgSecondary,
+      borderColor: colors.borderSubtle,
+    },
+  };
+
+  const variantStyle = dynamicStyles[variant];
 
   if (onPress) {
     return (
@@ -67,8 +104,8 @@ export default function Card({
       >
         <Animated.View
           style={[
-            styles.cardBase,
-            variantStyles,
+            dynamicStyles.cardBase,
+            variantStyle,
             style,
             { transform: [{ scale }] },
           ]}
@@ -80,7 +117,7 @@ export default function Card({
   }
 
   return (
-    <View style={[styles.cardBase, variantStyles, style]}>
+    <View style={[dynamicStyles.cardBase, variantStyle, style]}>
       {children}
     </View>
   );
@@ -89,31 +126,5 @@ export default function Card({
 const styles = StyleSheet.create({
   pressableWrap: {
     width: "100%",
-  },
-  cardBase: {
-    backgroundColor: colors.card,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radii.lg,
-    padding: spacing.lg,
-    gap: spacing.md,
-    minWidth: 0,
-  },
-  cardDefault: {
-    ...shadows.card,
-  },
-  cardElevated: {
-    backgroundColor: colors.cardSoft,
-    borderColor: colors.borderLight,
-    ...shadows.card,
-  },
-  cardGlow: {
-    borderColor: colors.primaryBorder,
-    backgroundColor: colors.card,
-    ...shadows.glow,
-  },
-  cardSubtle: {
-    backgroundColor: colors.bgSecondary,
-    borderColor: colors.borderSubtle,
   },
 });

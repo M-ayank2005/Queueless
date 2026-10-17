@@ -6,6 +6,7 @@ import queueRoutes from "./routes/queueRoutes";
 import healthRoutes from "./routes/healthRoutes";
 import { requestIdMiddleware } from "./middleware/requestId";
 import { generalApiRateLimiter } from "./middleware/rateLimiter";
+import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
 import { logger } from "./utils/logger";
 
 const app = express();
@@ -56,10 +57,10 @@ app.use(cors({
   optionsSuccessStatus: 204
 }));
 
-app.use(express.json({ limit: "2mb" }));
-
-// Request tracing & structured HTTP access logging
+// Request tracing & structured HTTP access logging (mounted before body parsing to trace all requests)
 app.use(requestIdMiddleware);
+
+app.use(express.json({ limit: "2mb" }));
 
 // Root landing endpoint
 app.get("/", (req: Request, res: Response) => {
@@ -78,31 +79,10 @@ app.use("/api/business", businessRoutes);
 app.use("/api/queue", queueRoutes);
 app.use("/api/customer", queueRoutes);
 
-// Central 404 handler
-app.use((req: Request, res: Response) => {
-  res.status(404).json({
-    success: false,
-    message: `Route not found: ${req.method} ${req.originalUrl}`,
-    requestId: req.requestId,
-  });
-});
+// Central 404 handler for unknown routes
+app.use(notFoundHandler);
 
 // Centralized error handling middleware
-app.use((err: any, req: Request, res: Response, next: NextFunction) => {
-  logger.error("Unhandled error caught in central error handler:", {
-    requestId: req.requestId,
-    error: err.message || err,
-    stack: err.stack,
-    path: req.originalUrl,
-    method: req.method,
-  });
-
-  const statusCode = err.status || err.statusCode || 500;
-  res.status(statusCode).json({
-    success: false,
-    message: err.message || "Internal server error",
-    requestId: req.requestId,
-  });
-});
+app.use(errorHandler);
 
 export default app;

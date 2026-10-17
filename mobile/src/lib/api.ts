@@ -1,4 +1,5 @@
 import axios from "axios";
+import { normalizeApiError } from "./errors";
 
 // Base API URL with environment variable support (fallback to local server)
 const API_URL = process.env.EXPO_PUBLIC_API_URL || "http://localhost:5000/api";
@@ -40,13 +41,16 @@ api.interceptors.request.use(
     }
     return config;
   },
-  (error) => Promise.reject(error)
+  (error) => Promise.reject(normalizeApiError(error))
 );
 
 // Response Interceptor: Catches 401 Unauthorized responses and invokes session invalidation handler
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
+    const normalized = normalizeApiError(error);
+    (error as any).normalized = normalized;
+
     if (error.response?.status === 401) {
       if (!isHandlingUnauthorized) {
         isHandlingUnauthorized = true;

@@ -896,7 +896,7 @@ export const toggleFavoriteService = async (customerId: string, businessId: stri
 export const getCustomerFavoritesService = async (customerId: string) => {
   const customer = await User.findById(customerId).populate({
     path: "favoriteBusinesses",
-    select: "businessProfile"
+    select: "name businessProfile"
   });
 
   if (!customer) {
@@ -921,12 +921,21 @@ export const getCustomerFavoritesService = async (customerId: string) => {
         });
 
         const estimate = await calculateTicketWaitEstimate(b._id, now, "waiting");
+        const effectiveQrCode = b.businessProfile.uniqueQrCode || b._id.toString();
 
         return {
           _id: b._id,
-          shopName: b.businessProfile.shopName || "QueueLess Store",
+          name: b.name,
+          shopName: b.businessProfile.shopName || b.name || "QueueLess Store",
           address: b.businessProfile.address || "",
-          uniqueQrCode: b.businessProfile.uniqueQrCode,
+          uniqueQrCode: effectiveQrCode,
+          qrCode: effectiveQrCode,
+          businessProfile: {
+            ...(typeof (b.businessProfile as any)?.toObject === "function"
+              ? (b.businessProfile as any).toObject()
+              : b.businessProfile),
+            uniqueQrCode: effectiveQrCode
+          },
           services: b.businessProfile.services || [],
           workingHours,
           isOpen: openStatus.isOpen,

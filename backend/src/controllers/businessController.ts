@@ -1,4 +1,4 @@
-import { Response } from "express";
+import { Request, Response, NextFunction } from "express";
 import User, { IService } from "../models/User";
 import QueueEntry from "../models/QueueEntry";
 import { AuthRequest } from "../middleware/authMiddleware";
@@ -8,45 +8,73 @@ import {
 } from "../services/queueService";
 import { getBusinessAnalyticsService } from "../services/analyticsService";
 
+const sendValidationError = (res: Response, req: Request, field: string, message: string) => {
+  return res.status(400).json({
+    success: false,
+    message,
+    error: {
+      code: "VALIDATION_ERROR",
+      message,
+      details: [{ field, message }],
+      requestId: req.requestId
+    },
+    requestId: req.requestId
+  });
+};
+
+const sendNotFoundError = (res: Response, req: Request, message: string = "Resource not found") => {
+  return res.status(404).json({
+    success: false,
+    message,
+    error: {
+      code: "RESOURCE_NOT_FOUND",
+      message,
+      details: [],
+      requestId: req.requestId
+    },
+    requestId: req.requestId
+  });
+};
+
 // Get Business Profile (Services, QR, Working Hours)
-export const getBusinessProfile = async (req: AuthRequest, res: Response) => {
+export const getBusinessProfile = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const user = await User.findById(req.user!.id);
     if (!user || user.role !== "business" || !user.businessProfile) {
-      return res.status(404).json({ success: false, message: "Business profile not found" });
+      return sendNotFoundError(res, req, "Business profile not found");
     }
     return res.json(user.businessProfile);
   } catch (error) {
-    return res.status(500).json({ success: false, message: "Internal server error retrieving business profile" });
+    return next(error);
   }
 };
 
 // Update Services Catalog
-export const updateServices = async (req: AuthRequest, res: Response) => {
+export const updateServices = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const { services } = req.body;
 
     if (!Array.isArray(services)) {
-      return res.status(400).json({ success: false, message: "Services must be provided as an array" });
+      return sendValidationError(res, req, "services", "Services must be provided as an array");
     }
 
     // Validate each service in the catalog
     for (let i = 0; i < services.length; i++) {
       const s = services[i];
       if (!s.name || typeof s.name !== "string" || s.name.trim().length === 0) {
-        return res.status(400).json({ success: false, message: `Service at index ${i} requires a valid name` });
+        return sendValidationError(res, req, `services[${i}].name`, `Service at index ${i} requires a valid name`);
       }
       if (typeof s.durationMin !== "number" || s.durationMin <= 0) {
-        return res.status(400).json({ success: false, message: `Service '${s.name}' must have a positive duration (minutes)` });
+        return sendValidationError(res, req, `services[${i}].durationMin`, `Service '${s.name}' must have a positive duration (minutes)`);
       }
       if (typeof s.cost !== "number" || s.cost < 0) {
-        return res.status(400).json({ success: false, message: `Service '${s.name}' must have a non-negative cost` });
+        return sendValidationError(res, req, `services[${i}].cost`, `Service '${s.name}' must have a non-negative cost`);
       }
     }
 
     const user = await User.findById(req.user!.id);
     if (!user || user.role !== "business" || !user.businessProfile) {
-      return res.status(404).json({ success: false, message: "Business not found" });
+      return sendNotFoundError(res, req, "Business not found");
     }
 
     user.businessProfile.services = services.map((s: any) => ({
@@ -58,30 +86,30 @@ export const updateServices = async (req: AuthRequest, res: Response) => {
     await user.save();
     return res.json(user.businessProfile);
   } catch (error) {
-    return res.status(500).json({ success: false, message: "Internal server error updating services" });
+    return next(error);
   }
 };
 
 // Update Business Settings (Hours, Address, Name, Timezone)
-export const updateSettings = async (req: AuthRequest, res: Response) => {
+export const updateSettings = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const { shopName, address, workingHours } = req.body;
 
     const user = await User.findById(req.user!.id);
     if (!user || user.role !== "business" || !user.businessProfile) {
-      return res.status(404).json({ success: false, message: "Business not found" });
+      return sendNotFoundError(res, req, "Business not found");
     }
 
     if (shopName !== undefined) {
       if (typeof shopName !== "string" || shopName.trim().length === 0) {
-        return res.status(400).json({ success: false, message: "Shop name cannot be empty" });
+        return sendValidationError(res, req, "shopName", "Shop name cannot be empty");
       }
       user.businessProfile.shopName = shopName.trim();
     }
 
     if (address !== undefined) {
       if (typeof address !== "string" || address.trim().length === 0) {
-        return res.status(400).json({ success: false, message: "Address cannot be empty" });
+        return sendValidationError(res, req, "address", "Address cannot be empty");
       }
       user.businessProfile.address = address.trim();
     }
@@ -89,13 +117,13 @@ export const updateSettings = async (req: AuthRequest, res: Response) => {
     if (workingHours !== undefined) {
       const timeRegex = /^([01]\d|2[0-3]):([0-5]\d)$/;
       if (workingHours.openTime && !timeRegex.test(workingHours.openTime)) {
-        return res.status(400).json({ success: false, message: "openTime must be in 24h HH:mm format" });
+        return sendValidationError(res, req, "workingHours.openTime", "openTime must be in 24h HH:mm format");
       }
       if (workingHours.closeTime && !timeRegex.test(workingHours.closeTime)) {
-        return res.status(400).json({ success: false, message: "closeTime must be in 24h HH:mm format" });
+        return sendValidationError(res, req, "workingHours.closeTime", "closeTime must be in 24h HH:mm format");
       }
       if (workingHours.closedDays && !Array.isArray(workingHours.closedDays)) {
-        return res.status(400).json({ success: false, message: "closedDays must be an array of day numbers (0-6)" });
+        return sendValidationError(res, req, "workingHours.closedDays", "closedDays must be an array of day numbers (0-6)");
       }
 
       user.businessProfile.workingHours = {
@@ -109,12 +137,12 @@ export const updateSettings = async (req: AuthRequest, res: Response) => {
     await user.save();
     return res.json(user.businessProfile);
   } catch (error) {
-    return res.status(500).json({ success: false, message: "Internal server error updating business settings" });
+    return next(error);
   }
 };
 
 // Get Current Queue and Recently Processed Entries (Enriched with unified estimates)
-export const getQueue = async (req: AuthRequest, res: Response) => {
+export const getQueue = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     // 1. Fetch active queue entries (waiting or in_progress), ordered by joinedAt asc
     const activeQueueRaw = await QueueEntry.find({
@@ -153,12 +181,12 @@ export const getQueue = async (req: AuthRequest, res: Response) => {
 
     return res.json([...activeQueue, ...processedQueue]);
   } catch (error) {
-    return res.status(500).json({ success: false, message: "Internal server error retrieving counter queue" });
+    return next(error);
   }
 };
 
 // Update Queue Status - delegates to QueueService
-export const updateQueueStatus = async (req: AuthRequest, res: Response) => {
+export const updateQueueStatus = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
     const { status } = req.body;
@@ -172,16 +200,29 @@ export const updateQueueStatus = async (req: AuthRequest, res: Response) => {
 
     return res.json(entry);
   } catch (error: any) {
-    const statusCode = error.status || 500;
+    if (!error.status && !error.statusCode) {
+      return next(error);
+    }
+    const statusCode = error.status || error.statusCode || 500;
+    const code = statusCode === 400 ? "BAD_REQUEST" :
+                 statusCode === 404 ? "RESOURCE_NOT_FOUND" :
+                 statusCode === 409 ? "CONFLICT" : "INTERNAL_SERVER_ERROR";
     return res.status(statusCode).json({
       success: false,
-      message: error.message || "Server error updating ticket status"
+      message: error.message || "Server error updating ticket status",
+      error: {
+        code,
+        message: error.message || "Server error updating ticket status",
+        details: error.details || [],
+        requestId: req.requestId
+      },
+      requestId: req.requestId
     });
   }
 };
 
 // Get Operational Analytics & Insights
-export const getAnalytics = async (req: AuthRequest, res: Response) => {
+export const getAnalytics = async (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const range = (req.query.range as string) || "7d";
     const startDate = req.query.startDate as string;
@@ -196,10 +237,6 @@ export const getAnalytics = async (req: AuthRequest, res: Response) => {
 
     return res.json(analytics);
   } catch (error: any) {
-    return res.status(500).json({
-      success: false,
-      message: error.message || "Server error retrieving business analytics",
-      error
-    });
+    return next(error);
   }
 };

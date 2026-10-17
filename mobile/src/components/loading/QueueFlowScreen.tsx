@@ -2,7 +2,7 @@ import React from "react";
 import { StyleSheet, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import QueueFlowLoader from "./QueueFlowLoader";
-import { colors } from "../../theme/colors";
+import { useTheme } from "../../context/ThemeContext";
 
 type Props = {
   message?: string;
@@ -20,12 +20,14 @@ export default function QueueFlowScreen({
   submessage = "Connecting to counter...",
 }: Props) {
   const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
 
   return (
     <View
       style={[
         styles.container,
         {
+          backgroundColor: colors.bg,
           paddingTop: Math.max(insets.top, 24),
           paddingBottom: Math.max(insets.bottom, 24),
         },
@@ -44,9 +46,9 @@ export default function QueueFlowScreen({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: colors.bg,
     alignItems: "center",
     justifyContent: "center",
     width: "100%",
   },
 });
+

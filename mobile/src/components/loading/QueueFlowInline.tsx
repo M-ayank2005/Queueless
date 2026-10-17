@@ -9,7 +9,6 @@ import {
   View,
   ViewStyle,
 } from "react-native";
-import { colors } from "../../theme/colors";
 
 type Props = {
   text?: string;
