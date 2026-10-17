@@ -300,30 +300,35 @@ export const joinQueueService = async (
     };
   }
 
+  if (!Array.isArray(requestedServices) || requestedServices.length === 0) {
+    throw { status: 400, message: "At least one service must be selected" };
+  }
+
   const catalog = businessUser.businessProfile.services || [];
   const verifiedServices: IService[] = [];
 
   for (const item of requestedServices) {
-    const matched = catalog.find(
-      c => c.name.toLowerCase().trim() === (item.name || "").toLowerCase().trim()
-    );
-    if (matched) {
-      verifiedServices.push({
-        name: matched.name,
-        durationMin: matched.durationMin,
-        cost: matched.cost
-      });
-    } else if (item.name && typeof item.durationMin === "number" && item.durationMin > 0) {
-      verifiedServices.push({
-        name: String(item.name).trim(),
-        durationMin: Number(item.durationMin),
-        cost: Math.max(0, Number(item.cost || 0))
-      });
+    if (!item || typeof item !== "object" || typeof item.name !== "string" || !item.name.trim()) {
+      throw { status: 400, message: "Invalid service item format" };
     }
-  }
 
-  if (verifiedServices.length === 0) {
-    throw { status: 400, message: "No valid services selected from store catalog" };
+    const trimmedName = item.name.trim().toLowerCase();
+    const matched = catalog.find(
+      c => c.name.trim().toLowerCase() === trimmedName
+    );
+
+    if (!matched) {
+      throw {
+        status: 400,
+        message: `Service '${item.name.trim()}' is not offered by this store`
+      };
+    }
+
+    verifiedServices.push({
+      name: matched.name,
+      durationMin: matched.durationMin,
+      cost: matched.cost
+    });
   }
 
   const now = new Date();
@@ -603,37 +608,14 @@ export const transitionTicketStatusService = async (
     status: nextStatus
   };
 
+  let shouldDispatchYourTurn = false;
   if (nextStatus === "in_progress") {
     updateFields.serviceStartedAt = now;
 
-    // Dispatched YOUR_TURN notification (once per ticket)
+    // Record turn notification timestamp in atomic update payload
     if (!entry.notificationLedger?.yourTurnSentAt) {
       updateFields["notificationLedger.yourTurnSentAt"] = now;
-
-      let shopName = "QueueLess Store";
-      try {
-        const busUser = await User.findById(entry.businessId);
-        if (busUser?.businessProfile?.shopName) {
-          shopName = busUser.businessProfile.shopName;
-        }
-      } catch {}
-
-      const yourTurnPayload: QueueNotificationPayload = {
-        type: "YOUR_TURN",
-        ticketId: entry._id.toString(),
-        businessId: entry.businessId.toString(),
-        shopName,
-        peopleAhead: 0,
-        estimatedWaitMin: 0,
-        title: "It's Your Turn! 🎯",
-        message: `The counter is ready for you at ${shopName}! Please proceed to the service counter now.`,
-        timestamp: now.toISOString()
-      };
-
-      if (io) {
-        io.to(`queue_${entry._id}`).emit("customer_notification", yourTurnPayload);
-        io.to(`user_${entry.customerId}`).emit("customer_notification", yourTurnPayload);
-      }
+      shouldDispatchYourTurn = true;
     }
   } else if (nextStatus === "completed") {
     updateFields.completedAt = now;
@@ -659,6 +641,36 @@ export const transitionTicketStatusService = async (
       status: 409,
       message: "Ticket status was concurrently modified by another request. Please refresh."
     };
+  }
+
+  // Dispatch YOUR_TURN notification ONLY after atomic database transition succeeds
+  if (io && shouldDispatchYourTurn) {
+    try {
+      let shopName = "QueueLess Store";
+      try {
+        const busUser = await User.findById(updatedEntry.businessId);
+        if (busUser?.businessProfile?.shopName) {
+          shopName = busUser.businessProfile.shopName;
+        }
+      } catch {}
+
+      const yourTurnPayload: QueueNotificationPayload = {
+        type: "YOUR_TURN",
+        ticketId: updatedEntry._id.toString(),
+        businessId: updatedEntry.businessId.toString(),
+        shopName,
+        peopleAhead: 0,
+        estimatedWaitMin: 0,
+        title: "It's Your Turn! 🎯",
+        message: `The counter is ready for you at ${shopName}! Please proceed to the service counter now.`,
+        timestamp: now.toISOString()
+      };
+
+      io.to(`queue_${updatedEntry._id}`).emit("customer_notification", yourTurnPayload);
+      io.to(`user_${updatedEntry.customerId}`).emit("customer_notification", yourTurnPayload);
+    } catch {
+      // Notification dispatch failure must not reverse or misreport a committed transition
+    }
   }
 
   if (io) {
@@ -1037,25 +1049,33 @@ export const generateTicketShareTokenService = async (
   const now = new Date();
   const isExpired = entry.shareTokenExpiresAt && entry.shareTokenExpiresAt < now;
 
-  // Generate new token if missing, revoked, or expired
-  if (!entry.shareToken || entry.shareTokenRevoked || isExpired) {
-    const rawToken = crypto.randomBytes(24).toString("hex");
-    const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24-hour expiration policy
-
-    entry.shareToken = rawToken;
-    entry.shareTokenHash = tokenHash;
-    entry.shareTokenCreatedAt = now;
-    entry.shareTokenExpiresAt = expiresAt;
-    entry.shareTokenRevoked = false;
-    await entry.save();
+  // For backward compatibility: if a legacy plaintext token exists and is valid, return it
+  if (entry.shareToken && !entry.shareTokenRevoked && !isExpired) {
+    return {
+      shareToken: entry.shareToken,
+      shareUrl: `/shared/${entry.shareToken}`,
+      createdAt: entry.shareTokenCreatedAt || now,
+      expiresAt: entry.shareTokenExpiresAt || new Date(Date.now() + 24 * 60 * 60 * 1000)
+    };
   }
 
+  // Generate new cryptographically secure token and store ONLY its SHA-256 hash
+  const rawToken = crypto.randomBytes(24).toString("hex");
+  const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
+  const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24-hour expiration policy
+
+  entry.shareToken = undefined; // Do not persist plaintext token in new/updated records
+  entry.shareTokenHash = tokenHash;
+  entry.shareTokenCreatedAt = now;
+  entry.shareTokenExpiresAt = expiresAt;
+  entry.shareTokenRevoked = false;
+  await entry.save();
+
   return {
-    shareToken: entry.shareToken!,
-    shareUrl: `/shared/${entry.shareToken}`,
-    createdAt: entry.shareTokenCreatedAt || now,
-    expiresAt: entry.shareTokenExpiresAt || new Date(Date.now() + 24 * 60 * 60 * 1000)
+    shareToken: rawToken,
+    shareUrl: `/shared/${rawToken}`,
+    createdAt: now,
+    expiresAt
   };
 };
 
@@ -1123,7 +1143,8 @@ export const getSharedTicketService = async (
   const entry = await QueueEntry.findOne({
     $or: [
       { shareTokenHash: tokenHash },
-      { shareToken: cleanToken }
+      { shareTokenHash: cleanToken }, // supports internal lookup by hash
+      { shareToken: cleanToken }      // backward compatibility for unmigrated legacy tokens
     ],
     shareTokenRevoked: { $ne: true }
   }).populate("businessId", "businessProfile.shopName businessProfile.address");
@@ -1141,6 +1162,19 @@ export const getSharedTicketService = async (
       status: 410,
       message: "This shared ticket link has expired. Please request an updated link from the ticket holder."
     };
+  }
+
+  // Timing-safe verification if token matched via hash
+  if (entry.shareTokenHash && (entry.shareTokenHash === tokenHash || entry.shareTokenHash === cleanToken)) {
+    const targetHash = entry.shareTokenHash === tokenHash ? tokenHash : cleanToken;
+    const computedBuf = Buffer.from(targetHash, "hex");
+    const storedBuf = Buffer.from(entry.shareTokenHash, "hex");
+    if (computedBuf.length !== storedBuf.length || !crypto.timingSafeEqual(computedBuf, storedBuf)) {
+      throw {
+        status: 404,
+        message: "This shared ticket link is invalid, expired, or has been revoked by the holder."
+      };
+    }
   }
 
   const businessIdStr =

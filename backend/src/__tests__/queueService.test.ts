@@ -5,6 +5,7 @@ import {
   transitionTicketStatusService,
   toggleFavoriteService,
   quickRebookService,
+  joinQueueService,
   VALID_TRANSITIONS
 } from "../services/queueService";
 import QueueEntry from "../models/QueueEntry";
@@ -353,6 +354,110 @@ describe("Queue Service Engine — Unit Tests", () => {
         type: "YOUR_TURN",
         title: "It's Your Turn! 🎯"
       }));
+      expect(mockIo.to).toHaveBeenCalledWith(`queue_${ticketId}`);
+      expect(mockIo.to).toHaveBeenCalledWith(`user_${customerId}`);
+    });
+
+    it("should NOT emit YOUR_TURN notification if atomic findOneAndUpdate fails (race condition)", async () => {
+      const ticketId = new mongoose.Types.ObjectId();
+      const customerId = new mongoose.Types.ObjectId();
+      const mockTicket: any = {
+        _id: ticketId,
+        businessId: dummyBusinessId,
+        customerId,
+        status: "waiting",
+        notificationLedger: {}
+      };
+
+      (QueueEntry.findOne as jest.Mock).mockResolvedValue(mockTicket);
+      // Atomic update fails because another process changed the status concurrently
+      (QueueEntry.findOneAndUpdate as jest.Mock).mockResolvedValue(null);
+
+      await expect(
+        transitionTicketStatusService(
+          ticketId.toString(),
+          dummyBusinessId.toString(),
+          "in_progress",
+          mockIo
+        )
+      ).rejects.toMatchObject({
+        status: 409,
+        message: expect.stringContaining("concurrently modified")
+      });
+
+      // Verify no turn notification was emitted
+      expect(mockEmitter.emit).not.toHaveBeenCalledWith(
+        "customer_notification",
+        expect.objectContaining({ type: "YOUR_TURN" })
+      );
+    });
+
+    it("should NOT emit any notification if invalid transition is attempted", async () => {
+      const ticketId = new mongoose.Types.ObjectId();
+      const mockTicket: any = {
+        _id: ticketId,
+        businessId: dummyBusinessId,
+        customerId: new mongoose.Types.ObjectId(),
+        status: "waiting",
+        notificationLedger: {}
+      };
+
+      (QueueEntry.findOne as jest.Mock).mockResolvedValue(mockTicket);
+
+      // Transition from 'waiting' directly to 'completed' is illegal
+      await expect(
+        transitionTicketStatusService(
+          ticketId.toString(),
+          dummyBusinessId.toString(),
+          "completed",
+          mockIo
+        )
+      ).rejects.toMatchObject({
+        status: 400,
+        message: expect.stringContaining("Invalid queue status transition")
+      });
+
+      expect(mockEmitter.emit).not.toHaveBeenCalledWith(
+        "customer_notification",
+        expect.anything()
+      );
+    });
+
+    it("should NOT re-emit YOUR_TURN notification if yourTurnSentAt is already recorded in notificationLedger", async () => {
+      const ticketId = new mongoose.Types.ObjectId();
+      const customerId = new mongoose.Types.ObjectId();
+      const mockTicket: any = {
+        _id: ticketId,
+        businessId: dummyBusinessId,
+        customerId,
+        status: "waiting",
+        notificationLedger: { yourTurnSentAt: new Date(Date.now() - 60000) }
+      };
+
+      (QueueEntry.findOne as jest.Mock).mockResolvedValue(mockTicket);
+      (QueueEntry.findOneAndUpdate as jest.Mock).mockResolvedValue({
+        ...mockTicket,
+        status: "in_progress"
+      });
+
+      (QueueEntry.find as jest.Mock).mockImplementation(() => ({
+        sort: jest.fn().mockReturnValue({
+          populate: jest.fn().mockResolvedValue([])
+        })
+      }));
+
+      await transitionTicketStatusService(
+        ticketId.toString(),
+        dummyBusinessId.toString(),
+        "in_progress",
+        mockIo
+      );
+
+      // Must not re-emit duplicate YOUR_TURN
+      expect(mockEmitter.emit).not.toHaveBeenCalledWith(
+        "customer_notification",
+        expect.objectContaining({ type: "YOUR_TURN" })
+      );
     });
   });
 
@@ -521,4 +626,149 @@ describe("Queue Service Engine — Unit Tests", () => {
       });
     });
   });
+
+  describe("joinQueueService — Catalog Integrity & Authorization", () => {
+    const customerId = new mongoose.Types.ObjectId();
+    const businessId = new mongoose.Types.ObjectId();
+
+    beforeEach(() => {
+      (User.findById as jest.Mock).mockResolvedValue({
+        _id: businessId,
+        role: "business",
+        businessProfile: {
+          shopName: "Urban Salon",
+          services: [
+            { name: "Haircut", durationMin: 30, cost: 25 },
+            { name: "Beard Trim", durationMin: 15, cost: 15 }
+          ]
+        }
+      });
+
+      (QueueEntry.findOne as jest.Mock).mockResolvedValue(null);
+
+      (QueueEntry.find as jest.Mock).mockImplementation((filter: any) => {
+        if (filter.status === "completed") {
+          return {
+            sort: jest.fn().mockReturnThis(),
+            limit: jest.fn().mockReturnThis(),
+            select: jest.fn().mockResolvedValue([])
+          };
+        }
+        if (filter.status === "waiting" && !filter.joinedAt) {
+          return {
+            sort: jest.fn().mockReturnValue({
+              populate: jest.fn().mockResolvedValue([])
+            })
+          };
+        }
+        return {
+          sort: jest.fn().mockResolvedValue([])
+        };
+      });
+
+      (QueueEntry as any).mockImplementation((doc: any) => ({
+        ...doc,
+        _id: new mongoose.Types.ObjectId(),
+        toObject: () => ({ ...doc, _id: new mongoose.Types.ObjectId() }),
+        save: jest.fn().mockResolvedValue(true)
+      }));
+    });
+
+    it("should successfully book valid catalog service and use server catalog price and duration", async () => {
+      // Client attempts to forge price ($0) and duration (1 min)
+      const requested = [{ name: "Haircut", durationMin: 1, cost: 0 }];
+
+      const result = await joinQueueService(
+        customerId.toString(),
+        "Alice",
+        businessId.toString(),
+        requested
+      );
+
+      expect(result).toBeDefined();
+      expect(result.status).toBe("waiting");
+      expect(result.selectedServices).toHaveLength(1);
+      // Authoritative catalog values: durationMin=30, cost=25
+      expect(result.selectedServices[0].name).toBe("Haircut");
+      expect(result.selectedServices[0].durationMin).toBe(30);
+      expect(result.selectedServices[0].cost).toBe(25);
+    });
+
+    it("should reject a nonexistent service not in the store catalog with 400", async () => {
+      const requested = [{ name: "Laser Treatment" }];
+
+      await expect(
+        joinQueueService(customerId.toString(), "Alice", businessId.toString(), requested)
+      ).rejects.toMatchObject({
+        status: 400,
+        message: expect.stringContaining("Laser Treatment")
+      });
+    });
+
+    it("should reject a mixed request where one service is valid and another is invalid (all-or-nothing)", async () => {
+      const requested = [
+        { name: "Haircut" },
+        { name: "Nonexistent VIP Treatment" }
+      ];
+
+      await expect(
+        joinQueueService(customerId.toString(), "Alice", businessId.toString(), requested)
+      ).rejects.toMatchObject({
+        status: 400,
+        message: expect.stringContaining("Nonexistent VIP Treatment")
+      });
+    });
+
+    it("should reject malformed service items with 400", async () => {
+      await expect(
+        joinQueueService(customerId.toString(), "Alice", businessId.toString(), [{ name: "" }])
+      ).rejects.toMatchObject({
+        status: 400,
+        message: "Invalid service item format"
+      });
+
+      await expect(
+        joinQueueService(customerId.toString(), "Alice", businessId.toString(), [null as any])
+      ).rejects.toMatchObject({
+        status: 400,
+        message: "Invalid service item format"
+      });
+    });
+
+    it("should reject empty services array with 400", async () => {
+      await expect(
+        joinQueueService(customerId.toString(), "Alice", businessId.toString(), [])
+      ).rejects.toMatchObject({
+        status: 400,
+        message: "At least one service must be selected"
+      });
+    });
+
+    it("should reject joining queue when business is not found or not business role", async () => {
+      (User.findById as jest.Mock).mockResolvedValue(null);
+
+      await expect(
+        joinQueueService(customerId.toString(), "Alice", businessId.toString(), [{ name: "Haircut" }])
+      ).rejects.toMatchObject({
+        status: 404,
+        message: "Business not found or invalid"
+      });
+    });
+
+    it("should reject joining queue if user already has an active ticket with 409", async () => {
+      const activeTicketId = new mongoose.Types.ObjectId();
+      (QueueEntry.findOne as jest.Mock).mockResolvedValue({
+        _id: activeTicketId,
+        status: "waiting"
+      });
+
+      await expect(
+        joinQueueService(customerId.toString(), "Alice", businessId.toString(), [{ name: "Haircut" }])
+      ).rejects.toMatchObject({
+        status: 409,
+        activeTicketId
+      });
+    });
+  });
 });
+

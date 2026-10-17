@@ -60,7 +60,23 @@ const QueueEntrySchema = new Schema<IQueueEntry>({
   shareTokenCreatedAt: { type: Date },
   shareTokenExpiresAt: { type: Date, index: true },
   shareTokenRevoked: { type: Boolean, default: false }
-}, { timestamps: true });
+}, {
+  timestamps: true,
+  toJSON: {
+    transform: (_doc, ret: any) => {
+      delete ret.shareTokenHash;
+      delete ret.shareToken;
+      return ret;
+    }
+  },
+  toObject: {
+    transform: (_doc, ret: any) => {
+      delete ret.shareTokenHash;
+      delete ret.shareToken;
+      return ret;
+    }
+  }
+});
 
 // Partial unique compound index: Prevents race conditions and guarantees at most 1 active ticket per customer per store
 QueueEntrySchema.index(

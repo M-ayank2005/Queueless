@@ -11,7 +11,14 @@ export const getJwtSecret = (): string => {
     }
     return "dev_queueless_jwt_secret_key_change_in_prod";
   }
+  if (process.env.NODE_ENV === "production" && secret.length < 32) {
+    throw new Error("FATAL: JWT_SECRET must be at least 32 characters long in production.");
+  }
   return secret;
+};
+
+export const verifyJwtToken = (token: string): UserPayload => {
+  return jwt.verify(token, getJwtSecret()) as UserPayload;
 };
 
 export const VALID_ROLES = ["customer", "business"] as const;
@@ -27,6 +34,32 @@ export interface UserPayload {
 export interface AuthRequest extends Request {
   user?: UserPayload;
 }
+
+export const socketAuthMiddleware = (socket: any, next: (err?: any) => void) => {
+  const token = socket.handshake?.auth?.token || 
+    (socket.handshake?.headers?.authorization && socket.handshake.headers.authorization.split(" ")[1]);
+
+  if (token) {
+    try {
+      const decoded = verifyJwtToken(token);
+      if (decoded && decoded.id && VALID_ROLES.includes(decoded.role)) {
+        socket.data = socket.data || {};
+        socket.data.user = decoded;
+      } else {
+        socket.data = socket.data || {};
+        socket.data.user = null;
+      }
+    } catch {
+      // Allow unauthenticated connection for guest socket listeners, but restrict sensitive rooms
+      socket.data = socket.data || {};
+      socket.data.user = null;
+    }
+  } else {
+    socket.data = socket.data || {};
+    socket.data.user = null;
+  }
+  next();
+};
 
 export const protect = async (req: AuthRequest, res: Response, next: NextFunction) => {
   const authHeader = req.headers.authorization;
@@ -47,11 +80,19 @@ export const protect = async (req: AuthRequest, res: Response, next: NextFunctio
   }
 
   try {
-    const decoded = jwt.verify(token, getJwtSecret()) as UserPayload;
+    const decoded = verifyJwtToken(token);
     if (!decoded || !decoded.id || !decoded.role) {
       return res.status(401).json({
         success: false,
         message: "Not authorized, invalid token payload"
+      });
+    }
+
+    // Validate user ID format (MongoDB ObjectId)
+    if (!decoded.id || !mongoose.Types.ObjectId.isValid(decoded.id)) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authorized, invalid account identifier"
       });
     }
 
@@ -63,32 +104,45 @@ export const protect = async (req: AuthRequest, res: Response, next: NextFunctio
       });
     }
 
-    // User existence and active status verification against live database
-    if (mongoose.connection.readyState === 1 && mongoose.Types.ObjectId.isValid(decoded.id)) {
-      const user = await User.findById(decoded.id).select("_id role name email");
-      if (!user) {
-        return res.status(401).json({
-          success: false,
-          message: "Not authorized, user account no longer exists"
-        });
-      }
-
-      if (user.role !== decoded.role) {
-        return res.status(401).json({
-          success: false,
-          message: "Not authorized, account role mismatch"
-        });
-      }
-
-      req.user = {
-        id: user._id.toString(),
-        role: user.role,
-        name: user.name,
-        email: user.email
-      };
-    } else {
-      req.user = decoded;
+    // Fail closed if database is unavailable
+    if (mongoose.connection.readyState !== 1) {
+      return res.status(503).json({
+        success: false,
+        message: "Service temporarily unavailable, authentication database unreachable"
+      });
     }
+
+    // Live account lookup
+    let user;
+    try {
+      user = await User.findById(decoded.id).select("_id role name email");
+    } catch {
+      return res.status(503).json({
+        success: false,
+        message: "Service temporarily unavailable, failed to verify account"
+      });
+    }
+
+    if (!user) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authorized, user account no longer exists"
+      });
+    }
+
+    if (user.role !== decoded.role) {
+      return res.status(401).json({
+        success: false,
+        message: "Not authorized, account role mismatch"
+      });
+    }
+
+    req.user = {
+      id: user._id.toString(),
+      role: user.role,
+      name: user.name,
+      email: user.email
+    };
 
     return next();
   } catch (error: any) {

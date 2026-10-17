@@ -3,20 +3,21 @@ import crypto from "crypto";
 import { Server, Socket } from "socket.io";
 import mongoose from "mongoose";
 import dotenv from "dotenv";
-import jwt from "jsonwebtoken";
 import app, { getAppCorsOrigins } from "./app";
 import { logger } from "./utils/logger";
 import { setServerDraining } from "./controllers/healthController";
 import QueueEntry from "./models/QueueEntry";
+import { getJwtSecret, socketAuthMiddleware } from "./middleware/authMiddleware";
 
 dotenv.config();
 
 const PORT = process.env.PORT || 5000;
 const MONGO_URI = process.env.MONGO_URI || "mongodb://localhost:27017/queueless";
-const JWT_SECRET = process.env.JWT_SECRET || (process.env.NODE_ENV === "production" ? "" : "your_jwt_secret_key");
 
-if (process.env.NODE_ENV === "production" && !process.env.JWT_SECRET) {
-  logger.error("FATAL: JWT_SECRET environment variable is required in production mode.");
+try {
+  getJwtSecret();
+} catch (err: any) {
+  logger.error(err.message || "FATAL: JWT_SECRET must be configured in production.");
   process.exit(1);
 }
 
@@ -34,30 +35,10 @@ const io = new Server(server, {
 });
 
 // Socket Authentication Middleware
-io.use((socket: Socket, next) => {
-  const token = socket.handshake.auth?.token || 
-    (socket.handshake.headers.authorization && socket.handshake.headers.authorization.split(" ")[1]);
-
-  if (token && JWT_SECRET) {
-    try {
-      const decoded: any = jwt.verify(token, JWT_SECRET);
-      if (decoded && decoded.id && ["customer", "business"].includes(decoded.role)) {
-        socket.data.user = decoded;
-      } else {
-        socket.data.user = null;
-      }
-    } catch {
-      // Allow unauthenticated connection for guest socket listeners, but restrict sensitive rooms
-      socket.data.user = null;
-    }
-  } else {
-    socket.data.user = null;
-  }
-  next();
-});
+io.use(socketAuthMiddleware);
 
 // Hardened Socket.IO connection handlers
-io.on("connection", (socket: Socket) => {
+export const registerSocketHandlers = (socket: any) => {
   logger.debug(`[Socket] User connected: ${socket.id} (Auth: ${socket.data.user ? socket.data.user.id : "guest"})`);
 
   // Authenticated user room join: automatically join personal room for authenticated connection
@@ -172,21 +153,25 @@ io.on("connection", (socket: Socket) => {
   socket.on("disconnect", () => {
     logger.debug(`[Socket] User disconnected: ${socket.id}`);
   });
-});
+};
+
+io.on("connection", registerSocketHandlers);
 
 app.set("io", io);
 
 // Database connection
-mongoose.connect(MONGO_URI)
-  .then(() => {
-    logger.info("Connected to MongoDB via Mongoose");
-    server.listen(PORT, () => {
-      logger.info(`Server running on port ${PORT} [env: ${process.env.NODE_ENV || "development"}]`);
+if (process.env.NODE_ENV !== "test") {
+  mongoose.connect(MONGO_URI)
+    .then(() => {
+      logger.info("Connected to MongoDB via Mongoose");
+      server.listen(PORT, () => {
+        logger.info(`Server running on port ${PORT} [env: ${process.env.NODE_ENV || "development"}]`);
+      });
+    })
+    .catch((err) => {
+      logger.error("MongoDB connection error:", { error: err });
     });
-  })
-  .catch((err) => {
-    logger.error("MongoDB connection error:", { error: err });
-  });
+}
 
 // Graceful shutdown engine
 let isShuttingDown = false;

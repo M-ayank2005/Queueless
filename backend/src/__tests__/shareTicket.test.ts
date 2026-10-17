@@ -58,6 +58,11 @@ describe("Secure Shareable Queue Tickets — Unit Tests", () => {
       expect(result.shareToken).toHaveLength(48); // 24 bytes hex = 48 chars
       expect(result.shareUrl).toBe(`/shared/${result.shareToken}`);
       expect(testTicket.shareTokenRevoked).toBe(false);
+      // Plaintext token must NEVER be persisted in document
+      expect(testTicket.shareToken).toBeUndefined();
+      // Only SHA-256 hash is persisted
+      expect(testTicket.shareTokenHash).toBeDefined();
+      expect(testTicket.shareTokenHash).toHaveLength(64);
       expect(testTicket.save).toHaveBeenCalled();
     });
 
@@ -192,6 +197,77 @@ describe("Secure Shareable Queue Tickets — Unit Tests", () => {
         status: 410,
         message: expect.stringContaining("expired")
       });
+    });
+
+    it("should resolve resource when querying with a valid hashed token and never expose shareTokenHash", async () => {
+      const rawToken = "my_guest_tracking_token_hex_1234567890abcdef1234";
+      const crypto = require("crypto");
+      const hash = crypto.createHash("sha256").update(rawToken).digest("hex");
+
+      const hashedTicket: any = {
+        _id: new mongoose.Types.ObjectId(),
+        businessId: {
+          _id: businessId,
+          businessProfile: { shopName: "Hashed Salon", address: "456 Elm St" }
+        },
+        customerId,
+        status: "waiting",
+        shareToken: undefined, // no plaintext
+        shareTokenHash: hash,  // only hash
+        shareTokenExpiresAt: new Date(Date.now() + 3600000),
+        shareTokenRevoked: false,
+        selectedServices: [{ name: "Styling", durationMin: 25, cost: 35 }]
+      };
+
+      (jest.spyOn(QueueEntry, "findOne") as any).mockImplementation((query: any) => {
+        if (query?.$or || query?.shareToken || query?.shareTokenHash) {
+          return {
+            populate: jest.fn().mockResolvedValue(hashedTicket)
+          };
+        }
+        return Promise.resolve(null);
+      });
+
+      (jest.spyOn(QueueEntry, "find") as any).mockImplementation((filter: any) => {
+        if (filter?.status === "completed") {
+          return {
+            sort: jest.fn().mockReturnThis(),
+            limit: jest.fn().mockReturnThis(),
+            select: jest.fn().mockResolvedValue([])
+          } as any;
+        }
+        return {
+          sort: jest.fn().mockResolvedValue([])
+        } as any;
+      });
+
+      const result = await getSharedTicketService(rawToken);
+
+      expect(result).toBeDefined();
+      expect(result.shopName).toBe("Hashed Salon");
+      expect(result.shareToken).toBe(rawToken);
+      // Ensure the server-side hash is NEVER exposed in the public response
+      expect((result as any).shareTokenHash).toBeUndefined();
+    });
+
+    it("should ensure QueueEntry model transforms strip shareTokenHash from serialized outputs", () => {
+      const rawDoc = new QueueEntry({
+        businessId,
+        customerId,
+        date: new Date(),
+        customerName: "Bob",
+        totalEstimatedTime: 20,
+        shareToken: "secret_plaintext",
+        shareTokenHash: "secret_hash_value_123456"
+      });
+
+      const obj = rawDoc.toObject();
+      const json = rawDoc.toJSON();
+
+      expect(obj.shareTokenHash).toBeUndefined();
+      expect(obj.shareToken).toBeUndefined();
+      expect(json.shareTokenHash).toBeUndefined();
+      expect(json.shareToken).toBeUndefined();
     });
   });
 });

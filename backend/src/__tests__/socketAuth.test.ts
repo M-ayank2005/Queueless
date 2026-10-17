@@ -1,7 +1,6 @@
-import { Server, Socket } from "socket.io";
-import { createServer } from "http";
 import mongoose from "mongoose";
 import QueueEntry from "../models/QueueEntry";
+import { registerSocketHandlers } from "../index";
 
 describe("Socket.IO Room Authorization & Security", () => {
   let mockSocket: any;
@@ -23,18 +22,9 @@ describe("Socket.IO Room Authorization & Security", () => {
   describe("join_user Room Lockdown", () => {
     it("should reject unauthenticated socket attempting to join user room", () => {
       mockSocket.data.user = null;
+      registerSocketHandlers(mockSocket);
 
-      // Simulated hardened handler logic
-      const handleJoinUser = (userId: string) => {
-        const user = mockSocket.data.user;
-        if (!user || !user.id || user.id !== userId) {
-          mockSocket.emit("socket_error", { message: "Unauthorized user room join: identity mismatch or unauthenticated" });
-          return;
-        }
-        mockSocket.join(`user_${userId}`);
-      };
-
-      handleJoinUser("user_abc_123");
+      eventHandlers["join_user"]("user_abc_123");
 
       expect(mockSocket.join).not.toHaveBeenCalled();
       expect(mockSocket.emit).toHaveBeenCalledWith("socket_error", expect.objectContaining({
@@ -44,19 +34,11 @@ describe("Socket.IO Room Authorization & Security", () => {
 
     it("should reject authenticated user attempting to join another user's room", () => {
       mockSocket.data.user = { id: "my_user_id", role: "customer" };
+      registerSocketHandlers(mockSocket);
 
-      const handleJoinUser = (userId: string) => {
-        const user = mockSocket.data.user;
-        if (!user || !user.id || user.id !== userId) {
-          mockSocket.emit("socket_error", { message: "Unauthorized user room join: identity mismatch or unauthenticated" });
-          return;
-        }
-        mockSocket.join(`user_${userId}`);
-      };
+      eventHandlers["join_user"]("target_victim_user_id");
 
-      handleJoinUser("target_victim_user_id");
-
-      expect(mockSocket.join).not.toHaveBeenCalled();
+      expect(mockSocket.join).not.toHaveBeenCalledWith("user_target_victim_user_id");
       expect(mockSocket.emit).toHaveBeenCalledWith("socket_error", expect.objectContaining({
         message: expect.stringContaining("Unauthorized user room join")
       }));
@@ -64,17 +46,9 @@ describe("Socket.IO Room Authorization & Security", () => {
 
     it("should allow authenticated user to join their own personal user room", () => {
       mockSocket.data.user = { id: "my_user_id", role: "customer" };
+      registerSocketHandlers(mockSocket);
 
-      const handleJoinUser = (userId: string) => {
-        const user = mockSocket.data.user;
-        if (!user || !user.id || user.id !== userId) {
-          mockSocket.emit("socket_error", { message: "Unauthorized user room join" });
-          return;
-        }
-        mockSocket.join(`user_${userId}`);
-      };
-
-      handleJoinUser("my_user_id");
+      eventHandlers["join_user"]("my_user_id");
 
       expect(mockSocket.join).toHaveBeenCalledWith("user_my_user_id");
     });
@@ -83,19 +57,11 @@ describe("Socket.IO Room Authorization & Security", () => {
   describe("join_business Room Lockdown (No Unauthenticated Fallback)", () => {
     it("should reject customer account attempting to join merchant business room", () => {
       mockSocket.data.user = { id: "cust_123", role: "customer" };
+      registerSocketHandlers(mockSocket);
 
-      const handleJoinBusiness = (businessId: string) => {
-        const user = mockSocket.data.user;
-        if (user && user.role === "business" && user.id === businessId) {
-          mockSocket.join(`business_${businessId}`);
-        } else {
-          mockSocket.emit("socket_error", { message: "Unauthorized: Only verified business owners can join this business room" });
-        }
-      };
+      eventHandlers["join_business"]("biz_456");
 
-      handleJoinBusiness("biz_456");
-
-      expect(mockSocket.join).not.toHaveBeenCalled();
+      expect(mockSocket.join).not.toHaveBeenCalledWith("business_biz_456");
       expect(mockSocket.emit).toHaveBeenCalledWith("socket_error", expect.objectContaining({
         message: expect.stringContaining("Only verified business owners")
       }));
@@ -103,35 +69,21 @@ describe("Socket.IO Room Authorization & Security", () => {
 
     it("should reject unauthenticated guest attempting to join business room without credentials", () => {
       mockSocket.data.user = null;
+      registerSocketHandlers(mockSocket);
 
-      const handleJoinBusiness = (businessId: string) => {
-        const user = mockSocket.data.user;
-        if (user && user.role === "business" && user.id === businessId) {
-          mockSocket.join(`business_${businessId}`);
-        } else {
-          mockSocket.emit("socket_error", { message: "Unauthorized: Only verified business owners can join this business room" });
-        }
-      };
-
-      handleJoinBusiness("biz_456");
+      eventHandlers["join_business"]("biz_456");
 
       expect(mockSocket.join).not.toHaveBeenCalled();
-      expect(mockSocket.emit).toHaveBeenCalledWith("socket_error", expect.any(Object));
+      expect(mockSocket.emit).toHaveBeenCalledWith("socket_error", expect.objectContaining({
+        message: expect.stringContaining("Only verified business owners")
+      }));
     });
 
     it("should allow verified merchant to join their own store room", () => {
       mockSocket.data.user = { id: "biz_456", role: "business" };
+      registerSocketHandlers(mockSocket);
 
-      const handleJoinBusiness = (businessId: string) => {
-        const user = mockSocket.data.user;
-        if (user && user.role === "business" && user.id === businessId) {
-          mockSocket.join(`business_${businessId}`);
-        } else {
-          mockSocket.emit("socket_error", { message: "Unauthorized" });
-        }
-      };
-
-      handleJoinBusiness("biz_456");
+      eventHandlers["join_business"]("biz_456");
 
       expect(mockSocket.join).toHaveBeenCalledWith("business_biz_456");
     });
@@ -144,6 +96,7 @@ describe("Socket.IO Room Authorization & Security", () => {
       const strangerId = new mongoose.Types.ObjectId();
 
       mockSocket.data.user = { id: strangerId.toString(), role: "customer" };
+      registerSocketHandlers(mockSocket);
 
       jest.spyOn(QueueEntry, "findById").mockReturnValue({
         select: jest.fn().mockResolvedValue({
@@ -152,34 +105,94 @@ describe("Socket.IO Room Authorization & Security", () => {
         })
       } as any);
 
-      const handleJoinQueue = async (queueId: string) => {
-        const user = mockSocket.data.user;
-        if (!user || !user.id) {
-          mockSocket.emit("socket_error", { message: "Authentication required" });
-          return;
-        }
+      await eventHandlers["join_queue"](ticketId.toString());
 
-        const entry: any = await (QueueEntry.findById(queueId) as any).select("customerId businessId");
-        if (!entry) {
-          mockSocket.emit("socket_error", { message: "Queue ticket not found" });
-          return;
-        }
-
-        const isAuthorized = entry.customerId.toString() === user.id || entry.businessId.toString() === user.id;
-        if (!isAuthorized) {
-          mockSocket.emit("socket_error", { message: "Unauthorized: You are not the ticket owner or store manager" });
-          return;
-        }
-
-        mockSocket.join(`queue_${queueId}`);
-      };
-
-      await handleJoinQueue(ticketId.toString());
-
-      expect(mockSocket.join).not.toHaveBeenCalled();
+      expect(mockSocket.join).not.toHaveBeenCalledWith(`queue_${ticketId}`);
       expect(mockSocket.emit).toHaveBeenCalledWith("socket_error", expect.objectContaining({
         message: expect.stringContaining("Unauthorized: You are not the ticket owner")
       }));
+    });
+
+    it("should allow ticket owner to join ticket room", async () => {
+      const ticketId = new mongoose.Types.ObjectId();
+      const ownerId = new mongoose.Types.ObjectId();
+
+      mockSocket.data.user = { id: ownerId.toString(), role: "customer" };
+      registerSocketHandlers(mockSocket);
+
+      jest.spyOn(QueueEntry, "findById").mockReturnValue({
+        select: jest.fn().mockResolvedValue({
+          customerId: ownerId,
+          businessId: new mongoose.Types.ObjectId()
+        })
+      } as any);
+
+      await eventHandlers["join_queue"](ticketId.toString());
+
+      expect(mockSocket.join).toHaveBeenCalledWith(`queue_${ticketId}`);
+    });
+  });
+
+  describe("join_shared_ticket Authorization", () => {
+    it("should reject joining shared ticket room when token is missing or empty", async () => {
+      mockSocket.data.user = null;
+      registerSocketHandlers(mockSocket);
+
+      await eventHandlers["join_shared_ticket"]("");
+
+      expect(mockSocket.emit).toHaveBeenCalledWith("socket_error", expect.objectContaining({
+        message: "Valid share token is required"
+      }));
+    });
+
+    it("should reject joining shared ticket room when token does not exist or was revoked", async () => {
+      registerSocketHandlers(mockSocket);
+
+      jest.spyOn(QueueEntry, "findOne").mockReturnValue({
+        select: jest.fn().mockResolvedValue(null)
+      } as any);
+
+      await eventHandlers["join_shared_ticket"]("nonexistent_or_revoked_token");
+
+      expect(mockSocket.emit).toHaveBeenCalledWith("socket_error", expect.objectContaining({
+        message: expect.stringContaining("not found or link has been revoked")
+      }));
+    });
+
+    it("should reject joining shared ticket room when token has expired", async () => {
+      registerSocketHandlers(mockSocket);
+
+      jest.spyOn(QueueEntry, "findOne").mockReturnValue({
+        select: jest.fn().mockResolvedValue({
+          _id: new mongoose.Types.ObjectId(),
+          shareTokenExpiresAt: new Date(Date.now() - 60000)
+        })
+      } as any);
+
+      await eventHandlers["join_shared_ticket"]("expired_token_123");
+
+      expect(mockSocket.emit).toHaveBeenCalledWith("socket_error", expect.objectContaining({
+        message: expect.stringContaining("link has expired")
+      }));
+    });
+
+    it("should allow guest to join shared ticket room with valid active token", async () => {
+      registerSocketHandlers(mockSocket);
+      const crypto = require("crypto");
+      const cleanToken = "active_valid_share_token_hex_1234";
+      const hash = crypto.createHash("sha256").update(cleanToken).digest("hex");
+
+      jest.spyOn(QueueEntry, "findOne").mockReturnValue({
+        select: jest.fn().mockResolvedValue({
+          _id: new mongoose.Types.ObjectId(),
+          shareTokenHash: hash,
+          shareTokenExpiresAt: new Date(Date.now() + 3600000)
+        })
+      } as any);
+
+      await eventHandlers["join_shared_ticket"](cleanToken);
+
+      expect(mockSocket.join).toHaveBeenCalledWith(`shared_ticket_${hash}`);
     });
   });
 });
