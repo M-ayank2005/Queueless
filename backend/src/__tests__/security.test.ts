@@ -128,4 +128,48 @@ describe("Validation & Security Rules", () => {
       expect(res.body.success).toBe(false);
     });
   });
+
+  describe("CORS Preflight & Origin Whitelisting", () => {
+    it("should allow OPTIONS preflight from production frontend origin", async () => {
+      const res = await request(app)
+        .options("/api/auth/login")
+        .set("Origin", "https://queueless-gamma.vercel.app")
+        .set("Access-Control-Request-Method", "POST")
+        .set("Access-Control-Request-Headers", "Content-Type,Authorization");
+
+      expect(res.status).toBe(204);
+      expect(res.headers["access-control-allow-origin"]).toBe("https://queueless-gamma.vercel.app");
+      expect(res.headers["access-control-allow-credentials"]).toBe("true");
+    });
+
+    it("should allow OPTIONS preflight from preview Vercel branch deployments", async () => {
+      const res = await request(app)
+        .options("/api/auth/login")
+        .set("Origin", "https://queueless-preview-branch.vercel.app")
+        .set("Access-Control-Request-Method", "POST");
+
+      expect(res.status).toBe(204);
+      expect(res.headers["access-control-allow-origin"]).toBe("https://queueless-preview-branch.vercel.app");
+    });
+
+    it("should allow local development origins", async () => {
+      const res = await request(app)
+        .options("/api/auth/login")
+        .set("Origin", "http://localhost:3000")
+        .set("Access-Control-Request-Method", "POST");
+
+      expect(res.status).toBe(204);
+      expect(res.headers["access-control-allow-origin"]).toBe("http://localhost:3000");
+    });
+
+    it("should reject and not return Access-Control-Allow-Origin for unauthorized origins", async () => {
+      const res = await request(app)
+        .options("/api/auth/login")
+        .set("Origin", "https://malicious-site.example.com")
+        .set("Access-Control-Request-Method", "POST");
+
+      expect(res.headers["access-control-allow-origin"]).toBeUndefined();
+    });
+  });
 });
+

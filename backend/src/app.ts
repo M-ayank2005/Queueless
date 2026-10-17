@@ -24,22 +24,36 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   next();
 });
 
-export const getAppCorsOrigins = (): string[] | boolean => {
+// Built-in trusted origins (production frontend, Vercel deployments, Render domain, local dev)
+export const DEFAULT_ALLOWED_ORIGINS: (string | RegExp)[] = [
+  "https://queueless-gamma.vercel.app",
+  /^https:\/\/([a-zA-Z0-9_-]+\.)*vercel\.app$/,
+  /^https:\/\/([a-zA-Z0-9_-]+\.)*onrender\.com$/,
+  "http://localhost:3000",
+  "http://localhost:5000",
+  "http://localhost:8081",
+  "http://127.0.0.1:3000"
+];
+
+export const getAppCorsOrigins = (): (string | RegExp)[] | string => {
   if (process.env.ALLOWED_ORIGINS) {
-    return process.env.ALLOWED_ORIGINS.split(",").map(o => o.trim()).filter(Boolean);
+    const configured = process.env.ALLOWED_ORIGINS.split(",").map(o => o.trim()).filter(Boolean);
+    if (configured.includes("*")) {
+      return "*";
+    }
+    // Merge configured origins with default allowed origins
+    return Array.from(new Set([...configured, ...DEFAULT_ALLOWED_ORIGINS]));
   }
-  if (process.env.NODE_ENV === "production") {
-    // Fail-closed in production: reject all origins unless explicitly configured
-    return false;
-  }
-  return ["http://localhost:3000", "http://localhost:5000", "http://localhost:8081", "http://127.0.0.1:3000"];
+  return DEFAULT_ALLOWED_ORIGINS;
 };
 
-// Cross-Origin Resource Sharing (Fail-closed in production)
+// Cross-Origin Resource Sharing
 app.use(cors({
   origin: getAppCorsOrigins(),
+  credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization", "X-Request-Id"]
+  allowedHeaders: ["Content-Type", "Authorization", "X-Request-Id"],
+  optionsSuccessStatus: 204
 }));
 
 app.use(express.json({ limit: "2mb" }));

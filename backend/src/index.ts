@@ -4,7 +4,7 @@ import { Server, Socket } from "socket.io";
 import mongoose from "mongoose";
 import dotenv from "dotenv";
 import jwt from "jsonwebtoken";
-import app from "./app";
+import app, { getAppCorsOrigins } from "./app";
 import { logger } from "./utils/logger";
 import { setServerDraining } from "./controllers/healthController";
 import QueueEntry from "./models/QueueEntry";
@@ -20,24 +20,16 @@ if (process.env.NODE_ENV === "production" && !process.env.JWT_SECRET) {
   process.exit(1);
 }
 
-// Fail-closed CORS policy
-export const getSocketCorsOrigins = (): string[] | boolean => {
-  if (process.env.ALLOWED_ORIGINS) {
-    return process.env.ALLOWED_ORIGINS.split(",").map(o => o.trim()).filter(Boolean);
-  }
-  if (process.env.NODE_ENV === "production") {
-    // Fail-closed in production: reject all origins if not explicitly configured
-    return false;
-  }
-  return ["http://localhost:3000", "http://localhost:5000", "http://localhost:8081", "http://127.0.0.1:3000"];
-};
+// Synchronize Socket.IO CORS policy with Express app
+export const getSocketCorsOrigins = getAppCorsOrigins;
 
 const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
     origin: getSocketCorsOrigins(),
-    methods: ["GET", "POST"]
+    methods: ["GET", "POST"],
+    credentials: true
   }
 });
 
