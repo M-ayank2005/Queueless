@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   TextInput,
   ScrollView,
-  KeyboardAvoidingView,
   Platform,
   Linking,
   ActivityIndicator,
@@ -27,11 +26,216 @@ interface ChatMessage {
   role: "user" | "assistant";
   content: string;
   timestamp: string;
+  isMenu?: boolean;
+}
+
+interface MenuOption {
+  id: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  title: string;
+  description: string;
+  prompt: string;
+}
+
+const MENU_OPTIONS: MenuOption[] = [
+  {
+    id: "wait_time",
+    icon: "time-outline",
+    title: "Check Live Queue & Wait Time",
+    description: "Current position, people ahead, and estimated wait",
+    prompt: "What is my current queue position and estimated wait time?",
+  },
+  {
+    id: "scan_qr",
+    icon: "qr-code-outline",
+    title: "How to Join a Queue (Scan QR)",
+    description: "Scan store QR code, select services, and join line",
+    prompt: "How do I scan a store QR code and join a queue?",
+  },
+  {
+    id: "edit_services",
+    icon: "create-outline",
+    title: "Edit Services on Active Ticket",
+    description: "Safely update service counts without losing spot",
+    prompt: "How can I edit services or quantities on my active ticket?",
+  },
+  {
+    id: "counter_verify",
+    icon: "shield-checkmark-outline",
+    title: "Counter Verification (Ticket QR)",
+    description: "How merchant verifies your ticket when it's your turn",
+    prompt: "How does counter verification work when it is my turn?",
+  },
+  {
+    id: "cancel_ticket",
+    icon: "close-circle-outline",
+    title: "Cancel Active Booking",
+    description: "Leave the queue if you can no longer attend",
+    prompt: "How do I cancel my active ticket?",
+  },
+  {
+    id: "payments",
+    icon: "card-outline",
+    title: "In-Person Payments & Pricing",
+    description: "All payments are completed in person with the merchant",
+    prompt: "How do payments work in QueueLess? Are payments online or at the store?",
+  },
+  {
+    id: "merchant_ops",
+    icon: "storefront-outline",
+    title: "Merchant Queue Management",
+    description: "Call next customer, view customer details, and verify tickets",
+    prompt: "As a merchant, how do I call the next customer and advance queue status?",
+  },
+  {
+    id: "human_support",
+    icon: "mail-outline",
+    title: "Contact Human Support",
+    description: "Reach our support desk for account issues",
+    prompt: "How can I contact human customer support?",
+  },
+];
+
+/**
+ * FormattedMessageText
+ * Parses raw text, list bullets, numbered steps, bold, and notes into clean native typography
+ * removing ugly raw markdown asterisks (**) and hashtags (###).
+ */
+function FormattedMessageText({
+  content,
+  isUser,
+  colors,
+  styles,
+}: {
+  content: string;
+  isUser: boolean;
+  colors: ThemeColors;
+  styles: any;
+}) {
+  if (isUser) {
+    return <Text style={styles.messageTextUser}>{content}</Text>;
+  }
+
+  // Pre-clean raw headers like ### or ##
+  const cleaned = content.replace(/^#{1,6}\s+/gm, "").trim();
+  const lines = cleaned.split("\n");
+
+  return (
+    <View style={styles.formattedContainer}>
+      {lines.map((line, lineIdx) => {
+        let trimmed = line.trim();
+        if (!trimmed) {
+          return <View key={`sp-${lineIdx}`} style={styles.paragraphSpacer} />;
+        }
+
+        // Check if line is a note: e.g. "*(Note: ...)*" or "(Note: ...)"
+        if (
+          (trimmed.startsWith("*(") && trimmed.endsWith(")*")) ||
+          trimmed.startsWith("*(Note") ||
+          trimmed.startsWith("(Note")
+        ) {
+          const noteText = trimmed.replace(/^\*\(/, "(").replace(/\)\*$/, ")");
+          return (
+            <Text
+              key={`note-${lineIdx}`}
+              style={[styles.noteText, { color: colors.muted }]}
+            >
+              {renderInlineFormatted(noteText, colors, styles)}
+            </Text>
+          );
+        }
+
+        // Check if line is a numbered item: e.g. "1. **Title**: Description"
+        const numMatch = trimmed.match(/^(\d+[\.\)])\s*(.*)/);
+        if (numMatch) {
+          const numberPrefix = numMatch[1];
+          const restOfLine = numMatch[2];
+          return (
+            <View key={`num-${lineIdx}`} style={styles.listItemRow}>
+              <Text style={[styles.listNumber, { color: colors.primary }]}>
+                {numberPrefix}
+              </Text>
+              <Text style={[styles.listItemText, { color: colors.text }]}>
+                {renderInlineFormatted(restOfLine, colors, styles)}
+              </Text>
+            </View>
+          );
+        }
+
+        // Check if line is a bullet item: e.g. "* Item" or "- Item" or "• Item"
+        const bulletMatch = trimmed.match(/^([\-•]|\*(?!\*))\s*(.*)/);
+        if (bulletMatch) {
+          const restOfLine = bulletMatch[2];
+          return (
+            <View key={`bullet-${lineIdx}`} style={styles.listItemRow}>
+              <Text style={[styles.listBullet, { color: colors.primary }]}>
+                •
+              </Text>
+              <Text style={[styles.listItemText, { color: colors.text }]}>
+                {renderInlineFormatted(restOfLine, colors, styles)}
+              </Text>
+            </View>
+          );
+        }
+
+        // Standard paragraph line
+        return (
+          <Text
+            key={`p-${lineIdx}`}
+            style={[styles.paragraphText, { color: colors.text }]}
+          >
+            {renderInlineFormatted(trimmed, colors, styles)}
+          </Text>
+        );
+      })}
+    </View>
+  );
+}
+
+/**
+ * renderInlineFormatted
+ * Extracts **bold** and *italic* tokens and renders them natively without showing asterisks
+ */
+function renderInlineFormatted(
+  rawText: string,
+  colors: ThemeColors,
+  styles: any
+) {
+  const parts = rawText.split(/(\*\*.*?\*\*|\*.*?\*)/g);
+
+  return parts.map((part, idx) => {
+    if (part.startsWith("**") && part.endsWith("**") && part.length >= 4) {
+      const boldText = part.slice(2, -2);
+      return (
+        <Text key={`b-${idx}`} style={[styles.boldText, { color: colors.text }]}>
+          {boldText}
+        </Text>
+      );
+    }
+    if (part.startsWith("*") && part.endsWith("*") && part.length >= 2) {
+      const italicText = part.slice(1, -1);
+      return (
+        <Text
+          key={`i-${idx}`}
+          style={[styles.italicText, { color: colors.muted }]}
+        >
+          {italicText}
+        </Text>
+      );
+    }
+
+    // Clean any residual stray asterisks
+    const plain = part.replace(/\*/g, "");
+    return (
+      <Text key={`t-${idx}`} style={{ color: colors.text }}>
+        {plain}
+      </Text>
+    );
+  });
 }
 
 export default function HelpSupportScreen() {
   const { colors, isDark } = useTheme();
-  const { user } = useAuth();
   const navigation = useNavigation<any>();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
@@ -47,7 +251,8 @@ export default function HelpSupportScreen() {
     {
       id: "welcome-1",
       role: "assistant",
-      content: "Hello! I am your QueueLess AI Support Assistant. I can help you check your active ticket status, explain counter verification, or guide you through queue settings. How can I assist you?",
+      content:
+        "Hello! I am your QueueLess Support Assistant. I can help you check your active ticket status, explain counter verification, or guide you through queue settings. Type 'menu' anytime to view common topics.",
       timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
     },
   ]);
@@ -76,9 +281,31 @@ export default function HelpSupportScreen() {
     Linking.openURL("mailto:support@queueless.local?subject=QueueLess%20Support%20Request");
   };
 
+  // Triggers the interactive problem selection menu
+  const triggerMenu = () => {
+    const menuMsg: ChatMessage = {
+      id: `menu-${Date.now()}`,
+      role: "assistant",
+      content:
+        "Select a problem from the menu below to get immediate guidance, or explain your situation in the text box:",
+      timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      isMenu: true,
+    };
+    setMessages((prev) => [...prev, menuMsg]);
+    setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 150);
+  };
+
   const handleSendMessage = async (retryContent?: string) => {
     const textToSend = (retryContent || inputMessage).trim();
     if (!textToSend || isLoading) return;
+
+    const lower = textToSend.toLowerCase();
+    const isMenuKeyword =
+      lower === "menu" ||
+      lower === "/menu" ||
+      lower === "help menu" ||
+      lower === "options" ||
+      lower === "help";
 
     const userMsg: ChatMessage = {
       id: `msg-${Date.now()}`,
@@ -89,18 +316,37 @@ export default function HelpSupportScreen() {
 
     setMessages((prev) => [...prev, userMsg]);
     if (!retryContent) setInputMessage("");
-    setIsLoading(true);
     setChatError(null);
     setLastFailedMessage(null);
 
-    // Scroll chat down
+    // If user asked for menu, present the problem selection menu immediately
+    if (isMenuKeyword) {
+      setTimeout(() => {
+        const menuMsg: ChatMessage = {
+          id: `asst-menu-${Date.now()}`,
+          role: "assistant",
+          content:
+            "Select a problem from the menu below to get immediate guidance, or explain your situation in the text box:",
+          timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          isMenu: true,
+        };
+        setMessages((prev) => [...prev, menuMsg]);
+        setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 150);
+      }, 200);
+      return;
+    }
+
+    setIsLoading(true);
     setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
 
     try {
-      const historyPayload = messages.slice(-6).map((m) => ({
-        role: m.role === "assistant" ? "model" : "user",
-        content: m.content,
-      }));
+      const historyPayload = messages
+        .filter((m) => !m.isMenu && m.id !== "welcome-1")
+        .slice(-6)
+        .map((m) => ({
+          role: m.role === "assistant" ? "model" : "user",
+          content: m.content,
+        }));
 
       const res = await api.post("/support/chat", {
         message: textToSend,
@@ -132,32 +378,39 @@ export default function HelpSupportScreen() {
   };
 
   return (
-    <AppScreen contentContainerStyle={styles.screenContent}>
-      {/* Top Header */}
+    <AppScreen
+      scroll={activeTab === "faq"}
+      safeBottom={activeTab === "faq"}
+      contentContainerStyle={
+        activeTab === "ai" ? styles.screenContentAi : styles.screenContent
+      }
+    >
+      {/* Top Header - Back Button Only (No Gemini Badge) */}
       <View style={styles.topRow}>
         <TouchableOpacity
           style={styles.backBtn}
           onPress={() => navigation.goBack()}
           activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Go Back"
         >
           <View style={styles.backIconCircle}>
             <Ionicons name="arrow-back" size={18} color={colors.text} />
           </View>
           <Text style={styles.backText}>Back</Text>
         </TouchableOpacity>
-
-        <View style={styles.geminiBadge}>
-          <Ionicons name="sparkles" size={12} color={colors.primary} />
-          <Text style={styles.geminiBadgeText}>Gemini 3.8 Flash</Text>
-        </View>
       </View>
 
       {/* Screen Title */}
-      <View style={styles.titleSection}>
-        <Text style={styles.pageTitle}>Help & Support</Text>
-        <Text style={styles.pageSubtitle}>
-          Frequently asked questions, live ticket guidance, and direct support.
+      <View style={[styles.titleSection, activeTab === "ai" && styles.titleSectionAi]}>
+        <Text style={[styles.pageTitle, activeTab === "ai" && styles.pageTitleAi]}>
+          Help & Support
         </Text>
+        {activeTab === "faq" && (
+          <Text style={styles.pageSubtitle}>
+            Frequently asked questions, live ticket guidance, and direct support.
+          </Text>
+        )}
       </View>
 
       {/* Segment Switcher */}
@@ -203,23 +456,29 @@ export default function HelpSupportScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* TAB 1: AI ASSISTANT CHAT */}
+      {/* TAB 1: AI ASSISTANT CHAT (Occupies Full Remaining Screen) */}
       {activeTab === "ai" && (
         <Card style={styles.chatCard}>
-          {/* Status Bar */}
+          {/* Clean Status Header (No Personalized Text, No Gemini Badge) */}
           <View style={styles.chatStatusBar}>
             <View style={styles.chatStatusLeft}>
               <View style={styles.statusDot} />
-              <Text style={styles.chatStatusTitle}>
-                {user ? `Personalized for ${user.name}` : "QueueLess Support Assistant"}
-              </Text>
-            </View>
-            {user && (
-              <View style={styles.syncBadge}>
-                <Ionicons name="shield-checkmark" size={12} color={colors.success} />
-                <Text style={styles.syncBadgeText}>Synced</Text>
+              <Text style={styles.chatStatusTitle}>QueueLess Assistant</Text>
+              <View style={styles.onlinePill}>
+                <Text style={styles.onlinePillText}>Online</Text>
               </View>
-            )}
+            </View>
+
+            <TouchableOpacity
+              style={styles.menuHeaderBtn}
+              onPress={triggerMenu}
+              activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel="Show Problem Menu"
+            >
+              <Ionicons name="list" size={13} color={colors.primary} />
+              <Text style={styles.menuHeaderBtnText}>Problem Menu</Text>
+            </TouchableOpacity>
           </View>
 
           {/* Messages Scroll Area */}
@@ -228,6 +487,7 @@ export default function HelpSupportScreen() {
             style={styles.messagesScroll}
             contentContainerStyle={styles.messagesContent}
             showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
           >
             {messages.map((msg) => {
               const isUser = msg.role === "user";
@@ -248,20 +508,60 @@ export default function HelpSupportScreen() {
                     style={[
                       styles.messageBubble,
                       isUser ? styles.messageBubbleUser : styles.messageBubbleAssistant,
+                      msg.isMenu && styles.messageBubbleMenu,
                     ]}
                   >
-                    <Text
-                      style={[
-                        styles.messageText,
-                        isUser ? styles.messageTextUser : styles.messageTextAssistant,
-                      ]}
-                    >
-                      {msg.content}
-                    </Text>
+                    <FormattedMessageText
+                      content={msg.content}
+                      isUser={isUser}
+                      colors={colors}
+                      styles={styles}
+                    />
+
+                    {/* Interactive Problem Selection Menu Options */}
+                    {msg.isMenu && (
+                      <View style={styles.menuCardsContainer}>
+                        {MENU_OPTIONS.map((opt) => (
+                          <TouchableOpacity
+                            key={opt.id}
+                            style={[
+                              styles.menuCard,
+                              { backgroundColor: colors.card, borderColor: colors.border },
+                            ]}
+                            onPress={() => handleSendMessage(opt.prompt)}
+                            activeOpacity={0.7}
+                          >
+                            <View
+                              style={[
+                                styles.menuCardIcon,
+                                { backgroundColor: colors.primarySubtle },
+                              ]}
+                            >
+                              <Ionicons name={opt.icon} size={16} color={colors.primary} />
+                            </View>
+                            <View style={styles.menuCardTextCol}>
+                              <Text style={[styles.menuCardTitle, { color: colors.text }]}>
+                                {opt.title}
+                              </Text>
+                              <Text
+                                style={[styles.menuCardDesc, { color: colors.muted }]}
+                                numberOfLines={2}
+                              >
+                                {opt.description}
+                              </Text>
+                            </View>
+                            <Ionicons name="chevron-forward" size={14} color={colors.primary} />
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    )}
+
                     <Text
                       style={[
                         styles.messageTimestamp,
-                        isUser ? styles.messageTimestampUser : styles.messageTimestampAssistant,
+                        isUser
+                          ? styles.messageTimestampUser
+                          : styles.messageTimestampAssistant,
                       ]}
                     >
                       {msg.timestamp}
@@ -278,7 +578,7 @@ export default function HelpSupportScreen() {
                 </View>
                 <View style={[styles.messageBubbleAssistant, styles.loadingBubble]}>
                   <ActivityIndicator size="small" color={colors.primary} />
-                  <Text style={styles.loadingText}>QueueLess Assistant is thinking...</Text>
+                  <Text style={styles.loadingText}>QueueLess Assistant is typing...</Text>
                 </View>
               </View>
             )}
@@ -303,39 +603,109 @@ export default function HelpSupportScreen() {
             )}
           </ScrollView>
 
-          {/* Input Bar */}
-          <KeyboardAvoidingView
-            behavior={Platform.OS === "ios" ? "padding" : undefined}
-            keyboardVerticalOffset={20}
-          >
-            <View style={styles.inputContainer}>
-              <TextInput
-                style={styles.textInput}
-                value={inputMessage}
-                onChangeText={setInputMessage}
-                placeholder="Ask a question (e.g. check my wait time)..."
-                placeholderTextColor={colors.muted}
-                multiline
-                maxLength={1000}
-                editable={!isLoading}
-              />
+          {/* Quick Problem Action Chips Row */}
+          <View style={styles.quickChipsBar}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.quickChipsContent}
+              keyboardShouldPersistTaps="handled"
+            >
               <TouchableOpacity
-                style={[
-                  styles.sendBtn,
-                  (!inputMessage.trim() || isLoading) && styles.sendBtnDisabled,
-                ]}
-                onPress={() => handleSendMessage()}
-                disabled={!inputMessage.trim() || isLoading}
-                activeOpacity={0.8}
+                style={styles.quickChipMenu}
+                onPress={triggerMenu}
+                activeOpacity={0.7}
               >
+                <Ionicons name="grid-outline" size={12} color="#FFFFFF" />
+                <Text style={styles.quickChipMenuText}>Problem Menu</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.quickChip}
+                onPress={() =>
+                  handleSendMessage("What is my current queue position and estimated wait time?")
+                }
+                activeOpacity={0.7}
+              >
+                <Text style={styles.quickChipText}>🎫 My Wait Time</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.quickChip}
+                onPress={() =>
+                  handleSendMessage("How do I scan a store QR code and join a queue?")
+                }
+                activeOpacity={0.7}
+              >
+                <Text style={styles.quickChipText}>📱 Scan QR</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.quickChip}
+                onPress={() =>
+                  handleSendMessage("How can I edit services or quantities on my active ticket?")
+                }
+                activeOpacity={0.7}
+              >
+                <Text style={styles.quickChipText}>✏️ Edit Services</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.quickChip}
+                onPress={() =>
+                  handleSendMessage("How does counter verification with QR work?")
+                }
+                activeOpacity={0.7}
+              >
+                <Text style={styles.quickChipText}>🔍 Counter QR</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.quickChip}
+                onPress={() =>
+                  handleSendMessage("How do payments work in QueueLess?")
+                }
+                activeOpacity={0.7}
+              >
+                <Text style={styles.quickChipText}>💳 Payments</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+
+          {/* Input Bar — User can explain completely in textbox if they want */}
+          <View style={styles.inputContainer}>
+            <TextInput
+              style={styles.textInput}
+              value={inputMessage}
+              onChangeText={setInputMessage}
+              placeholder="Ask a question or explain your problem..."
+              placeholderTextColor={colors.muted}
+              multiline
+              maxLength={1000}
+              editable={!isLoading}
+            />
+            <TouchableOpacity
+              style={[
+                styles.sendBtn,
+                (!inputMessage.trim() || isLoading) && styles.sendBtnDisabled,
+              ]}
+              onPress={() => handleSendMessage()}
+              disabled={!inputMessage.trim() || isLoading}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel="Send Message"
+            >
+              {isLoading ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
                 <Ionicons
                   name="arrow-up"
                   size={18}
                   color={inputMessage.trim() ? "#FFFFFF" : colors.muted}
                 />
-              </TouchableOpacity>
-            </View>
-          </KeyboardAvoidingView>
+              )}
+            </TouchableOpacity>
+          </View>
         </Card>
       )}
 
@@ -415,8 +785,8 @@ export default function HelpSupportScreen() {
             })}
           </View>
 
-          {/* Contact Support Card */}
-          <Card style={styles.supportContactCard}>
+          {/* Contact Support Card - Solid Opaque Styling without muddy elevation bleed */}
+          <Card variant="subtle" style={styles.supportContactCard}>
             <View style={styles.supportCardLeft}>
               <View style={styles.supportIconWrap}>
                 <Ionicons name="mail" size={20} color={colors.primary} />
@@ -449,54 +819,61 @@ const createStyles = (colors: ThemeColors) =>
       gap: spacing.md,
       paddingBottom: spacing.xxl,
     },
+    screenContentAi: {
+      flex: 1,
+      paddingHorizontal: spacing.sm,
+      paddingBottom: spacing.xs,
+      gap: spacing.xs,
+    },
     topRow: {
       flexDirection: "row",
       alignItems: "center",
-      justifyContent: "space-between",
-      paddingTop: spacing.xs,
+      justifyContent: "flex-start",
+      paddingTop: Platform.OS === "android" ? spacing.md : spacing.xs,
+      paddingBottom: spacing.xs,
     },
     backBtn: {
       flexDirection: "row",
       alignItems: "center",
       gap: spacing.xs,
-    },
-    backIconCircle: {
-      width: 34,
-      height: 34,
-      borderRadius: 17,
+      paddingVertical: 6,
+      paddingHorizontal: 12,
+      borderRadius: radii.full,
       backgroundColor: colors.cardSoft,
       borderColor: colors.border,
       borderWidth: 1,
+      alignSelf: "flex-start",
+    },
+    backIconCircle: {
+      width: 24,
+      height: 24,
+      borderRadius: 12,
+      backgroundColor: colors.card,
       alignItems: "center",
       justifyContent: "center",
     },
     backText: {
       color: colors.text,
       fontSize: 14,
-      fontWeight: "600",
-    },
-    geminiBadge: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 4,
-      paddingHorizontal: 10,
-      paddingVertical: 4,
-      borderRadius: radii.full,
-      backgroundColor: colors.primarySubtle,
-    },
-    geminiBadgeText: {
-      fontSize: 11,
       fontWeight: "700",
-      color: colors.primary,
     },
     titleSection: {
       gap: 4,
+    },
+    titleSectionAi: {
+      gap: 2,
+      paddingBottom: 0,
     },
     pageTitle: {
       fontSize: 26,
       fontWeight: "800",
       color: colors.text,
       letterSpacing: -0.5,
+    },
+    pageTitleAi: {
+      fontSize: 20,
+      fontWeight: "800",
+      letterSpacing: -0.3,
     },
     pageSubtitle: {
       fontSize: 12,
@@ -539,18 +916,20 @@ const createStyles = (colors: ThemeColors) =>
       fontWeight: "700",
     },
     chatCard: {
-      height: 520,
+      flex: 1,
+      minHeight: 0,
       padding: 0,
       overflow: "hidden",
       display: "flex",
       flexDirection: "column",
+      marginBottom: 0,
     },
     chatStatusBar: {
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
       paddingHorizontal: spacing.md,
-      paddingVertical: spacing.sm,
+      paddingVertical: 9,
       borderBottomWidth: 1,
       borderBottomColor: colors.border,
       backgroundColor: colors.cardSoft,
@@ -571,19 +950,32 @@ const createStyles = (colors: ThemeColors) =>
       fontWeight: "700",
       color: colors.text,
     },
-    syncBadge: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: 4,
-      backgroundColor: colors.successSubtle,
-      paddingHorizontal: 8,
+    onlinePill: {
+      paddingHorizontal: 6,
       paddingVertical: 2,
       borderRadius: radii.full,
+      backgroundColor: colors.successSubtle,
     },
-    syncBadgeText: {
+    onlinePillText: {
       fontSize: 10,
       fontWeight: "700",
       color: colors.success,
+    },
+    menuHeaderBtn: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      paddingHorizontal: 9,
+      paddingVertical: 4,
+      borderRadius: radii.full,
+      backgroundColor: colors.primarySubtle,
+      borderWidth: 1,
+      borderColor: colors.primaryBorder,
+    },
+    menuHeaderBtnText: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: colors.primary,
     },
     messagesScroll: {
       flex: 1,
@@ -614,7 +1006,7 @@ const createStyles = (colors: ThemeColors) =>
       marginTop: 2,
     },
     messageBubble: {
-      maxWidth: "82%",
+      maxWidth: "84%",
       paddingHorizontal: 12,
       paddingVertical: 9,
       borderRadius: radii.lg,
@@ -629,20 +1021,18 @@ const createStyles = (colors: ThemeColors) =>
       borderWidth: 1,
       borderTopLeftRadius: 4,
     },
-    messageText: {
-      fontSize: 13,
-      lineHeight: 18,
+    messageBubbleMenu: {
+      maxWidth: "94%",
     },
     messageTextUser: {
       color: "#FFFFFF",
       fontWeight: "500",
-    },
-    messageTextAssistant: {
-      color: colors.text,
+      fontSize: 13,
+      lineHeight: 18,
     },
     messageTimestamp: {
       fontSize: 9,
-      marginTop: 4,
+      marginTop: 5,
       textAlign: "right",
     },
     messageTimestampUser: {
@@ -650,6 +1040,81 @@ const createStyles = (colors: ThemeColors) =>
     },
     messageTimestampAssistant: {
       color: colors.muted,
+    },
+    formattedContainer: {
+      gap: 3,
+    },
+    paragraphSpacer: {
+      height: 5,
+    },
+    paragraphText: {
+      fontSize: 13,
+      lineHeight: 19,
+    },
+    listItemRow: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: 5,
+      marginVertical: 1.5,
+    },
+    listNumber: {
+      fontSize: 13,
+      fontWeight: "700",
+      minWidth: 16,
+    },
+    listBullet: {
+      fontSize: 14,
+      fontWeight: "700",
+      minWidth: 12,
+    },
+    listItemText: {
+      fontSize: 13,
+      lineHeight: 19,
+      flex: 1,
+    },
+    noteText: {
+      fontStyle: "italic",
+      fontSize: 12,
+      lineHeight: 17,
+      marginTop: 3,
+    },
+    boldText: {
+      fontWeight: "700",
+    },
+    italicText: {
+      fontStyle: "italic",
+    },
+    menuCardsContainer: {
+      gap: 6,
+      marginTop: 8,
+      marginBottom: 3,
+    },
+    menuCard: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      padding: 9,
+      borderRadius: radii.md,
+      borderWidth: 1,
+    },
+    menuCardIcon: {
+      width: 30,
+      height: 30,
+      borderRadius: radii.sm,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    menuCardTextCol: {
+      flex: 1,
+      gap: 1,
+    },
+    menuCardTitle: {
+      fontSize: 12,
+      fontWeight: "700",
+    },
+    menuCardDesc: {
+      fontSize: 10,
+      lineHeight: 14,
     },
     loadingBubble: {
       flexDirection: "row",
@@ -697,6 +1162,45 @@ const createStyles = (colors: ThemeColors) =>
       fontSize: 11,
       fontWeight: "700",
       color: colors.danger,
+    },
+    quickChipsBar: {
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+      backgroundColor: colors.cardSoft,
+      paddingVertical: 6,
+    },
+    quickChipsContent: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 6,
+      paddingHorizontal: spacing.sm,
+    },
+    quickChip: {
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: radii.full,
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    quickChipText: {
+      fontSize: 11,
+      fontWeight: "600",
+      color: colors.textSecondary,
+    },
+    quickChipMenu: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 4,
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: radii.full,
+      backgroundColor: colors.primary,
+    },
+    quickChipMenuText: {
+      fontSize: 11,
+      fontWeight: "700",
+      color: "#FFFFFF",
     },
     inputContainer: {
       flexDirection: "row",
@@ -813,9 +1317,11 @@ const createStyles = (colors: ThemeColors) =>
       alignItems: "center",
       justifyContent: "space-between",
       padding: spacing.md,
-      backgroundColor: colors.primarySubtle,
-      borderColor: colors.primaryBorder,
+      backgroundColor: colors.card,
+      borderColor: colors.border,
       borderWidth: 1,
+      elevation: 0,
+      shadowOpacity: 0,
       gap: spacing.sm,
     },
     supportCardLeft: {

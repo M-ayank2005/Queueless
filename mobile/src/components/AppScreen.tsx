@@ -48,10 +48,10 @@ export default function AppScreen({
     Platform.OS === "ios"
       ? 44
       : Platform.OS === "android"
-      ? (RNStatusBar.currentHeight || 28)
+      ? Math.max(RNStatusBar.currentHeight || 0, 36)
       : 24;
   const rawTop = insets.top > 0 ? insets.top : defaultTop;
-  const paddingTop = safeTop ? rawTop + spacing.sm : spacing.md;
+  const paddingTop = safeTop ? rawTop + spacing.md : spacing.md;
 
   const bottomPadding = hasTabBar
     ? Math.max(insets.bottom + 76, 92)
@@ -64,8 +64,8 @@ export default function AppScreen({
       style={styles.scrollView}
       contentContainerStyle={[
         styles.scrollContent,
-        { paddingTop, paddingBottom: bottomPadding },
         contentContainerStyle,
+        { paddingTop, paddingBottom: bottomPadding },
       ]}
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
@@ -78,8 +78,8 @@ export default function AppScreen({
       style={[
         styles.content,
         styles.innerContainer,
-        { paddingTop, paddingBottom: bottomPadding },
         contentContainerStyle,
+        { paddingTop, paddingBottom: bottomPadding },
       ]}
     >
       {children}

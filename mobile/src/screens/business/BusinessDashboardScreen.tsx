@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
+  Animated,
   Image,
   Linking,
   Modal,
@@ -13,6 +14,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { CameraView, useCameraPermissions } from "expo-camera";
 import { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
 import { Ionicons } from "@expo/vector-icons";
 import AppButton from "../../components/AppButton";
@@ -70,6 +72,43 @@ export default function BusinessDashboardScreen(_: Props) {
     message: string;
     ticket?: any;
   } | null>(null);
+
+  // Counter Ticket QR Scanner & Verification State
+  const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+  const [targetTicketForVerification, setTargetTicketForVerification] = useState<QueueEntry | null>(null);
+  const [isManualInputMode, setIsManualInputMode] = useState(false);
+  const [isProcessingScan, setIsProcessingScan] = useState(false);
+  const laserAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (verifyModalVisible && !isManualInputMode) {
+      const loop = Animated.loop(
+        Animated.sequence([
+          Animated.timing(laserAnim, {
+            toValue: 1,
+            duration: 1600,
+            useNativeDriver: true,
+          }),
+          Animated.timing(laserAnim, {
+            toValue: 0,
+            duration: 1600,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+      loop.start();
+      return () => loop.stop();
+    }
+  }, [verifyModalVisible, isManualInputMode]);
+
+  const openScannerModal = (targetTicket?: QueueEntry) => {
+    setTargetTicketForVerification(targetTicket || null);
+    setVerificationResult(null);
+    setVerifyInput("");
+    setIsManualInputMode(false);
+    setIsProcessingScan(false);
+    setVerifyModalVisible(true);
+  };
 
   // Phase 6: Operational Analytics State & Navigation
   const [activeTab, setActiveTab] = useState<"queue" | "analytics" | "catalog">("queue");
@@ -258,59 +297,129 @@ export default function BusinessDashboardScreen(_: Props) {
     }
   };
 
-  const handleVerifyTicket = async (ticketIdOrToken: string) => {
-    if (!ticketIdOrToken.trim()) {
-      const msg = "Please enter ticket ID, code, or token.";
+  const processTicketVerification = async (rawInput: string) => {
+    const trimmed = (rawInput || "").trim();
+    if (!trimmed) {
+      const msg = "Please scan ticket QR code or enter ticket ID / token.";
       if (Platform.OS === "web") window.alert(msg);
       else Alert.alert("Missing Input", msg);
+      setIsProcessingScan(false);
       return;
     }
+
     setIsVerifying(true);
     try {
+      // 1. Parse token and ticketId from QR string or manual input
+      let parsedTicketId: string | undefined;
+      let parsedToken: string | undefined;
+
+      if (trimmed.startsWith("ql-ticket:")) {
+        const parts = trimmed.split(":");
+        if (parts.length >= 3) {
+          parsedTicketId = parts[1];
+          parsedToken = parts[2];
+        } else if (parts.length === 2) {
+          parsedToken = parts[1];
+        }
+      } else if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+        try {
+          const obj = JSON.parse(trimmed);
+          parsedTicketId = obj.ticketId;
+          parsedToken = obj.token;
+        } catch {
+          parsedToken = trimmed;
+        }
+      } else {
+        parsedToken = trimmed;
+        parsedTicketId = trimmed;
+      }
+
+      // 2. If targetTicket was selected from a specific live queue request:
+      // Verify that this scanned QR corresponds to that selected customer
+      if (targetTicketForVerification) {
+        const targetId = targetTicketForVerification._id;
+        const targetSuffix = targetId.slice(-4).toUpperCase();
+
+        const matchesTargetId = parsedTicketId && (
+          parsedTicketId.toLowerCase() === targetId.toLowerCase() ||
+          targetId.toUpperCase().endsWith(parsedTicketId.toUpperCase())
+        );
+        const matchesTargetToken = parsedToken && (
+          targetTicketForVerification.verificationToken === parsedToken
+        );
+
+        if (parsedTicketId && !matchesTargetId && !matchesTargetToken) {
+          setVerificationResult({
+            success: false,
+            message: `Ticket Mismatch: Scanned ticket does not match ${targetTicketForVerification.customerId?.name || targetTicketForVerification.customerName || "Customer"} (Ticket #${targetSuffix}).`,
+          });
+          setIsVerifying(false);
+          setIsProcessingScan(false);
+          return;
+        }
+      }
+
+      // 3. Call backend verification endpoint (enforces store queue ownership)
       const res = await api.post("/business/queue/verify", {
-        ticketId: ticketIdOrToken.trim(),
-        token: ticketIdOrToken.trim(),
+        ticketId: parsedTicketId || (targetTicketForVerification ? targetTicketForVerification._id : undefined),
+        token: parsedToken || trimmed,
       });
+
+      const verifiedTicket = res.data.ticket;
+
+      // 4. If ticket was waiting, automatically start the customer's service (in_progress)
+      let serviceStarted = false;
+      if (verifiedTicket && verifiedTicket.status === "waiting") {
+        try {
+          await api.put(`/business/queue/${verifiedTicket._id}/status`, {
+            status: "in_progress",
+          });
+          verifiedTicket.status = "in_progress";
+          serviceStarted = true;
+        } catch (statusErr) {
+          console.warn("Could not automatically start service status:", statusErr);
+        }
+      }
+
+      const custName = verifiedTicket?.customerId?.name || verifiedTicket?.customerName || "Customer";
+      const ticketNum = verifiedTicket?._id?.slice(-4).toUpperCase() || "";
+
       setVerificationResult({
         success: true,
-        message: res.data.message || "Customer verified successfully",
-        ticket: res.data.ticket,
+        message: serviceStarted
+          ? `Ticket Verified! Service has started for ${custName} (#${ticketNum}).`
+          : `Ticket #${ticketNum} verified at counter successfully.`,
+        ticket: verifiedTicket,
       });
+
       await load();
-      if (selectedTicket && res.data.ticket && selectedTicket._id === res.data.ticket._id) {
-        setSelectedTicket(res.data.ticket);
+
+      if (selectedTicket && verifiedTicket && selectedTicket._id === verifiedTicket._id) {
+        setSelectedTicket(verifiedTicket);
       }
     } catch (err: any) {
-      const msg = err.response?.data?.message || "Failed to verify customer ticket";
+      const msg = err.response?.data?.message || err.message || "Failed to verify customer ticket";
       setVerificationResult({
         success: false,
         message: msg,
       });
     } finally {
       setIsVerifying(false);
+      setTimeout(() => setIsProcessingScan(false), 2000);
     }
+  };
+
+  const handleBarcodeScanned = async ({ data }: { data: string }) => {
+    if (isProcessingScan || isVerifying || !data) return;
+    setIsProcessingScan(true);
+    await processTicketVerification(data);
   };
 
   const handleVerifySelectedTicket = async () => {
     if (!selectedTicket) return;
-    setIsVerifying(true);
-    try {
-      const res = await api.post("/business/queue/verify", {
-        ticketId: selectedTicket._id,
-        token: selectedTicket.verificationToken || selectedTicket._id,
-      });
-      setSelectedTicket(res.data.ticket);
-      await load();
-      const msg = "Customer verified at counter successfully!";
-      if (Platform.OS === "web") window.alert(msg);
-      else Alert.alert("Verified", msg);
-    } catch (err: any) {
-      const msg = err.response?.data?.message || "Failed to verify ticket";
-      if (Platform.OS === "web") window.alert(msg);
-      else Alert.alert("Verification Failed", msg);
-    } finally {
-      setIsVerifying(false);
-    }
+    // Open scanner modal pre-targeted to this ticket
+    setTicketModalVisible(false);
+    openScannerModal(selectedTicket);
   };
 
   if (loading) {
@@ -482,33 +591,37 @@ export default function BusinessDashboardScreen(_: Props) {
               subtitle="Customers currently waiting or being served"
               icon="people-outline"
               count={activeQueue.length}
-              actionIcon="refresh-outline"
-              actionText="Refresh"
-              onActionPress={onRefresh}
-              actionLoading={refreshing}
-            />
+              rightElement={
+                <View style={styles.headerActionsRow}>
+                  <TouchableOpacity
+                    style={styles.headerScanBtn}
+                    onPress={() => openScannerModal()}
+                    activeOpacity={0.8}
+                    accessibilityRole="button"
+                    accessibilityLabel="Scan customer ticket QR"
+                  >
+                    <Ionicons name="qr-code-outline" size={14} color="#FFF" />
+                    <Text style={styles.headerScanBtnText}>Scan Ticket</Text>
+                  </TouchableOpacity>
 
-            {/* Verify Ticket Quick Action Banner */}
-            <TouchableOpacity
-              style={styles.verifyActionBanner}
-              onPress={() => {
-                setVerificationResult(null);
-                setVerifyInput("");
-                setVerifyModalVisible(true);
-              }}
-              activeOpacity={0.8}
-            >
-              <View style={styles.verifyActionLeft}>
-                <View style={styles.verifyIconBadge}>
-                  <Ionicons name="shield-checkmark" size={18} color={colors.primary} />
+                  <TouchableOpacity
+                    style={styles.headerRefreshBtn}
+                    onPress={onRefresh}
+                    activeOpacity={0.7}
+                    disabled={refreshing}
+                    accessibilityRole="button"
+                    accessibilityLabel="Refresh live queue"
+                  >
+                    <Ionicons
+                      name="refresh-outline"
+                      size={15}
+                      color={colors.primary}
+                      style={refreshing ? { opacity: 0.5 } : undefined}
+                    />
+                  </TouchableOpacity>
                 </View>
-                <View>
-                  <Text style={styles.verifyBannerTitle}>Verify Customer Ticket</Text>
-                  <Text style={styles.verifyBannerSub}>Scan QR code or enter ticket ID / token</Text>
-                </View>
-              </View>
-              <Ionicons name="chevron-forward" size={18} color={colors.muted} />
-            </TouchableOpacity>
+              }
+            />
 
             {activeQueue.length === 0 ? (
               <EmptyState
@@ -571,26 +684,55 @@ export default function BusinessDashboardScreen(_: Props) {
                         ) : null}
                       </TouchableOpacity>
 
-                      {/* Action buttons row */}
-                      <View style={styles.itemActionRow}>
-                        <TouchableOpacity
-                          style={styles.doneBtn}
-                          onPress={() => updateStatus(item._id, "completed")}
-                          activeOpacity={0.8}
-                        >
-                          <Ionicons name="checkmark-done" size={15} color="#FFF" />
-                          <Text style={styles.doneBtnText}>Mark Completed</Text>
-                        </TouchableOpacity>
+                      {/* Action buttons row — If waiting, allow scanning ticket QR to claim & start service directly */}
+                      {item.status === "waiting" ? (
+                        <View style={styles.itemActionRow}>
+                          <TouchableOpacity
+                            style={styles.verifyAndStartBtn}
+                            onPress={() => openScannerModal(item)}
+                            activeOpacity={0.8}
+                          >
+                            <Ionicons name="qr-code-outline" size={15} color="#FFF" />
+                            <Text style={styles.verifyAndStartBtnText}>Scan QR & Start</Text>
+                          </TouchableOpacity>
 
-                        <TouchableOpacity
-                          style={styles.cancelBtn}
-                          onPress={() => updateStatus(item._id, "cancelled")}
-                          activeOpacity={0.8}
-                        >
-                          <Ionicons name="close" size={15} color={colors.danger} />
-                          <Text style={styles.cancelBtnText}>Cancel</Text>
-                        </TouchableOpacity>
-                      </View>
+                          <TouchableOpacity
+                            style={styles.cancelBtn}
+                            onPress={() => updateStatus(item._id, "cancelled")}
+                            activeOpacity={0.8}
+                          >
+                            <Ionicons name="close" size={15} color={colors.danger} />
+                            <Text style={styles.cancelBtnText}>Cancel</Text>
+                          </TouchableOpacity>
+                        </View>
+                      ) : (
+                        <View style={styles.inServiceContainer}>
+                          <View style={styles.inServiceBadge}>
+                            <Ionicons name="flash" size={12} color={colors.info} />
+                            <Text style={styles.inServiceBadgeText}>SERVICE IN PROGRESS</Text>
+                          </View>
+
+                          <View style={styles.itemActionRow}>
+                            <TouchableOpacity
+                              style={styles.doneBtn}
+                              onPress={() => updateStatus(item._id, "completed")}
+                              activeOpacity={0.8}
+                            >
+                              <Ionicons name="checkmark-done" size={15} color="#FFF" />
+                              <Text style={styles.doneBtnText}>Mark Completed</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                              style={styles.cancelBtn}
+                              onPress={() => updateStatus(item._id, "cancelled")}
+                              activeOpacity={0.8}
+                            >
+                              <Ionicons name="close" size={15} color={colors.danger} />
+                              <Text style={styles.cancelBtnText}>Cancel</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      )}
                     </Card>
                   );
                 })}
@@ -1143,38 +1285,53 @@ export default function BusinessDashboardScreen(_: Props) {
                     </View>
                   </View>
 
-                  {/* Verification Status / Action */}
-                  <View style={styles.modalVerificationBox}>
-                    <View style={styles.modalVerifyInfo}>
-                      <Ionicons
-                        name={selectedTicket.verifiedAt ? "checkmark-circle" : "shield-outline"}
-                        size={20}
-                        color={selectedTicket.verifiedAt ? colors.success : colors.warning}
-                      />
-                      <View style={styles.flex1}>
-                        <Text style={styles.modalVerifyTitle}>Counter Verification</Text>
-                        <Text style={styles.modalVerifySub}>
-                          {selectedTicket.verifiedAt
-                            ? `Verified at ${new Date(selectedTicket.verifiedAt).toLocaleTimeString()}`
-                            : "Ticket has not been verified at the counter yet"}
-                        </Text>
+                  {/* Verification Status / Action — Only active tickets can be verified */}
+                  {selectedTicket.status === "waiting" || selectedTicket.status === "in_progress" ? (
+                    <View style={styles.modalVerificationBox}>
+                      <View style={styles.modalVerifyInfo}>
+                        <Ionicons
+                          name={selectedTicket.verifiedAt ? "checkmark-circle" : "shield-outline"}
+                          size={20}
+                          color={selectedTicket.verifiedAt ? colors.success : colors.warning}
+                        />
+                        <View style={styles.flex1}>
+                          <Text style={styles.modalVerifyTitle}>Counter Verification</Text>
+                          <Text style={styles.modalVerifySub}>
+                            {selectedTicket.verifiedAt
+                              ? `Verified at ${new Date(selectedTicket.verifiedAt).toLocaleTimeString()}`
+                              : "Ticket has not been verified at the counter yet"}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {!selectedTicket.verifiedAt ? (
+                        <TouchableOpacity
+                          style={styles.modalVerifyActionBtn}
+                          onPress={handleVerifySelectedTicket}
+                          disabled={isVerifying}
+                          activeOpacity={0.8}
+                        >
+                          <Ionicons name="shield-checkmark" size={14} color="#FFF" />
+                          <Text style={styles.modalVerifyActionBtnText}>
+                            {isVerifying ? "Verifying..." : "Verify Ticket"}
+                          </Text>
+                        </TouchableOpacity>
+                      ) : null}
+                    </View>
+                  ) : selectedTicket.verifiedAt ? (
+                    /* Read-only verification status for completed/cancelled tickets if verified during service */
+                    <View style={styles.modalVerificationBox}>
+                      <View style={styles.modalVerifyInfo}>
+                        <Ionicons name="checkmark-circle" size={18} color={colors.success} />
+                        <View style={styles.flex1}>
+                          <Text style={styles.modalVerifyTitle}>Counter Verified</Text>
+                          <Text style={styles.modalVerifySub}>
+                            Customer was verified at {new Date(selectedTicket.verifiedAt).toLocaleTimeString()}
+                          </Text>
+                        </View>
                       </View>
                     </View>
-
-                    {!selectedTicket.verifiedAt ? (
-                      <TouchableOpacity
-                        style={styles.modalVerifyActionBtn}
-                        onPress={handleVerifySelectedTicket}
-                        disabled={isVerifying}
-                        activeOpacity={0.8}
-                      >
-                        <Ionicons name="shield-checkmark" size={14} color="#FFF" />
-                        <Text style={styles.modalVerifyActionBtnText}>
-                          {isVerifying ? "Verifying..." : "Verify Ticket"}
-                        </Text>
-                      </TouchableOpacity>
-                    ) : null}
-                  </View>
+                  ) : null}
                 </ScrollView>
 
                 {/* Footer Status Actions */}
@@ -1231,12 +1388,17 @@ export default function BusinessDashboardScreen(_: Props) {
         </View>
       </Modal>
 
-      {/* Counter Verification Modal */}
+      {/* Counter Verification Modal — QR Scanner as PRIMARY, Manual input as fallback */}
       <Modal
         visible={verifyModalVisible}
         animationType="fade"
         transparent={true}
-        onRequestClose={() => setVerifyModalVisible(false)}
+        onRequestClose={() => {
+          setVerifyModalVisible(false);
+          setTargetTicketForVerification(null);
+          setVerificationResult(null);
+          setVerifyInput("");
+        }}
       >
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
@@ -1250,6 +1412,7 @@ export default function BusinessDashboardScreen(_: Props) {
               <TouchableOpacity
                 onPress={() => {
                   setVerifyModalVisible(false);
+                  setTargetTicketForVerification(null);
                   setVerificationResult(null);
                   setVerifyInput("");
                 }}
@@ -1259,32 +1422,126 @@ export default function BusinessDashboardScreen(_: Props) {
               </TouchableOpacity>
             </View>
 
-            <View style={styles.modalBody}>
-              <Text style={styles.verifyInputLabel}>
-                Scan QR Code or Enter Ticket Number / Code
-              </Text>
-              <TextInput
-                style={styles.verifyTextInput}
-                placeholder="e.g. ql-ticket:... or ABCD or ticket ID"
-                placeholderTextColor={colors.muted}
-                value={verifyInput}
-                onChangeText={setVerifyInput}
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
+            <ScrollView contentContainerStyle={styles.modalBody} showsVerticalScrollIndicator={false}>
+              {/* Target Ticket Banner (if initiated from a specific queue card) */}
+              {targetTicketForVerification ? (
+                <View style={styles.targetTicketBanner}>
+                  <Ionicons name="person" size={14} color={colors.primary} />
+                  <Text style={styles.targetTicketText} numberOfLines={1}>
+                    Verifying for: {targetTicketForVerification.customerId?.name || targetTicketForVerification.customerName || "Customer"} (Ticket #{targetTicketForVerification._id.slice(-4).toUpperCase()})
+                  </Text>
+                </View>
+              ) : null}
 
-              <TouchableOpacity
-                style={styles.submitVerifyBtn}
-                onPress={() => handleVerifyTicket(verifyInput)}
-                disabled={isVerifying}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="shield-checkmark" size={16} color="#FFF" />
-                <Text style={styles.submitVerifyBtnText}>
-                  {isVerifying ? "Verifying..." : "Verify Customer Ticket"}
-                </Text>
-              </TouchableOpacity>
+              {/* PRIMARY MODE: Live Camera QR Scanner */}
+              {!isManualInputMode ? (
+                <View style={styles.scannerWrapper}>
+                  {!cameraPermission?.granted ? (
+                    <View style={styles.permissionBox}>
+                      <Ionicons name="camera-outline" size={32} color={colors.primary} />
+                      <Text style={styles.permissionTitle}>Camera Access Required</Text>
+                      <Text style={styles.permissionText}>
+                        Allow camera access to scan customer ticket QR codes directly at your checkout desk.
+                      </Text>
+                      <TouchableOpacity
+                        style={styles.grantBtn}
+                        onPress={requestCameraPermission}
+                        activeOpacity={0.8}
+                      >
+                        <Text style={styles.grantBtnText}>Grant Camera Permission</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    <View style={styles.cameraBox}>
+                      <CameraView
+                        onBarcodeScanned={handleBarcodeScanned}
+                        barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
+                        style={styles.cameraView}
+                      />
+                      <View style={styles.cameraOverlay} pointerEvents="none">
+                        <View style={styles.reticle}>
+                          <View style={[styles.cornerReticle, styles.topLeftCorner]} />
+                          <View style={[styles.cornerReticle, styles.topRightCorner]} />
+                          <View style={[styles.cornerReticle, styles.bottomLeftCorner]} />
+                          <View style={[styles.cornerReticle, styles.bottomRightCorner]} />
 
+                          <Animated.View
+                            style={[
+                              styles.scanningLaser,
+                              {
+                                transform: [
+                                  {
+                                    translateY: laserAnim.interpolate({
+                                      inputRange: [0, 1],
+                                      outputRange: [0, 150],
+                                    }),
+                                  },
+                                ],
+                              },
+                            ]}
+                          />
+                        </View>
+                      </View>
+                    </View>
+                  )}
+
+                  <Text style={styles.scannerInstructionText}>
+                    {isProcessingScan || isVerifying
+                      ? "Verifying ticket..."
+                      : "Align customer's ticket QR code within the frame"}
+                  </Text>
+
+                  {/* Fallback button to switch to manual code entry */}
+                  <TouchableOpacity
+                    style={styles.switchModeBtn}
+                    onPress={() => setIsManualInputMode(true)}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="keypad-outline" size={15} color={colors.primary} />
+                    <Text style={styles.switchModeBtnText}>Enter Ticket Code Manually (Fallback)</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                /* FALLBACK MODE: Manual Ticket Code or Token Entry */
+                <View style={styles.manualEntryWrapper}>
+                  <Text style={styles.verifyInputLabel}>
+                    Enter Ticket Number, ID, or Token
+                  </Text>
+                  <TextInput
+                    style={styles.verifyTextInput}
+                    placeholder="e.g. ql-ticket:... or ABCD or ticket ID"
+                    placeholderTextColor={colors.muted}
+                    value={verifyInput}
+                    onChangeText={setVerifyInput}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                  />
+
+                  <TouchableOpacity
+                    style={styles.submitVerifyBtn}
+                    onPress={() => processTicketVerification(verifyInput)}
+                    disabled={isVerifying}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="shield-checkmark" size={16} color="#FFF" />
+                    <Text style={styles.submitVerifyBtnText}>
+                      {isVerifying ? "Verifying..." : "Verify Customer Ticket"}
+                    </Text>
+                  </TouchableOpacity>
+
+                  {/* Switch back to Camera Scanner button */}
+                  <TouchableOpacity
+                    style={styles.switchModeBtn}
+                    onPress={() => setIsManualInputMode(false)}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="camera-outline" size={15} color={colors.primary} />
+                    <Text style={styles.switchModeBtnText}>Switch to Live QR Scanner</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* Verification Result Feedback Banner */}
               {verificationResult ? (
                 <View
                   style={[
@@ -1294,7 +1551,7 @@ export default function BusinessDashboardScreen(_: Props) {
                 >
                   <Ionicons
                     name={verificationResult.success ? "checkmark-circle" : "alert-circle"}
-                    size={20}
+                    size={22}
                     color={verificationResult.success ? colors.success : colors.danger}
                   />
                   <View style={styles.flex1}>
@@ -1319,18 +1576,25 @@ export default function BusinessDashboardScreen(_: Props) {
                         <Text style={styles.resultTicketText}>
                           Services: {verificationResult.ticket.selectedServices?.map((s: any) => `${s.name}${s.quantity > 1 ? ` (×${s.quantity})` : ""}`).join(", ")}
                         </Text>
+                        <View style={styles.resultStatusPill}>
+                          <Ionicons name="flash" size={11} color={colors.info} />
+                          <Text style={styles.resultStatusPillText}>
+                            Status: {verificationResult.ticket.status?.toUpperCase() || "IN PROGRESS"}
+                          </Text>
+                        </View>
                       </View>
                     ) : null}
                   </View>
                 </View>
               ) : null}
-            </View>
+            </ScrollView>
 
             <View style={styles.modalFooter}>
               <TouchableOpacity
                 style={styles.modalCloseFooterBtn}
                 onPress={() => {
                   setVerifyModalVisible(false);
+                  setTargetTicketForVerification(null);
                   setVerificationResult(null);
                   setVerifyInput("");
                 }}
@@ -2463,6 +2727,242 @@ const createStyles = (colors: ThemeColors) =>
   resultTicketText: {
     fontSize: 11,
     color: colors.textSecondary,
+  },
+  resultStatusPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: colors.infoSubtle,
+    alignSelf: "flex-start",
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: radii.sm,
+    marginTop: 4,
+  },
+  resultStatusPillText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: colors.info,
+  },
+
+  /* Header Scan & Refresh Actions */
+  headerActionsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  headerScanBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: colors.primary,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: radii.md,
+  },
+  headerScanBtnText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  headerRefreshBtn: {
+    padding: 6,
+    borderRadius: radii.md,
+    backgroundColor: colors.cardSoft,
+    borderColor: colors.border,
+    borderWidth: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  /* In-Queue Verify and In-Progress Service */
+  verifyAndStartBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: colors.primary,
+    paddingVertical: 9,
+    paddingHorizontal: spacing.md,
+    borderRadius: radii.md,
+  },
+  verifyAndStartBtnText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  inServiceContainer: {
+    gap: spacing.xs,
+    width: "100%",
+  },
+  inServiceBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: 4,
+    backgroundColor: colors.infoSubtle,
+    borderColor: colors.info,
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radii.sm,
+    marginBottom: 4,
+  },
+  inServiceBadgeText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: colors.info,
+    letterSpacing: 0.5,
+  },
+
+  /* Camera Scanner in Modal */
+  targetTicketBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: colors.primarySubtle,
+    borderColor: colors.primaryBorder,
+    borderWidth: 1,
+    borderRadius: radii.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: 8,
+    marginBottom: spacing.sm,
+  },
+  targetTicketText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: colors.primary,
+    flex: 1,
+  },
+  scannerWrapper: {
+    gap: spacing.xs,
+    marginBottom: spacing.sm,
+  },
+  cameraBox: {
+    width: "100%",
+    height: 220,
+    borderRadius: radii.lg,
+    overflow: "hidden",
+    backgroundColor: "#000000",
+    position: "relative",
+  },
+  cameraView: {
+    flex: 1,
+    width: "100%",
+    height: "100%",
+  },
+  cameraOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  reticle: {
+    width: 150,
+    height: 150,
+    position: "relative",
+  },
+  cornerReticle: {
+    position: "absolute",
+    width: 20,
+    height: 20,
+    borderColor: colors.primary,
+  },
+  topLeftCorner: {
+    top: 0,
+    left: 0,
+    borderTopWidth: 3,
+    borderLeftWidth: 3,
+    borderTopLeftRadius: 4,
+  },
+  topRightCorner: {
+    top: 0,
+    right: 0,
+    borderTopWidth: 3,
+    borderRightWidth: 3,
+    borderTopRightRadius: 4,
+  },
+  bottomLeftCorner: {
+    bottom: 0,
+    left: 0,
+    borderBottomWidth: 3,
+    borderLeftWidth: 3,
+    borderBottomLeftRadius: 4,
+  },
+  bottomRightCorner: {
+    bottom: 0,
+    right: 0,
+    borderBottomWidth: 3,
+    borderRightWidth: 3,
+    borderBottomRightRadius: 4,
+  },
+  scanningLaser: {
+    position: "absolute",
+    left: 4,
+    right: 4,
+    height: 2,
+    backgroundColor: colors.primary,
+  },
+  scannerInstructionText: {
+    fontSize: 11,
+    color: colors.muted,
+    textAlign: "center",
+    marginTop: 4,
+  },
+  permissionBox: {
+    padding: spacing.lg,
+    backgroundColor: colors.cardSoft,
+    borderRadius: radii.lg,
+    borderColor: colors.border,
+    borderWidth: 1,
+    alignItems: "center",
+    gap: spacing.xs,
+  },
+  permissionTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: colors.text,
+  },
+  permissionText: {
+    fontSize: 12,
+    color: colors.muted,
+    textAlign: "center",
+    marginBottom: 4,
+  },
+  grantBtn: {
+    backgroundColor: colors.primary,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: radii.md,
+  },
+  grantBtnText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  switchModeBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 9,
+    borderRadius: radii.md,
+    backgroundColor: colors.cardSoft,
+    borderColor: colors.border,
+    borderWidth: 1,
+    marginTop: 6,
+  },
+  switchModeBtnText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: colors.textSecondary,
+  },
+  manualEntryWrapper: {
+    marginBottom: spacing.sm,
   },
 });
 

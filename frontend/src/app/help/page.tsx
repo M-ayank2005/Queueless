@@ -302,22 +302,13 @@ export default function HelpCenterPage() {
                   <div>
                     <CardTitle className="text-sm font-bold flex items-center gap-1.5">
                       QueueLess Assistant
-                      <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-primary/10 text-primary">
-                        Gemini 3.8 Flash
-                      </span>
                     </CardTitle>
-                    <p className="text-[11px] text-muted-foreground">
-                      {user ? `Personalized for ${user.name}` : "Online • Queue & Ticket Support"}
+                    <p className="text-[11px] text-muted-foreground flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
+                      Online • Instant Queue & Ticket Guidance
                     </p>
                   </div>
                 </div>
-
-                {user && (
-                  <div className="flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400 font-medium bg-emerald-500/10 px-2 py-0.5 rounded-full">
-                    <CheckCircle2 className="w-3 h-3" />
-                    Synced
-                  </div>
-                )}
               </CardHeader>
 
               {/* Chat Messages Body */}
