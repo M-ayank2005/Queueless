@@ -88,7 +88,7 @@ export const getStoreHistoricalSpeedFactor = async (
 
     for (const ticket of recentCompleted) {
       const scheduled = (ticket.selectedServices || []).reduce(
-        (sum, s) => sum + (s.durationMin || 0),
+        (sum, s) => sum + (s.durationMin || 0) * (s.quantity || 1),
         0
       );
       if (scheduled > 0 && ticket.actualServiceDurationMin) {
@@ -198,7 +198,7 @@ export const calculateTicketWaitEstimate = async (
   let inProgressRemainingMin = 0;
   if (inProgressEntry) {
     const totalDuration = (inProgressEntry.selectedServices || []).reduce(
-      (acc, s) => acc + (s.durationMin || 0),
+      (acc, s) => acc + (s.durationMin || 0) * (s.quantity || 1),
       0
     );
     const startedAt = inProgressEntry.serviceStartedAt || inProgressEntry.updatedAt || inProgressEntry.joinedAt;
@@ -216,7 +216,7 @@ export const calculateTicketWaitEstimate = async (
 
   const waitingAheadMin = waitingAheadEntries.reduce((acc, entry) => {
     const entryDuration = (entry.selectedServices || []).reduce(
-      (sAcc, s) => sAcc + (s.durationMin || 0),
+      (sAcc, s) => sAcc + (s.durationMin || 0) * (s.quantity || 1),
       0
     );
     return acc + entryDuration;
@@ -296,7 +296,13 @@ export const joinQueueService = async (
     throw {
       status: 409,
       message: "You already have an active ticket at this store. Please wait for your turn or view your active ticket.",
-      activeTicketId: existingActiveTicket._id
+      activeTicketId: existingActiveTicket._id,
+      activeTicket: {
+        _id: existingActiveTicket._id,
+        status: existingActiveTicket.status,
+        selectedServices: existingActiveTicket.selectedServices,
+        joinedAt: existingActiveTicket.joinedAt
+      }
     };
   }
 
@@ -305,11 +311,19 @@ export const joinQueueService = async (
   }
 
   const catalog = businessUser.businessProfile.services || [];
-  const verifiedServices: IService[] = [];
+  const verifiedServices: any[] = [];
 
   for (const item of requestedServices) {
     if (!item || typeof item !== "object" || typeof item.name !== "string" || !item.name.trim()) {
       throw { status: 400, message: "Invalid service item format" };
+    }
+
+    const rawQty = item.quantity !== undefined ? item.quantity : 1;
+    if (typeof rawQty !== "number" || !Number.isInteger(rawQty) || rawQty < 1 || rawQty > 50) {
+      throw {
+        status: 400,
+        message: `Invalid quantity for service '${item.name}'. Quantity must be a positive integer between 1 and 50.`
+      };
     }
 
     const trimmedName = item.name.trim().toLowerCase();
@@ -327,12 +341,16 @@ export const joinQueueService = async (
     verifiedServices.push({
       name: matched.name,
       durationMin: matched.durationMin,
-      cost: matched.cost
+      cost: matched.cost,
+      quantity: rawQty
     });
   }
 
   const now = new Date();
   const initialEstimate = await calculateTicketWaitEstimate(businessId, now, "waiting");
+
+  const verificationToken = crypto.randomBytes(16).toString("hex");
+  const verificationTokenHash = crypto.createHash("sha256").update(verificationToken).digest("hex");
 
   const newEntry = new QueueEntry({
     businessId,
@@ -342,7 +360,10 @@ export const joinQueueService = async (
     joinedAt: now,
     selectedServices: verifiedServices,
     totalEstimatedTime: initialEstimate.currentEstimatedWait,
-    status: "waiting"
+    status: "waiting",
+    verificationToken,
+    verificationTokenHash,
+    verificationTokenRevoked: false
   });
 
   try {
@@ -1210,7 +1231,8 @@ export const getSharedTicketService = async (
     selectedServices: (entry.selectedServices || []).map((s) => ({
       name: s.name,
       durationMin: s.durationMin,
-      cost: s.cost
+      cost: s.cost,
+      ...(s.quantity !== undefined ? { quantity: s.quantity } : {})
     })),
     peopleAhead: estimate.peopleAhead,
     currentEstimatedWait: estimate.currentEstimatedWait,
@@ -1219,3 +1241,325 @@ export const getSharedTicketService = async (
     shareToken: cleanToken
   };
 };
+
+/**
+ * Edit Customer Active Ticket Services
+ * Safely updates selected services and quantities on an existing 'waiting' ticket.
+ * Recalculates wait times without altering queue position (joinedAt).
+ * Rejects if ticket is in_progress, completed, cancelled, or concurrently modified.
+ */
+export const editCustomerTicketService = async (
+  ticketId: string,
+  requesterUserId: string,
+  requestedServices: any[],
+  io?: Server
+) => {
+  if (!Types.ObjectId.isValid(ticketId)) {
+    throw { status: 400, message: "Invalid ticket ID" };
+  }
+
+  const ticket = await QueueEntry.findById(ticketId);
+  if (!ticket) {
+    throw { status: 404, message: "Queue entry not found" };
+  }
+
+  const isOwner = ticket.customerId.toString() === requesterUserId;
+  const isBusiness = ticket.businessId.toString() === requesterUserId;
+  if (!isOwner && !isBusiness) {
+    throw { status: 403, message: "Forbidden: You are not authorized to edit this ticket" };
+  }
+
+  if (ticket.status !== "waiting") {
+    throw {
+      status: 400,
+      message: `Cannot edit services for a ticket in '${ticket.status}' status. Only waiting tickets can be updated.`
+    };
+  }
+
+  if (!Array.isArray(requestedServices) || requestedServices.length === 0) {
+    throw { status: 400, message: "At least one service must be selected" };
+  }
+
+  const businessUser = await User.findById(ticket.businessId);
+  if (!businessUser || !businessUser.businessProfile || businessUser.role !== "business") {
+    throw { status: 404, message: "Store not found or invalid" };
+  }
+
+  const catalog = businessUser.businessProfile.services || [];
+  const verifiedServices: any[] = [];
+
+  for (const item of requestedServices) {
+    if (!item || typeof item !== "object" || typeof item.name !== "string" || !item.name.trim()) {
+      throw { status: 400, message: "Invalid service item format" };
+    }
+
+    const rawQty = item.quantity !== undefined ? item.quantity : 1;
+    if (typeof rawQty !== "number" || !Number.isInteger(rawQty) || rawQty < 1 || rawQty > 50) {
+      throw {
+        status: 400,
+        message: `Invalid quantity for service '${item.name}'. Quantity must be a positive integer between 1 and 50.`
+      };
+    }
+
+    const trimmedName = item.name.trim().toLowerCase();
+    const matched = catalog.find(
+      c => c.name.trim().toLowerCase() === trimmedName
+    );
+
+    if (!matched) {
+      throw {
+        status: 400,
+        message: `Service '${item.name.trim()}' is not offered by this store`
+      };
+    }
+
+    verifiedServices.push({
+      name: matched.name,
+      durationMin: matched.durationMin,
+      cost: matched.cost,
+      quantity: rawQty
+    });
+  }
+
+  // Atomic state update with status precondition to eliminate race conditions
+  const updatedTicket = await QueueEntry.findOneAndUpdate(
+    { _id: ticketId, status: "waiting" },
+    { $set: { selectedServices: verifiedServices } },
+    { new: true }
+  );
+
+  if (!updatedTicket) {
+    throw {
+      status: 409,
+      message: "Ticket was concurrently modified or is no longer in waiting status. Please refresh."
+    };
+  }
+
+  const estimate = await calculateTicketWaitEstimate(
+    updatedTicket.businessId,
+    updatedTicket.joinedAt || updatedTicket.date,
+    updatedTicket.status,
+    updatedTicket.serviceStartedAt
+  );
+
+  if (io) {
+    io.to(`business_${updatedTicket.businessId}`).emit("queue_updated", {
+      type: "EDIT",
+      entry: updatedTicket,
+      estimate
+    });
+    io.to(`queue_${updatedTicket._id}`).emit("status_updated", updatedTicket);
+  }
+
+  return {
+    ...updatedTicket.toObject(),
+    peopleAhead: estimate.peopleAhead,
+    currentEstimatedWait: estimate.currentEstimatedWait,
+    estimatedServiceStartTime: estimate.estimatedServiceStartTime,
+    prediction: estimate.prediction,
+    estimateMeta: {
+      inProgressRemainingMin: estimate.inProgressRemainingMin,
+      waitingAheadMin: estimate.waitingAheadMin,
+      calculatedAt: estimate.calculatedAt
+    }
+  };
+};
+
+/**
+ * Verify Ticket Service (Business Counter Verification)
+ * Supports scanning QR verification token or manual ticket-ID entry.
+ * Validates store ownership, token revocation, and state machine eligibility.
+ */
+export const verifyTicketService = async (
+  businessId: string,
+  params: { token?: string; ticketId?: string },
+  io?: Server
+) => {
+  let { token, ticketId } = params;
+
+  if ((!token || !token.trim()) && (!ticketId || !ticketId.trim())) {
+    throw { status: 400, message: "Either ticket QR token or ticket ID must be provided" };
+  }
+
+  let cleanToken = token ? token.trim() : undefined;
+  let cleanTicketId = ticketId ? ticketId.trim() : undefined;
+
+  // Handle formatted QR payload e.g. "ql-ticket:<ticketId>:<token>" or JSON payload
+  if (cleanToken) {
+    if (cleanToken.startsWith("ql-ticket:")) {
+      const parts = cleanToken.split(":");
+      if (parts.length >= 3) {
+        cleanTicketId = cleanTicketId || parts[1];
+        cleanToken = parts[2];
+      } else if (parts.length === 2) {
+        cleanToken = parts[1];
+      }
+    } else if (cleanToken.startsWith("{") && cleanToken.endsWith("}")) {
+      try {
+        const parsed = JSON.parse(cleanToken);
+        if (parsed.ticketId) cleanTicketId = cleanTicketId || parsed.ticketId;
+        if (parsed.token) cleanToken = parsed.token;
+      } catch {}
+    }
+  }
+
+  let ticket: IQueueEntry | null = null;
+
+  if (cleanTicketId) {
+    if (Types.ObjectId.isValid(cleanTicketId)) {
+      ticket = await QueueEntry.findById(cleanTicketId).populate("customerId", "name phone email");
+    } else if (cleanTicketId.length <= 6) {
+      // Suffix lookup within this business's active entries
+      const activeEntries = await QueueEntry.find({
+        businessId,
+        status: { $in: ["waiting", "in_progress"] }
+      }).populate("customerId", "name phone email");
+
+      const match = activeEntries.find(
+        e => e._id.toString().toUpperCase().endsWith(cleanTicketId!.toUpperCase())
+      );
+      if (match) {
+        ticket = match;
+      }
+    }
+  }
+
+  if (!ticket && cleanToken) {
+    const tokenHash = crypto.createHash("sha256").update(cleanToken).digest("hex");
+    ticket = await QueueEntry.findOne({
+      $or: [
+        { verificationToken: cleanToken },
+        { verificationTokenHash: tokenHash }
+      ]
+    }).populate("customerId", "name phone email");
+  }
+
+  if (!ticket) {
+    throw { status: 404, message: "Ticket not found" };
+  }
+
+  // Cross-business scope check
+  if (ticket.businessId.toString() !== businessId.toString()) {
+    throw {
+      status: 403,
+      message: "Cross-business access denied: This ticket belongs to another store"
+    };
+  }
+
+  // If token was provided, verify it matches
+  if (cleanToken) {
+    const tokenHash = crypto.createHash("sha256").update(cleanToken).digest("hex");
+    const matchesPlain = ticket.verificationToken === cleanToken;
+    const matchesHash = ticket.verificationTokenHash === tokenHash;
+    if (!matchesPlain && !matchesHash) {
+      throw {
+        status: 400,
+        message: "Invalid verification token for this ticket"
+      };
+    }
+  }
+
+  // Revocation check
+  if (ticket.verificationTokenRevoked) {
+    throw {
+      status: 400,
+      message: "This ticket's verification token has been revoked by the holder"
+    };
+  }
+
+  // State machine eligibility check
+  if (ticket.status === "completed") {
+    throw {
+      status: 400,
+      message: "This ticket has already been completed"
+    };
+  }
+
+  if (ticket.status === "cancelled") {
+    throw {
+      status: 400,
+      message: "This ticket has been cancelled"
+    };
+  }
+
+  const now = new Date();
+  ticket.verifiedAt = now;
+  ticket.verifiedBy = new Types.ObjectId(businessId);
+  await ticket.save();
+
+  const estimate = await calculateTicketWaitEstimate(
+    businessId,
+    ticket.joinedAt || ticket.date,
+    ticket.status,
+    ticket.serviceStartedAt
+  );
+
+  if (io) {
+    io.to(`business_${businessId}`).emit("queue_updated", {
+      type: "VERIFIED",
+      entry: ticket
+    });
+    io.to(`queue_${ticket._id}`).emit("ticket_verified", {
+      ticketId: ticket._id.toString(),
+      verifiedAt: now.toISOString()
+    });
+  }
+
+  return {
+    verified: true,
+    message: "Ticket verified successfully",
+    entry: {
+      ...ticket.toObject(),
+      peopleAhead: estimate.peopleAhead,
+      currentEstimatedWait: estimate.currentEstimatedWait,
+      estimatedServiceStartTime: estimate.estimatedServiceStartTime,
+      prediction: estimate.prediction
+    }
+  };
+};
+
+/**
+ * Revoke or Regenerate Ticket Verification Token
+ */
+export const revokeTicketVerificationTokenService = async (
+  ticketId: string,
+  requesterUserId: string,
+  regenerate: boolean = true
+) => {
+  if (!Types.ObjectId.isValid(ticketId)) {
+    throw { status: 400, message: "Invalid ticket ID" };
+  }
+
+  const ticket = await QueueEntry.findById(ticketId);
+  if (!ticket) {
+    throw { status: 404, message: "Ticket not found" };
+  }
+
+  const isOwner = ticket.customerId.toString() === requesterUserId;
+  const isBusiness = ticket.businessId.toString() === requesterUserId;
+  if (!isOwner && !isBusiness) {
+    throw { status: 403, message: "Forbidden: Not authorized" };
+  }
+
+  if (regenerate) {
+    const newToken = crypto.randomBytes(16).toString("hex");
+    const newHash = crypto.createHash("sha256").update(newToken).digest("hex");
+    ticket.verificationToken = newToken;
+    ticket.verificationTokenHash = newHash;
+    ticket.verificationTokenRevoked = false;
+    await ticket.save();
+    return {
+      success: true,
+      message: "Verification token regenerated successfully",
+      verificationToken: newToken
+    };
+  } else {
+    ticket.verificationTokenRevoked = true;
+    await ticket.save();
+    return {
+      success: true,
+      message: "Verification token revoked successfully"
+    };
+  }
+};
+

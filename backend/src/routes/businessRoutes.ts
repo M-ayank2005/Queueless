@@ -6,7 +6,8 @@ import {
   getQueue, 
   updateQueueStatus, 
   updateSettings,
-  getAnalytics
+  getAnalytics,
+  verifyQueueTicket
 } from "../controllers/businessController";
 
 const router = express.Router();
@@ -18,6 +19,7 @@ router.get("/me", getBusinessProfile);
 router.put("/services", updateServices);
 router.put("/settings", updateSettings);
 router.get("/queue", getQueue);
+router.post("/queue/verify", verifyQueueTicket);
 router.put("/queue/:id/status", updateQueueStatus);
 router.get("/analytics", getAnalytics);
 

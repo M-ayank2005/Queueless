@@ -25,11 +25,17 @@ import {
   Zap,
   Share2,
   Copy,
-  Check
+  Check,
+  Edit3,
+  Plus,
+  Minus,
+  QrCode,
+  ShieldCheck
 } from "lucide-react";
 import Link from "next/link";
 import api from "@/lib/api";
 import { io, Socket } from "socket.io-client";
+import { QRCodeSVG as QRCode } from "qrcode.react";
 import { QueueFlowLoader, LoadingButton } from "@/components/loading";
 
 interface PredictionMetadata {
@@ -64,10 +70,13 @@ interface QueueStatusData {
   estimatedServiceStartTime?: string;
   prediction?: PredictionMetadata;
   alert?: QueueAlertData | null;
+  verificationToken?: string;
+  verifiedAt?: string;
   selectedServices?: Array<{
     name: string;
     durationMin?: number;
     cost?: number;
+    quantity?: number;
   }>;
   businessId?: {
     _id?: string;
@@ -76,6 +85,12 @@ interface QueueStatusData {
     businessProfile?: {
       shopName?: string;
       address?: string;
+      services?: Array<{
+        name: string;
+        durationMin: number;
+        cost: number;
+      }>;
+      uniqueQrCode?: string;
     };
   };
 }
@@ -94,12 +109,83 @@ export default function StatusPage() {
   const [activeNotification, setActiveNotification] = useState<NotificationBannerData | null>(null);
   const [isAlertDismissed, setIsAlertDismissed] = useState(false);
 
+  // Edit Services on Active Ticket State
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editQuantities, setEditQuantities] = useState<Record<string, number>>({});
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [storeCatalog, setStoreCatalog] = useState<Array<{ name: string; durationMin: number; cost: number }>>([]);
+
   // Phase 7: Secure Shareable Tickets State
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [shareToken, setShareToken] = useState<string | null>(null);
   const [isGeneratingShare, setIsGeneratingShare] = useState(false);
   const [isRevokingShare, setIsRevokingShare] = useState(false);
   const [shareCopied, setShareCopied] = useState(false);
+
+  const handleOpenEditModal = async () => {
+    if (!queueData) return;
+    const initialQty: Record<string, number> = {};
+    for (const s of queueData.selectedServices || []) {
+      initialQty[s.name] = s.quantity || 1;
+    }
+    setEditQuantities(initialQty);
+
+    const storeServices = queueData.businessId?.businessProfile?.services;
+    if (storeServices && storeServices.length > 0) {
+      setStoreCatalog(storeServices);
+    } else {
+      try {
+        const busId = queueData.businessId?._id;
+        if (busId) {
+          const res = await api.get(`/queue/store/${busId}`);
+          setStoreCatalog(res.data?.businessProfile?.services || []);
+        }
+      } catch {}
+    }
+    setIsEditModalOpen(true);
+  };
+
+  const handleSaveEdit = async () => {
+    const selectedList = Object.entries(editQuantities)
+      .filter(([_, q]) => q > 0)
+      .map(([name, quantity]) => ({ name, quantity }));
+
+    if (selectedList.length === 0) {
+      toast.info("Please select at least one service with quantity 1 or more");
+      return;
+    }
+
+    setIsSavingEdit(true);
+    try {
+      await api.put(`/queue/${queueId}/services`, { selectedServices: selectedList });
+      toast.success("Services updated successfully!");
+      setIsEditModalOpen(false);
+      fetchStatus();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to update services");
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
+
+  const handleIncrementEdit = (name: string) => {
+    setEditQuantities(prev => ({
+      ...prev,
+      [name]: Math.min(50, (prev[name] || 0) + 1)
+    }));
+  };
+
+  const handleDecrementEdit = (name: string) => {
+    setEditQuantities(prev => {
+      const current = prev[name] || 0;
+      if (current <= 1) {
+        const copy = { ...prev };
+        delete copy[name];
+        return copy;
+      }
+      return { ...prev, [name]: current - 1 };
+    });
+  };
 
   const handleGenerateShare = async () => {
     try {
@@ -213,6 +299,13 @@ export default function StatusPage() {
       }
     });
 
+    socket.on("ticket_verified", (data: any) => {
+      if (data?.ticketId === queueId) {
+        toast.success("Spot verified! Counter confirmed your booking.");
+        fetchStatus();
+      }
+    });
+
     // Poll every 30 seconds as reliable fallback
     const interval = setInterval(fetchStatus, 30000);
 
@@ -320,7 +413,7 @@ export default function StatusPage() {
   const address =
     queueData.businessId?.businessProfile?.address ||
     queueData.businessId?.address;
-  const servicesList = queueData.selectedServices?.map((s) => s.name).join(", ");
+  const servicesList = queueData.selectedServices?.map((s) => `${s.name}${s.quantity && s.quantity > 1 ? ` (×${s.quantity})` : ""}`).join(", ");
 
   const isCompleted = queueData.status === "completed";
   const isCancelled = queueData.status === "cancelled";
@@ -579,6 +672,38 @@ export default function StatusPage() {
                       )}
                     </div>
                   )}
+
+                  {/* Counter Verification QR Code Card */}
+                  <div className="mt-4 pt-4 border-t border-border/60 flex flex-col items-center text-center">
+                    <div className="flex items-center justify-between w-full mb-3">
+                      <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+                        <QrCode className="w-4 h-4 text-primary" />
+                        <span>Counter Verification QR</span>
+                      </div>
+                      {queueData.verifiedAt ? (
+                        <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 rounded-full">
+                          <ShieldCheck className="w-3.5 h-3.5" />
+                          Verified
+                        </span>
+                      ) : (
+                        <span className="text-[11px] font-medium text-muted-foreground bg-muted/60 px-2 py-0.5 rounded-full border border-border/40">
+                          Show at Desk
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="p-3 bg-white rounded-2xl border shadow-xs inline-block">
+                      <QRCode
+                        value={`ql-ticket:${queueData._id}:${queueData.verificationToken || queueData._id}`}
+                        size={135}
+                        level="H"
+                      />
+                    </div>
+
+                    <p className="text-[11px] text-muted-foreground mt-2 max-w-xs leading-relaxed">
+                      Present this secure code to the merchant to verify your position without sharing personal details.
+                    </p>
+                  </div>
                 </div>
               ) : isCompleted ? (
                 <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-center text-emerald-600 dark:text-emerald-300 text-xs">
@@ -603,6 +728,18 @@ export default function StatusPage() {
 
           {/* Action Row */}
           <div className="space-y-3">
+            {/* Edit Services on Waiting Ticket */}
+            {isWaiting && (
+              <Button
+                variant="outline"
+                onClick={handleOpenEditModal}
+                className="w-full border-border/70 bg-card hover:bg-muted/50 text-xs text-foreground flex items-center justify-center gap-2 h-11 rounded-xl shadow-xs transition-transform active:scale-[0.98]"
+              >
+                <Edit3 className="w-4 h-4 text-primary" />
+                <span>Edit Requested Services</span>
+              </Button>
+            )}
+
             {/* Share Live Ticket Button */}
             {!isCancelled && (
               <Button
@@ -796,6 +933,113 @@ export default function StatusPage() {
                 >
                   Done
                 </Button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Edit Services Modal */}
+      <AnimatePresence>
+        {isEditModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsEditModalOpen(false)}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm"
+              aria-hidden="true"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 16 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 16 }}
+              className="relative w-full max-w-md bg-card border border-border rounded-3xl p-6 shadow-xl z-50 space-y-4 max-h-[90vh] overflow-y-auto"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
+                    <Edit3 className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-bold text-foreground">Edit Services</h3>
+                    <p className="text-xs text-muted-foreground">Adjust quantities for Ticket #{ticketId}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setIsEditModalOpen(false)}
+                  className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="p-3 rounded-2xl bg-primary/5 border border-primary/20 text-xs text-muted-foreground leading-relaxed">
+                ℹ️ Updating your services recalculates duration and wait estimates, but safely preserves your existing spot in line.
+              </div>
+
+              <div className="space-y-2.5 pt-1">
+                {(storeCatalog.length > 0
+                  ? storeCatalog
+                  : (queueData?.selectedServices || [])
+                ).map((service, idx) => {
+                  const qty = editQuantities[service.name] || 0;
+                  return (
+                    <div
+                      key={idx}
+                      className="p-3 rounded-xl border border-border/70 bg-card flex items-center justify-between gap-3"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="font-semibold text-xs text-foreground truncate">{service.name}</p>
+                        <p className="text-[11px] text-muted-foreground">
+                          ${service.cost || 0} • ~{service.durationMin || 0} mins each
+                        </p>
+                      </div>
+
+                      <div className="flex items-center bg-muted/60 border border-border rounded-lg p-0.5">
+                        <button
+                          type="button"
+                          onClick={() => handleDecrementEdit(service.name)}
+                          className="w-6 h-6 rounded bg-card hover:bg-background text-foreground flex items-center justify-center transition-colors active:scale-90"
+                        >
+                          <Minus className="w-3 h-3" />
+                        </button>
+                        <span className="w-7 text-center text-xs font-bold font-mono text-foreground">
+                          {qty}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleIncrementEdit(service.name)}
+                          className="w-6 h-6 rounded bg-primary/10 hover:bg-primary/20 text-primary flex items-center justify-center transition-colors active:scale-90"
+                        >
+                          <Plus className="w-3 h-3" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-border/60">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsEditModalOpen(false)}
+                  disabled={isSavingEdit}
+                  className="text-xs"
+                >
+                  Cancel
+                </Button>
+                <LoadingButton
+                  size="sm"
+                  onClick={handleSaveEdit}
+                  loading={isSavingEdit}
+                  loadingText="Saving..."
+                  className="bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold shadow-xs"
+                >
+                  Save Changes
+                </LoadingButton>
               </div>
             </motion.div>
           </div>

@@ -30,6 +30,8 @@ function RegisterContent() {
     businessName: "",
     address: ""
   });
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const [consentError, setConsentError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [apiError, setApiError] = useState<NormalizedApiError | null>(null);
 
@@ -43,8 +45,15 @@ function RegisterContent() {
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
     setApiError(null);
+    setConsentError(null);
+
+    if (!agreedToTerms) {
+      setConsentError("You must agree to the Terms and Conditions and acknowledge the Privacy Policy to create an account.");
+      return;
+    }
+
+    setLoading(true);
 
     try {
       const payload: any = {
@@ -52,7 +61,9 @@ function RegisterContent() {
         email: formData.email.trim(),
         phone: formData.phone.trim(),
         password: formData.password,
-        role
+        role,
+        agreedToTerms: true,
+        privacyPolicyAcknowledged: true
       };
 
       if (role === "business") {
@@ -287,6 +298,53 @@ function RegisterContent() {
                   </button>
                 </div>
                 <InlineError message={passwordError} />
+              </div>
+
+              {/* Legal Terms & Privacy Policy Consent */}
+              <div className="pt-1.5 space-y-1">
+                <label className="flex items-start gap-2.5 cursor-pointer text-xs text-muted-foreground select-none">
+                  <input
+                    type="checkbox"
+                    id="consent-checkbox"
+                    checked={agreedToTerms}
+                    onChange={(e) => {
+                      setAgreedToTerms(e.target.checked);
+                      if (e.target.checked) setConsentError(null);
+                    }}
+                    className="mt-0.5 rounded border-border text-primary focus:ring-primary w-4 h-4 cursor-pointer accent-primary shrink-0"
+                    required
+                  />
+                  <span className="leading-normal">
+                    I agree to the{" "}
+                    <Link
+                      href="/terms"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary font-semibold hover:underline"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      Terms and Conditions
+                    </Link>{" "}
+                    and acknowledge that I have read the{" "}
+                    <Link
+                      href="/privacy"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-primary font-semibold hover:underline"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      Privacy Policy
+                    </Link>
+                    .
+                  </span>
+                </label>
+                <InlineError
+                  message={
+                    consentError ||
+                    getFieldError(apiError, "agreedToTerms") ||
+                    getFieldError(apiError, "privacyPolicyAcknowledged")
+                  }
+                />
               </div>
 
               <LoadingButton

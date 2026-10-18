@@ -72,6 +72,23 @@ export const sharedTicketRateLimiter = rateLimit({
 });
 
 /**
+ * Rate limiter for AI Support Chat requests.
+ * Prevents API quota abuse and denial of service.
+ */
+export const supportRateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  limit: 40, // 40 requests per 15 minutes per IP
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: () => process.env.NODE_ENV === "test",
+  message: {
+    success: false,
+    message: "Too many AI support messages. Please wait a few minutes before trying again.",
+  },
+  handler: createRateLimitHandler("Too many AI support messages. Please wait a few minutes before trying again.")
+});
+
+/**
  * General baseline rate limiter for API routes.
  */
 export const generalApiRateLimiter = rateLimit({
@@ -86,3 +103,4 @@ export const generalApiRateLimiter = rateLimit({
   },
   handler: createRateLimitHandler("Too many requests. Please slow down.")
 });
+

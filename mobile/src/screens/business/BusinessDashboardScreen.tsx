@@ -2,8 +2,11 @@ import React, { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Image,
+  Linking,
+  Modal,
   Platform,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -55,6 +58,18 @@ export default function BusinessDashboardScreen(_: Props) {
   const [cost, setCost] = useState("");
   const [copied, setCopied] = useState(false);
   const [addingService, setAddingService] = useState(false);
+
+  // Ticket Details & Verification Modal State
+  const [selectedTicket, setSelectedTicket] = useState<QueueEntry | null>(null);
+  const [ticketModalVisible, setTicketModalVisible] = useState(false);
+  const [verifyModalVisible, setVerifyModalVisible] = useState(false);
+  const [verifyInput, setVerifyInput] = useState("");
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [verificationResult, setVerificationResult] = useState<{
+    success: boolean;
+    message: string;
+    ticket?: any;
+  } | null>(null);
 
   // Phase 6: Operational Analytics State & Navigation
   const [activeTab, setActiveTab] = useState<"queue" | "analytics" | "catalog">("queue");
@@ -233,10 +248,68 @@ export default function BusinessDashboardScreen(_: Props) {
     try {
       await api.put(`/business/queue/${id}/status`, { status });
       await load();
+      if (selectedTicket && selectedTicket._id === id) {
+        setSelectedTicket((prev) => (prev ? { ...prev, status } : null));
+      }
     } catch {
       const msg = "Status update failed. Please retry.";
       if (Platform.OS === "web") window.alert(msg);
       else Alert.alert("Error", msg);
+    }
+  };
+
+  const handleVerifyTicket = async (ticketIdOrToken: string) => {
+    if (!ticketIdOrToken.trim()) {
+      const msg = "Please enter ticket ID, code, or token.";
+      if (Platform.OS === "web") window.alert(msg);
+      else Alert.alert("Missing Input", msg);
+      return;
+    }
+    setIsVerifying(true);
+    try {
+      const res = await api.post("/business/queue/verify", {
+        ticketId: ticketIdOrToken.trim(),
+        token: ticketIdOrToken.trim(),
+      });
+      setVerificationResult({
+        success: true,
+        message: res.data.message || "Customer verified successfully",
+        ticket: res.data.ticket,
+      });
+      await load();
+      if (selectedTicket && res.data.ticket && selectedTicket._id === res.data.ticket._id) {
+        setSelectedTicket(res.data.ticket);
+      }
+    } catch (err: any) {
+      const msg = err.response?.data?.message || "Failed to verify customer ticket";
+      setVerificationResult({
+        success: false,
+        message: msg,
+      });
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
+  const handleVerifySelectedTicket = async () => {
+    if (!selectedTicket) return;
+    setIsVerifying(true);
+    try {
+      const res = await api.post("/business/queue/verify", {
+        ticketId: selectedTicket._id,
+        token: selectedTicket.verificationToken || selectedTicket._id,
+      });
+      setSelectedTicket(res.data.ticket);
+      await load();
+      const msg = "Customer verified at counter successfully!";
+      if (Platform.OS === "web") window.alert(msg);
+      else Alert.alert("Verified", msg);
+    } catch (err: any) {
+      const msg = err.response?.data?.message || "Failed to verify ticket";
+      if (Platform.OS === "web") window.alert(msg);
+      else Alert.alert("Verification Failed", msg);
+    } finally {
+      setIsVerifying(false);
     }
   };
 
@@ -415,6 +488,28 @@ export default function BusinessDashboardScreen(_: Props) {
               actionLoading={refreshing}
             />
 
+            {/* Verify Ticket Quick Action Banner */}
+            <TouchableOpacity
+              style={styles.verifyActionBanner}
+              onPress={() => {
+                setVerificationResult(null);
+                setVerifyInput("");
+                setVerifyModalVisible(true);
+              }}
+              activeOpacity={0.8}
+            >
+              <View style={styles.verifyActionLeft}>
+                <View style={styles.verifyIconBadge}>
+                  <Ionicons name="shield-checkmark" size={18} color={colors.primary} />
+                </View>
+                <View>
+                  <Text style={styles.verifyBannerTitle}>Verify Customer Ticket</Text>
+                  <Text style={styles.verifyBannerSub}>Scan QR code or enter ticket ID / token</Text>
+                </View>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+            </TouchableOpacity>
+
             {activeQueue.length === 0 ? (
               <EmptyState
                 icon="checkmark-circle-outline"
@@ -427,35 +522,54 @@ export default function BusinessDashboardScreen(_: Props) {
                 {activeQueue.map((item, index) => {
                   return (
                     <Card key={item._id} variant="elevated" style={styles.queueItemCard}>
-                      <View style={styles.queueItemHeader}>
-                        <View style={styles.positionBadge}>
-                          <Text style={styles.positionText}>#{index + 1}</Text>
-                        </View>
+                      <TouchableOpacity
+                        onPress={() => {
+                          setSelectedTicket(item);
+                          setTicketModalVisible(true);
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <View style={styles.queueItemHeader}>
+                          <View style={styles.positionBadge}>
+                            <Text style={styles.positionText}>#{index + 1}</Text>
+                          </View>
 
-                        <View style={styles.queueItemInfo}>
-                          <Text style={styles.customerName} numberOfLines={1}>
-                            {item.customerId?.name || "Customer Ticket"}
-                          </Text>
-                          <Text style={styles.ticketPill}>
-                            Ticket #{item._id.slice(-4).toUpperCase()}
-                          </Text>
-                        </View>
-
-                        <StatusBadge status={item.status} size="sm" />
-                      </View>
-
-                      {/* Services summary */}
-                      {item.selectedServices?.length ? (
-                        <View style={styles.itemServicesRow}>
-                          {item.selectedServices.map((s, idx) => (
-                            <View key={`${s.name}_${idx}`} style={styles.serviceChip}>
-                              <Text style={styles.serviceChipText}>
-                                {s.name} (${s.cost})
+                          <View style={styles.queueItemInfo}>
+                            <View style={styles.nameBadgeRow}>
+                              <Text style={styles.customerName} numberOfLines={1}>
+                                {item.customerId?.name || item.customerName || "Customer Ticket"}
                               </Text>
+                              {item.verifiedAt ? (
+                                <View style={styles.verifiedChip}>
+                                  <Ionicons name="checkmark-circle" size={12} color={colors.success} />
+                                  <Text style={styles.verifiedChipText}>Verified</Text>
+                                </View>
+                              ) : null}
                             </View>
-                          ))}
+                            <Text style={styles.ticketPill}>
+                              Ticket #{item._id.slice(-4).toUpperCase()} • Tap for details
+                            </Text>
+                          </View>
+
+                          <StatusBadge status={item.status} size="sm" />
                         </View>
-                      ) : null}
+
+                        {/* Services summary */}
+                        {item.selectedServices?.length ? (
+                          <View style={styles.itemServicesRow}>
+                            {item.selectedServices.map((s, idx) => {
+                              const qty = s.quantity || 1;
+                              return (
+                                <View key={`${s.name}_${idx}`} style={styles.serviceChip}>
+                                  <Text style={styles.serviceChipText}>
+                                    {s.name} {qty > 1 ? `(×${qty})` : ""} (${(s.cost || 0) * qty})
+                                  </Text>
+                                </View>
+                              );
+                            })}
+                          </View>
+                        ) : null}
+                      </TouchableOpacity>
 
                       {/* Action buttons row */}
                       <View style={styles.itemActionRow}>
@@ -514,42 +628,61 @@ export default function BusinessDashboardScreen(_: Props) {
 
                   return (
                     <Card key={item._id} variant="subtle" style={styles.processedItemCard}>
-                      <View style={styles.processedItemHeader}>
-                        <View style={styles.processedItemInfo}>
-                          <View style={styles.processedNameRow}>
-                            <Text style={styles.customerName} numberOfLines={1}>
-                              {item.customerId?.name || item.customerName || "Customer"}
-                            </Text>
-                            <StatusBadge status={item.status} size="sm" />
-                          </View>
-                          <View style={styles.processedMetaRow}>
-                            <Text style={styles.ticketPill}>
-                              Ticket #{item._id.slice(-4).toUpperCase()}
-                            </Text>
-                            {processedTimeStr ? (
-                              <>
-                                <Text style={styles.dotSeparator}>•</Text>
-                                <View style={styles.processedTimeBox}>
-                                  <Ionicons name="time-outline" size={12} color={colors.muted} />
-                                  <Text style={styles.processedTimeText}>{processedTimeStr}</Text>
-                                </View>
-                              </>
-                            ) : null}
-                          </View>
-                        </View>
-                      </View>
-
-                      {item.selectedServices?.length ? (
-                        <View style={styles.itemServicesRow}>
-                          {item.selectedServices.map((s, idx) => (
-                            <View key={`${s.name}_${idx}`} style={styles.serviceChip}>
-                              <Text style={styles.serviceChipText}>
-                                {s.name} (${s.cost})
-                              </Text>
+                      <TouchableOpacity
+                        onPress={() => {
+                          setSelectedTicket(item);
+                          setTicketModalVisible(true);
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <View style={styles.processedItemHeader}>
+                          <View style={styles.processedItemInfo}>
+                            <View style={styles.processedNameRow}>
+                              <View style={styles.nameBadgeRow}>
+                                <Text style={styles.customerName} numberOfLines={1}>
+                                  {item.customerId?.name || item.customerName || "Customer"}
+                                </Text>
+                                {item.verifiedAt ? (
+                                  <View style={styles.verifiedChip}>
+                                    <Ionicons name="checkmark-circle" size={12} color={colors.success} />
+                                    <Text style={styles.verifiedChipText}>Verified</Text>
+                                  </View>
+                                ) : null}
+                              </View>
+                              <StatusBadge status={item.status} size="sm" />
                             </View>
-                          ))}
+                            <View style={styles.processedMetaRow}>
+                              <Text style={styles.ticketPill}>
+                                Ticket #{item._id.slice(-4).toUpperCase()}
+                              </Text>
+                              {processedTimeStr ? (
+                                <>
+                                  <Text style={styles.dotSeparator}>•</Text>
+                                  <View style={styles.processedTimeBox}>
+                                    <Ionicons name="time-outline" size={12} color={colors.muted} />
+                                    <Text style={styles.processedTimeText}>{processedTimeStr}</Text>
+                                  </View>
+                                </>
+                              ) : null}
+                            </View>
+                          </View>
                         </View>
-                      ) : null}
+
+                        {item.selectedServices?.length ? (
+                          <View style={styles.itemServicesRow}>
+                            {item.selectedServices.map((s, idx) => {
+                              const qty = s.quantity || 1;
+                              return (
+                                <View key={`${s.name}_${idx}`} style={styles.serviceChip}>
+                                  <Text style={styles.serviceChipText}>
+                                    {s.name} {qty > 1 ? `(×${qty})` : ""} (${(s.cost || 0) * qty})
+                                  </Text>
+                                </View>
+                              );
+                            })}
+                          </View>
+                        ) : null}
+                      </TouchableOpacity>
                     </Card>
                   );
                 })}
@@ -895,6 +1028,320 @@ export default function BusinessDashboardScreen(_: Props) {
           </Card>
         </View>
       )}
+
+      {/* Customer Ticket Details Modal */}
+      <Modal
+        visible={ticketModalVisible && Boolean(selectedTicket)}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setTicketModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            {selectedTicket && (
+              <>
+                <View style={styles.modalHeader}>
+                  <View style={styles.modalHeaderLeft}>
+                    <Text style={styles.modalTicketNumber}>
+                      Ticket #{selectedTicket._id.slice(-4).toUpperCase()}
+                    </Text>
+                    <StatusBadge status={selectedTicket.status} size="sm" />
+                    {selectedTicket.verifiedAt ? (
+                      <View style={styles.verifiedChip}>
+                        <Ionicons name="checkmark-circle" size={12} color={colors.success} />
+                        <Text style={styles.verifiedChipText}>Verified</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => setTicketModalVisible(false)}
+                    style={styles.modalCloseBtn}
+                  >
+                    <Ionicons name="close" size={20} color={colors.text} />
+                  </TouchableOpacity>
+                </View>
+
+                <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+                  {/* Customer Info Card */}
+                  <View style={styles.modalCustomerCard}>
+                    <View style={styles.modalCustomerInfoRow}>
+                      <View style={styles.modalAvatar}>
+                        <Ionicons name="person" size={20} color={colors.primary} />
+                      </View>
+                      <View style={styles.flex1}>
+                        <Text style={styles.modalCustomerName}>
+                          {selectedTicket.customerId?.name || selectedTicket.customerName || "Customer"}
+                        </Text>
+                        <Text style={styles.modalCustomerJoined}>
+                          Joined: {new Date(selectedTicket.joinedAt || Date.now()).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {selectedTicket.customerId?.phone ? (
+                      <View style={styles.contactActionRow}>
+                        <TouchableOpacity
+                          style={styles.contactCallBtn}
+                          onPress={() => Linking.openURL(`tel:${selectedTicket.customerId?.phone}`)}
+                          activeOpacity={0.8}
+                        >
+                          <Ionicons name="call" size={14} color="#FFF" />
+                          <Text style={styles.contactCallText}>
+                            Call ({selectedTicket.customerId?.phone})
+                          </Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={styles.contactChatBtn}
+                          onPress={() => Linking.openURL(`sms:${selectedTicket.customerId?.phone}`)}
+                          activeOpacity={0.8}
+                        >
+                          <Ionicons name="chatbubble-ellipses" size={14} color={colors.primary} />
+                          <Text style={styles.contactChatText}>SMS / Chat</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <Text style={styles.noContactText}>No phone contact provided for this visitor</Text>
+                    )}
+                  </View>
+
+                  {/* Requested Services */}
+                  <View style={styles.modalSection}>
+                    <Text style={styles.modalSectionTitle}>Requested Services & Quantities</Text>
+                    <View style={styles.modalServicesList}>
+                      {selectedTicket.selectedServices?.map((s, idx) => {
+                        const qty = s.quantity || 1;
+                        const duration = (s.durationMin || 0) * qty;
+                        const totalCost = (s.cost || 0) * qty;
+                        return (
+                          <View key={idx} style={styles.modalServiceItem}>
+                            <View style={styles.flex1}>
+                              <Text style={styles.modalServiceName}>
+                                {s.name} <Text style={styles.qtyHighlight}>×{qty}</Text>
+                              </Text>
+                              <Text style={styles.modalServiceMeta}>
+                                ~{duration} mins {s.cost > 0 ? `($${s.cost} each)` : ""}
+                              </Text>
+                            </View>
+                            <Text style={styles.modalServiceTotal}>${totalCost}</Text>
+                          </View>
+                        );
+                      })}
+                    </View>
+
+                    {/* Subtotal row */}
+                    <View style={styles.modalTotalRow}>
+                      <Text style={styles.modalTotalLabel}>Total Estimate</Text>
+                      <View style={styles.modalTotalValues}>
+                        <Text style={styles.modalTotalDuration}>
+                          ~{selectedTicket.selectedServices?.reduce((sum, s) => sum + (s.durationMin || 0) * (s.quantity || 1), 0)} mins
+                        </Text>
+                        <Text style={styles.modalTotalCost}>
+                          ${selectedTicket.selectedServices?.reduce((sum, s) => sum + (s.cost || 0) * (s.quantity || 1), 0)}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  {/* Verification Status / Action */}
+                  <View style={styles.modalVerificationBox}>
+                    <View style={styles.modalVerifyInfo}>
+                      <Ionicons
+                        name={selectedTicket.verifiedAt ? "checkmark-circle" : "shield-outline"}
+                        size={20}
+                        color={selectedTicket.verifiedAt ? colors.success : colors.warning}
+                      />
+                      <View style={styles.flex1}>
+                        <Text style={styles.modalVerifyTitle}>Counter Verification</Text>
+                        <Text style={styles.modalVerifySub}>
+                          {selectedTicket.verifiedAt
+                            ? `Verified at ${new Date(selectedTicket.verifiedAt).toLocaleTimeString()}`
+                            : "Ticket has not been verified at the counter yet"}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {!selectedTicket.verifiedAt ? (
+                      <TouchableOpacity
+                        style={styles.modalVerifyActionBtn}
+                        onPress={handleVerifySelectedTicket}
+                        disabled={isVerifying}
+                        activeOpacity={0.8}
+                      >
+                        <Ionicons name="shield-checkmark" size={14} color="#FFF" />
+                        <Text style={styles.modalVerifyActionBtnText}>
+                          {isVerifying ? "Verifying..." : "Verify Ticket"}
+                        </Text>
+                      </TouchableOpacity>
+                    ) : null}
+                  </View>
+                </ScrollView>
+
+                {/* Footer Status Actions */}
+                <View style={styles.modalFooter}>
+                  {selectedTicket.status === "waiting" ? (
+                    <TouchableOpacity
+                      style={styles.modalPrimaryActionBtn}
+                      onPress={() => {
+                        updateStatus(selectedTicket._id, "in_progress");
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="play" size={16} color="#FFF" />
+                      <Text style={styles.modalPrimaryActionBtnText}>Call Customer</Text>
+                    </TouchableOpacity>
+                  ) : null}
+
+                  {selectedTicket.status === "in_progress" ? (
+                    <TouchableOpacity
+                      style={styles.modalCompleteActionBtn}
+                      onPress={() => {
+                        updateStatus(selectedTicket._id, "completed");
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="checkmark-done" size={16} color="#FFF" />
+                      <Text style={styles.modalCompleteActionBtnText}>Complete Service</Text>
+                    </TouchableOpacity>
+                  ) : null}
+
+                  {selectedTicket.status === "waiting" || selectedTicket.status === "in_progress" ? (
+                    <TouchableOpacity
+                      style={styles.modalCancelActionBtn}
+                      onPress={() => {
+                        updateStatus(selectedTicket._id, "cancelled");
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.modalCancelActionBtnText}>Cancel</Text>
+                    </TouchableOpacity>
+                  ) : null}
+
+                  <TouchableOpacity
+                    style={styles.modalCloseFooterBtn}
+                    onPress={() => setTicketModalVisible(false)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.modalCloseFooterBtnText}>Close</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Counter Verification Modal */}
+      <Modal
+        visible={verifyModalVisible}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setVerifyModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <View style={styles.modalHeaderLeft}>
+                <View style={styles.verifyIconBadge}>
+                  <Ionicons name="shield-checkmark" size={18} color={colors.primary} />
+                </View>
+                <Text style={styles.modalTitle}>Counter Ticket Verification</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => {
+                  setVerifyModalVisible(false);
+                  setVerificationResult(null);
+                  setVerifyInput("");
+                }}
+                style={styles.modalCloseBtn}
+              >
+                <Ionicons name="close" size={20} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.modalBody}>
+              <Text style={styles.verifyInputLabel}>
+                Scan QR Code or Enter Ticket Number / Code
+              </Text>
+              <TextInput
+                style={styles.verifyTextInput}
+                placeholder="e.g. ql-ticket:... or ABCD or ticket ID"
+                placeholderTextColor={colors.muted}
+                value={verifyInput}
+                onChangeText={setVerifyInput}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+
+              <TouchableOpacity
+                style={styles.submitVerifyBtn}
+                onPress={() => handleVerifyTicket(verifyInput)}
+                disabled={isVerifying}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="shield-checkmark" size={16} color="#FFF" />
+                <Text style={styles.submitVerifyBtnText}>
+                  {isVerifying ? "Verifying..." : "Verify Customer Ticket"}
+                </Text>
+              </TouchableOpacity>
+
+              {verificationResult ? (
+                <View
+                  style={[
+                    styles.resultCard,
+                    verificationResult.success ? styles.resultSuccessCard : styles.resultErrorCard,
+                  ]}
+                >
+                  <Ionicons
+                    name={verificationResult.success ? "checkmark-circle" : "alert-circle"}
+                    size={20}
+                    color={verificationResult.success ? colors.success : colors.danger}
+                  />
+                  <View style={styles.flex1}>
+                    <Text
+                      style={[
+                        styles.resultMessage,
+                        verificationResult.success
+                          ? styles.resultSuccessMessage
+                          : styles.resultErrorMessage,
+                      ]}
+                    >
+                      {verificationResult.message}
+                    </Text>
+                    {verificationResult.ticket ? (
+                      <View style={styles.resultTicketMeta}>
+                        <Text style={styles.resultTicketText}>
+                          Customer: {verificationResult.ticket.customerId?.name || verificationResult.ticket.customerName || "Customer"}
+                        </Text>
+                        <Text style={styles.resultTicketText}>
+                          Ticket: #{verificationResult.ticket._id?.slice(-4).toUpperCase()}
+                        </Text>
+                        <Text style={styles.resultTicketText}>
+                          Services: {verificationResult.ticket.selectedServices?.map((s: any) => `${s.name}${s.quantity > 1 ? ` (×${s.quantity})` : ""}`).join(", ")}
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
+                </View>
+              ) : null}
+            </View>
+
+            <View style={styles.modalFooter}>
+              <TouchableOpacity
+                style={styles.modalCloseFooterBtn}
+                onPress={() => {
+                  setVerifyModalVisible(false);
+                  setVerificationResult(null);
+                  setVerifyInput("");
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.modalCloseFooterBtnText}>Done</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </AppScreen>
   );
 }
@@ -1586,6 +2033,436 @@ const createStyles = (colors: ThemeColors) =>
     fontWeight: "800",
     color: colors.text,
     marginLeft: 4,
+  },
+
+  /* Verification Banner */
+  verifyActionBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: colors.cardElevated,
+    borderColor: colors.primaryBorder,
+    borderWidth: 1,
+    padding: spacing.md,
+    borderRadius: radii.md,
+    marginBottom: spacing.xs,
+  },
+  verifyActionLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  verifyIconBadge: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.primarySubtle,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  verifyBannerTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: colors.text,
+  },
+  verifyBannerSub: {
+    fontSize: 11,
+    color: colors.muted,
+    marginTop: 1,
+  },
+
+  /* Verified badges */
+  nameBadgeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    flexWrap: "wrap",
+  },
+  verifiedChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: colors.successSubtle,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: radii.full,
+  },
+  verifiedChipText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: colors.success,
+  },
+
+  /* Modal Styles */
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.65)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: spacing.md,
+  },
+  modalContainer: {
+    width: "100%",
+    maxWidth: 480,
+    maxHeight: "85%",
+    backgroundColor: colors.cardElevated,
+    borderRadius: radii.xl,
+    borderColor: colors.border,
+    borderWidth: 1,
+    overflow: "hidden",
+    ...shadows.card,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderBottomColor: colors.border,
+    borderBottomWidth: 1,
+  },
+  modalHeaderLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    flexWrap: "wrap",
+    flex: 1,
+  },
+  modalTicketNumber: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: colors.primary,
+    fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
+  },
+  modalTitle: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: colors.text,
+  },
+  modalCloseBtn: {
+    padding: spacing.xs,
+  },
+  modalBody: {
+    padding: spacing.lg,
+  },
+  modalCustomerCard: {
+    backgroundColor: colors.cardSoft,
+    borderColor: colors.border,
+    borderWidth: 1,
+    borderRadius: radii.lg,
+    padding: spacing.md,
+    gap: spacing.sm,
+    marginBottom: spacing.md,
+  },
+  modalCustomerInfoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  modalAvatar: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: colors.primarySubtle,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalCustomerName: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: colors.text,
+  },
+  modalCustomerJoined: {
+    fontSize: 11,
+    color: colors.muted,
+    marginTop: 1,
+  },
+  contactActionRow: {
+    flexDirection: "row",
+    gap: spacing.xs,
+    paddingTop: spacing.xs,
+    borderTopColor: colors.border,
+    borderTopWidth: 1,
+  },
+  contactCallBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    backgroundColor: colors.primary,
+    paddingVertical: 8,
+    borderRadius: radii.md,
+  },
+  contactCallText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  contactChatBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    backgroundColor: colors.cardElevated,
+    borderColor: colors.border,
+    borderWidth: 1,
+    paddingVertical: 8,
+    borderRadius: radii.md,
+  },
+  contactChatText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: colors.text,
+  },
+  noContactText: {
+    fontSize: 11,
+    fontStyle: "italic",
+    color: colors.muted,
+  },
+  modalSection: {
+    gap: spacing.xs,
+    marginBottom: spacing.md,
+  },
+  modalSectionTitle: {
+    fontSize: 12,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    color: colors.muted,
+    letterSpacing: 0.5,
+  },
+  modalServicesList: {
+    backgroundColor: colors.cardSoft,
+    borderColor: colors.border,
+    borderWidth: 1,
+    borderRadius: radii.md,
+    overflow: "hidden",
+  },
+  modalServiceItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    borderBottomColor: colors.border,
+    borderBottomWidth: 1,
+  },
+  modalServiceName: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: colors.text,
+  },
+  qtyHighlight: {
+    fontWeight: "800",
+    color: colors.primary,
+  },
+  modalServiceMeta: {
+    fontSize: 11,
+    color: colors.muted,
+    marginTop: 1,
+  },
+  modalServiceTotal: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: colors.text,
+  },
+  modalTotalRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingTop: spacing.xs,
+    paddingHorizontal: spacing.xs,
+  },
+  modalTotalLabel: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: colors.textSecondary,
+  },
+  modalTotalValues: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  modalTotalDuration: {
+    fontSize: 11,
+    color: colors.muted,
+  },
+  modalTotalCost: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: colors.primary,
+  },
+  modalVerificationBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: colors.cardSoft,
+    borderColor: colors.border,
+    borderWidth: 1,
+    borderStyle: "dashed",
+    borderRadius: radii.md,
+    padding: spacing.md,
+    marginBottom: spacing.md,
+    gap: spacing.sm,
+  },
+  modalVerifyInfo: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+  },
+  modalVerifyTitle: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: colors.text,
+  },
+  modalVerifySub: {
+    fontSize: 10,
+    color: colors.muted,
+    marginTop: 1,
+  },
+  modalVerifyActionBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: colors.success,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: radii.md,
+  },
+  modalVerifyActionBtnText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  modalFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    padding: spacing.md,
+    borderTopColor: colors.border,
+    borderTopWidth: 1,
+  },
+  modalPrimaryActionBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    backgroundColor: colors.primary,
+    paddingVertical: 10,
+    borderRadius: radii.md,
+  },
+  modalPrimaryActionBtnText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  modalCompleteActionBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    backgroundColor: colors.success,
+    paddingVertical: 10,
+    borderRadius: radii.md,
+  },
+  modalCompleteActionBtnText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  modalCancelActionBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: radii.md,
+    backgroundColor: colors.dangerSubtle,
+    borderColor: colors.dangerBorder,
+    borderWidth: 1,
+  },
+  modalCancelActionBtnText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: colors.danger,
+  },
+  modalCloseFooterBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: radii.md,
+  },
+  modalCloseFooterBtnText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: colors.muted,
+  },
+  verifyInputLabel: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: colors.text,
+    marginBottom: spacing.xs,
+  },
+  verifyTextInput: {
+    backgroundColor: colors.cardSoft,
+    borderColor: colors.border,
+    borderWidth: 1,
+    borderRadius: radii.md,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    color: colors.text,
+    fontSize: 13,
+    fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
+    marginBottom: spacing.md,
+  },
+  submitVerifyBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: colors.primary,
+    paddingVertical: 11,
+    borderRadius: radii.md,
+    marginBottom: spacing.md,
+  },
+  submitVerifyBtnText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  resultCard: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: spacing.sm,
+    padding: spacing.md,
+    borderRadius: radii.md,
+    borderWidth: 1,
+  },
+  resultSuccessCard: {
+    backgroundColor: colors.successSubtle,
+    borderColor: colors.successBorder,
+  },
+  resultErrorCard: {
+    backgroundColor: colors.dangerSubtle,
+    borderColor: colors.dangerBorder,
+  },
+  resultMessage: {
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  resultSuccessMessage: {
+    color: colors.success,
+  },
+  resultErrorMessage: {
+    color: colors.danger,
+  },
+  resultTicketMeta: {
+    marginTop: spacing.xs,
+    gap: 2,
+  },
+  resultTicketText: {
+    fontSize: 11,
+    color: colors.textSecondary,
   },
 });
 

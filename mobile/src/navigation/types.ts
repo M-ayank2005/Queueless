@@ -2,6 +2,9 @@ export type AuthStackParamList = {
   Welcome: undefined;
   Login: undefined;
   Register: undefined;
+  PrivacyPolicy: undefined;
+  Terms: undefined;
+  HelpSupport: undefined;
 };
 
 export type CustomerTabParamList = {
@@ -19,4 +22,7 @@ export type RootStackParamList = {
   CustomerTabs: undefined;
   BusinessTabs: undefined;
   QueueStatus: { id: string };
+  PrivacyPolicy: undefined;
+  Terms: undefined;
+  HelpSupport: undefined;
 };

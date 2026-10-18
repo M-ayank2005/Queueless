@@ -1,7 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   Alert,
+  Image,
+  Modal,
   Platform,
+  ScrollView,
   Share,
   StyleSheet,
   Text,
@@ -35,6 +38,75 @@ export default function QueueStatusScreen({ route, navigation }: Props) {
   const [shareToken, setShareToken] = useState<string | null>(null);
   const [entry, setEntry] = useState<QueueEntry | null>(null);
   const [isAlertDismissed, setIsAlertDismissed] = useState(false);
+
+  // Edit Services Modal State
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editQuantities, setEditQuantities] = useState<Record<string, number>>({});
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+
+  const openEditModal = () => {
+    const q: Record<string, number> = {};
+    entry?.selectedServices?.forEach((s) => {
+      q[s.name] = s.quantity || 1;
+    });
+    setEditQuantities(q);
+    setIsEditModalOpen(true);
+  };
+
+  const setEditQuantity = (serviceName: string, delta: number) => {
+    setEditQuantities((prev) => {
+      const current = prev[serviceName] || 0;
+      const next = Math.max(0, Math.min(50, current + delta));
+      if (next === 0) {
+        const copy = { ...prev };
+        delete copy[serviceName];
+        return copy;
+      }
+      return { ...prev, [serviceName]: next };
+    });
+  };
+
+  const handleSaveEditedServices = async () => {
+    if (!entry) return;
+    const catalog =
+      entry.businessId?.businessProfile?.services ||
+      entry.businessId?.services ||
+      entry.selectedServices ||
+      [];
+
+    const selected = catalog
+      .filter((s: any) => (editQuantities[s.name] || 0) > 0)
+      .map((s: any) => ({
+        name: s.name,
+        quantity: editQuantities[s.name],
+        durationMin: s.durationMin,
+        cost: s.cost,
+      }));
+
+    if (selected.length === 0) {
+      if (Platform.OS === "web") window.alert("Please select at least one service.");
+      else Alert.alert("Selection Required", "Please select at least one service.");
+      return;
+    }
+
+    setIsSavingEdit(true);
+    try {
+      const res = await api.put(`/queue/${entry._id}/services`, {
+        selectedServices: selected,
+      });
+      setEntry(res.data);
+      setIsEditModalOpen(false);
+      const msg = "Services updated successfully! Your position in line is preserved.";
+      if (Platform.OS === "web") window.alert(msg);
+      else Alert.alert("Services Updated", msg);
+    } catch (err: any) {
+      const msg = err.response?.data?.message || "Failed to update requested services.";
+      if (Platform.OS === "web") window.alert(msg);
+      else Alert.alert("Update Failed", msg);
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
 
   const handleShareTicket = async () => {
     if (!entry) return;
@@ -225,7 +297,7 @@ export default function QueueStatusScreen({ route, navigation }: Props) {
     "Store Location";
 
   const totalCost = (entry.selectedServices || []).reduce(
-    (acc, s) => acc + (Number(s.cost) || 0),
+    (acc, s) => acc + (Number(s.cost) || 0) * (s.quantity || 1),
     0
   );
 
@@ -432,26 +504,97 @@ export default function QueueStatusScreen({ route, navigation }: Props) {
         </View>
       )}
 
+      {/* Counter Verification Card */}
+      {!isCancelled && entry.verificationToken && (
+        <Card variant="elevated" style={styles.verificationCard}>
+          <View style={styles.verificationHeader}>
+            <View style={styles.verificationIconCircle}>
+              <Ionicons
+                name={entry.verifiedAt ? "checkmark-circle" : "qr-code"}
+                size={20}
+                color={entry.verifiedAt ? colors.success : colors.primary}
+              />
+            </View>
+            <View style={styles.flex1}>
+              <Text style={styles.verificationTitle}>
+                {entry.verifiedAt ? "Counter Verified" : "Counter Verification QR"}
+              </Text>
+              <Text style={styles.verificationSub}>
+                {entry.verifiedAt
+                  ? `Verified by counter at ${new Date(entry.verifiedAt).toLocaleTimeString()}`
+                  : "Show this code to counter staff when called to verify your spot"}
+              </Text>
+            </View>
+            {entry.verifiedAt ? (
+              <View style={styles.verifiedBadgePill}>
+                <Ionicons name="shield-checkmark" size={12} color={colors.success} />
+                <Text style={styles.verifiedBadgeText}>VERIFIED</Text>
+              </View>
+            ) : null}
+          </View>
+
+          {!entry.verifiedAt ? (
+            <View style={styles.verificationQrContainer}>
+              <View style={styles.verificationQrBox}>
+                <Image
+                  source={{
+                    uri: `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=8&data=${encodeURIComponent(
+                      `ql-ticket:${entry._id}:${entry.verificationToken}`
+                    )}`,
+                  }}
+                  style={styles.verificationQrImage}
+                  resizeMode="contain"
+                />
+              </View>
+              <Text style={styles.verificationTokenText}>
+                Token: #{entry._id.slice(-6).toUpperCase()}
+              </Text>
+            </View>
+          ) : null}
+        </Card>
+      )}
+
       {/* Selected Services Breakdown Card */}
       <Card variant="default" style={styles.servicesCard}>
         <View style={styles.serviceHeaderRow}>
-          <Ionicons name="list" size={18} color={colors.primary} />
-          <Text style={styles.sectionHeading}>Selected Services</Text>
+          <View style={styles.serviceHeaderTitleWrap}>
+            <Ionicons name="list" size={18} color={colors.primary} />
+            <Text style={styles.sectionHeading}>Selected Services</Text>
+          </View>
+          {entry.status === "waiting" && (
+            <TouchableOpacity
+              style={styles.editServicesBtn}
+              onPress={openEditModal}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="create-outline" size={14} color={colors.primary} />
+              <Text style={styles.editServicesBtnText}>Edit Services</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {entry.selectedServices?.length ? (
           <View style={styles.servicesList}>
-            {entry.selectedServices.map((service, idx) => (
-              <View key={`${service.name}_${idx}`} style={styles.serviceItemRow}>
-                <View style={styles.serviceLeftCol}>
-                  <Text style={styles.serviceNameText}>{service.name}</Text>
-                  {service.durationMin ? (
-                    <Text style={styles.serviceDurationText}>⏱ {service.durationMin} mins</Text>
-                  ) : null}
+            {entry.selectedServices.map((service, idx) => {
+              const qty = service.quantity || 1;
+              const unitCost = Number(service.cost) || 0;
+              const unitDur = Number(service.durationMin) || 0;
+              return (
+                <View key={`${service.name}_${idx}`} style={styles.serviceItemRow}>
+                  <View style={styles.serviceLeftCol}>
+                    <Text style={styles.serviceNameText}>
+                      {service.name} <Text style={styles.qtyHighlight}>×{qty}</Text>
+                    </Text>
+                    {unitDur ? (
+                      <Text style={styles.serviceDurationText}>
+                        ⏱ {unitDur * qty} mins {qty > 1 ? `(${unitDur}m each)` : ""}
+                      </Text>
+                    ) : null}
+                  </View>
+                  <Text style={styles.serviceCostText}>${unitCost * qty}</Text>
                 </View>
-                <Text style={styles.serviceCostText}>${service.cost}</Text>
-              </View>
-            ))}
+              );
+            })}
 
             <View style={styles.totalDivider} />
             <View style={styles.totalRow}>
@@ -517,12 +660,166 @@ export default function QueueStatusScreen({ route, navigation }: Props) {
           icon="home-outline"
         />
       </View>
+
+      {/* Edit Services Modal */}
+      <Modal
+        visible={isEditModalOpen}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setIsEditModalOpen(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <View style={styles.modalHeader}>
+              <View style={styles.modalHeaderLeft}>
+                <View style={styles.editIconBadge}>
+                  <Ionicons name="create-outline" size={18} color={colors.primary} />
+                </View>
+                <Text style={styles.modalTitle}>Edit Requested Services</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setIsEditModalOpen(false)}
+                style={styles.modalCloseBtn}
+              >
+                <Ionicons name="close" size={20} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+              <Text style={styles.modalSub}>
+                Adjust the services or quantities needed. Your position in line is completely preserved.
+              </Text>
+
+              <View style={styles.modalServicesList}>
+                {(
+                  entry.businessId?.businessProfile?.services ||
+                  entry.businessId?.services ||
+                  entry.selectedServices ||
+                  []
+                ).map((service: any, index: number) => {
+                  const qty = editQuantities[service.name] || 0;
+                  return (
+                    <View
+                      key={`${service.name}_${index}`}
+                      style={[styles.editServiceItem, qty > 0 && styles.editServiceItemActive]}
+                    >
+                      <TouchableOpacity
+                        style={styles.editServiceTextCol}
+                        onPress={() => setEditQuantity(service.name, qty > 0 ? -qty : 1)}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={styles.editServiceName}>{service.name}</Text>
+                        <Text style={styles.editServiceMeta}>
+                          ⏱ {service.durationMin} mins • ${service.cost} each
+                        </Text>
+                        {qty > 1 ? (
+                          <Text style={styles.editServiceSubtotal}>
+                            Total: ${service.cost * qty} (~{service.durationMin * qty} mins)
+                          </Text>
+                        ) : null}
+                      </TouchableOpacity>
+
+                      {/* Stepper Controls */}
+                      <View style={styles.stepperWrap}>
+                        <TouchableOpacity
+                          style={[styles.stepperBtn, qty === 0 && styles.stepperBtnDisabled]}
+                          onPress={() => setEditQuantity(service.name, -1)}
+                          disabled={qty === 0}
+                          activeOpacity={0.7}
+                        >
+                          <Ionicons name="remove" size={16} color={qty === 0 ? colors.muted : colors.text} />
+                        </TouchableOpacity>
+
+                        <View style={[styles.countBadge, qty > 0 && styles.countBadgeActive]}>
+                          <Text style={[styles.countBadgeText, qty > 0 && styles.countBadgeTextActive]}>
+                            {qty}
+                          </Text>
+                        </View>
+
+                        <TouchableOpacity
+                          style={styles.stepperBtn}
+                          onPress={() => setEditQuantity(service.name, 1)}
+                          activeOpacity={0.7}
+                        >
+                          <Ionicons name="add" size={16} color={colors.primary} />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+
+              {/* Edit Totals summary */}
+              <View style={styles.editTotalsBox}>
+                <View style={styles.editTotalRow}>
+                  <Text style={styles.editTotalLabel}>Total Est. Duration:</Text>
+                  <Text style={styles.editTotalVal}>
+                    ~
+                    {(
+                      entry.businessId?.businessProfile?.services ||
+                      entry.businessId?.services ||
+                      entry.selectedServices ||
+                      []
+                    ).reduce(
+                      (sum: number, s: any) =>
+                        sum + (s.durationMin || 0) * (editQuantities[s.name] || 0),
+                      0
+                    )}{" "}
+                    mins
+                  </Text>
+                </View>
+                <View style={styles.editTotalRow}>
+                  <Text style={styles.editTotalLabel}>Total Est. Cost:</Text>
+                  <Text style={[styles.editTotalVal, { color: colors.successLight }]}>
+                    $
+                    {(
+                      entry.businessId?.businessProfile?.services ||
+                      entry.businessId?.services ||
+                      entry.selectedServices ||
+                      []
+                    ).reduce(
+                      (sum: number, s: any) =>
+                        sum + (s.cost || 0) * (editQuantities[s.name] || 0),
+                      0
+                    )}
+                  </Text>
+                </View>
+              </View>
+            </ScrollView>
+
+            <View style={styles.modalFooter}>
+              <TouchableOpacity
+                style={styles.modalSaveBtn}
+                onPress={handleSaveEditedServices}
+                disabled={isSavingEdit}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="checkmark-circle-outline" size={16} color="#FFF" />
+                <Text style={styles.modalSaveBtnText}>
+                  {isSavingEdit ? "Saving Changes..." : "Save Changes (Keep Spot)"}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                onPress={() => setIsEditModalOpen(false)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.modalCancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </AppScreen>
   );
 }
 
 const createStyles = (colors: ThemeColors, isDark: boolean = false) =>
   StyleSheet.create({
+  flex1: {
+    flex: 1,
+  },
   topRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -934,6 +1231,296 @@ const createStyles = (colors: ThemeColors, isDark: boolean = false) =>
     fontSize: 12,
     color: colors.danger,
     fontWeight: "700",
+  },
+
+  /* Verification Card */
+  verificationCard: {
+    padding: spacing.md,
+    gap: spacing.sm,
+    backgroundColor: colors.cardElevated,
+    borderColor: colors.primaryBorder,
+    borderWidth: 1.5,
+  },
+  verificationHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  verificationIconCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: colors.primarySubtle,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  verificationTitle: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: colors.text,
+  },
+  verificationSub: {
+    fontSize: 11,
+    color: colors.muted,
+    marginTop: 1,
+  },
+  verifiedBadgePill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    backgroundColor: colors.successSubtle,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radii.full,
+  },
+  verifiedBadgeText: {
+    fontSize: 10,
+    fontWeight: "800",
+    color: colors.success,
+  },
+  verificationQrContainer: {
+    alignItems: "center",
+    paddingTop: spacing.xs,
+    gap: spacing.xs,
+  },
+  verificationQrBox: {
+    backgroundColor: "#FFFFFF",
+    padding: 10,
+    borderRadius: radii.lg,
+    borderWidth: 3,
+    borderColor: colors.primarySubtle,
+    ...shadows.card,
+  },
+  verificationQrImage: {
+    width: 170,
+    height: 170,
+  },
+  verificationTokenText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: colors.muted,
+    fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
+  },
+
+  /* Service Header & Edit Button */
+  serviceHeaderTitleWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+  },
+  editServicesBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: colors.cardSoft,
+    borderColor: colors.primaryBorder,
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: radii.sm,
+  },
+  editServicesBtnText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: colors.primary,
+  },
+  qtyHighlight: {
+    fontWeight: "800",
+    color: colors.primary,
+  },
+
+  /* Modal Styles */
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.65)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: spacing.md,
+  },
+  modalContainer: {
+    width: "100%",
+    maxWidth: 480,
+    maxHeight: "85%",
+    backgroundColor: colors.cardElevated,
+    borderRadius: radii.xl,
+    borderColor: colors.border,
+    borderWidth: 1,
+    overflow: "hidden",
+    ...shadows.card,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderBottomColor: colors.border,
+    borderBottomWidth: 1,
+  },
+  modalHeaderLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  editIconBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.primarySubtle,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalTitle: {
+    fontSize: 15,
+    fontWeight: "800",
+    color: colors.text,
+  },
+  modalCloseBtn: {
+    padding: spacing.xs,
+  },
+  modalBody: {
+    padding: spacing.lg,
+  },
+  modalSub: {
+    fontSize: 12,
+    color: colors.muted,
+    lineHeight: 17,
+    marginBottom: spacing.md,
+  },
+  modalServicesList: {
+    gap: spacing.sm,
+  },
+  editServiceItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: colors.cardSoft,
+    borderColor: colors.border,
+    borderWidth: 1,
+    borderRadius: radii.md,
+    padding: spacing.md,
+    gap: spacing.sm,
+  },
+  editServiceItemActive: {
+    borderColor: colors.primaryBorder,
+    backgroundColor: colors.cardElevated,
+  },
+  editServiceTextCol: {
+    flex: 1,
+    minWidth: 0,
+    gap: 2,
+  },
+  editServiceName: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: colors.text,
+  },
+  editServiceMeta: {
+    fontSize: 11,
+    color: colors.muted,
+  },
+  editServiceSubtotal: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: colors.primary,
+    marginTop: 2,
+  },
+  stepperWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: colors.cardSoft,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    borderRadius: radii.full,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  stepperBtn: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: colors.cardElevated,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+  },
+  stepperBtnDisabled: {
+    opacity: 0.4,
+  },
+  countBadge: {
+    minWidth: 24,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  countBadgeActive: {
+    transform: [{ scale: 1.05 }],
+  },
+  countBadgeText: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: colors.muted,
+  },
+  countBadgeTextActive: {
+    color: colors.primary,
+  },
+  editTotalsBox: {
+    backgroundColor: colors.cardSoft,
+    borderColor: colors.border,
+    borderWidth: 1,
+    borderRadius: radii.md,
+    padding: spacing.md,
+    gap: spacing.xs,
+    marginTop: spacing.md,
+  },
+  editTotalRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  editTotalLabel: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: colors.muted,
+  },
+  editTotalVal: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: colors.text,
+  },
+  modalFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.xs,
+    padding: spacing.md,
+    borderTopColor: colors.border,
+    borderTopWidth: 1,
+  },
+  modalSaveBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    backgroundColor: colors.primary,
+    paddingVertical: 10,
+    borderRadius: radii.md,
+  },
+  modalSaveBtnText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  modalCancelBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: radii.md,
+  },
+  modalCancelBtnText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: colors.muted,
   },
 });
 

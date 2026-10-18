@@ -4,7 +4,8 @@ import QueueEntry from "../models/QueueEntry";
 import { AuthRequest } from "../middleware/authMiddleware";
 import {
   transitionTicketStatusService,
-  calculateTicketWaitEstimate
+  calculateTicketWaitEstimate,
+  verifyTicketService
 } from "../services/queueService";
 import { getBusinessAnalyticsService } from "../services/analyticsService";
 
@@ -240,3 +241,34 @@ export const getAnalytics = async (req: AuthRequest, res: Response, next: NextFu
     return next(error);
   }
 };
+
+// Verify Customer Ticket (By scanned QR token or manual ticket ID)
+export const verifyQueueTicket = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { token, ticketId } = req.body;
+    const io = req.app.get("io");
+    const result = await verifyTicketService(req.user!.id, { token, ticketId }, io);
+    return res.json(result);
+  } catch (error: any) {
+    if (!error.status && !error.statusCode) {
+      return next(error);
+    }
+    const statusCode = error.status || error.statusCode || 500;
+    const code = error.code || (statusCode === 400 ? "BAD_REQUEST" :
+                 statusCode === 403 ? "FORBIDDEN" :
+                 statusCode === 404 ? "RESOURCE_NOT_FOUND" :
+                 statusCode === 409 ? "CONFLICT" : "INTERNAL_SERVER_ERROR");
+    return res.status(statusCode).json({
+      success: false,
+      message: error.message || "Failed to verify ticket",
+      error: {
+        code,
+        message: error.message || "Failed to verify ticket",
+        details: error.details || [],
+        requestId: req.requestId
+      },
+      requestId: req.requestId
+    });
+  }
+};
+

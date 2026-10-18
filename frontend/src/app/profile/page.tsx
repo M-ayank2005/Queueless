@@ -29,7 +29,9 @@ import {
   Sun,
   Moon,
   Palette,
-  Check
+  Check,
+  HelpCircle,
+  FileText
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useTheme, Theme } from "@/context/ThemeContext";
@@ -516,6 +518,64 @@ export default function ProfilePage() {
             <div className="mt-4 flex items-center justify-between text-xs text-muted-foreground pt-4 border-t border-border/40">
               <span>Active Theme: <strong className="text-foreground capitalize">{theme} Mode</strong></span>
               <span>Changes apply instantly without page reload</span>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Support, Help & Legal Section */}
+        <Card className="shadow-xs border-border/80">
+          <CardHeader className="pb-3 border-b border-border/60">
+            <CardTitle className="text-lg font-semibold flex items-center gap-2">
+              <HelpCircle className="w-4 h-4 text-primary" />
+              Help & Support Center
+            </CardTitle>
+            <CardDescription className="text-xs">
+              Frequently asked questions, Gemini AI ticket assistant, and official legal policies.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-4 space-y-3">
+            <Link
+              href="/help"
+              className="flex items-center justify-between p-3.5 rounded-xl border border-border/70 hover:border-primary/50 hover:bg-muted/40 transition-all group"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+                  <HelpCircle className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-semibold text-foreground group-hover:text-primary transition-colors">
+                    Help & AI Support Assistant
+                  </h4>
+                  <p className="text-xs text-muted-foreground">
+                    Get answers to FAQs or chat with our personalized support assistant
+                  </p>
+                </div>
+              </div>
+              <ArrowRight className="w-4 h-4 text-muted-foreground group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
+            </Link>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+              <Link
+                href="/privacy"
+                className="flex items-center justify-between p-3 rounded-xl border border-border/70 hover:border-primary/40 hover:bg-muted/30 transition-all text-xs"
+              >
+                <div className="flex items-center gap-2.5">
+                  <ShieldCheck className="w-4 h-4 text-primary" />
+                  <span className="font-medium text-foreground">Privacy Policy</span>
+                </div>
+                <ArrowRight className="w-3.5 h-3.5 text-muted-foreground" />
+              </Link>
+
+              <Link
+                href="/terms"
+                className="flex items-center justify-between p-3 rounded-xl border border-border/70 hover:border-primary/40 hover:bg-muted/30 transition-all text-xs"
+              >
+                <div className="flex items-center gap-2.5">
+                  <FileText className="w-4 h-4 text-primary" />
+                  <span className="font-medium text-foreground">Terms of Service</span>
+                </div>
+                <ArrowRight className="w-3.5 h-3.5 text-muted-foreground" />
+              </Link>
             </div>
           </CardContent>
         </Card>

@@ -1,13 +1,30 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { StatusBadge } from "@/components/ui/StatusBadge";
 import { useToast } from "@/components/ui/Toast";
-import { motion } from "framer-motion";
-import { Clock, Check, Store, MapPin, ArrowLeft, Ticket, AlertCircle, Heart } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { 
+  Clock, 
+  Check, 
+  Store, 
+  MapPin, 
+  ArrowLeft, 
+  Ticket, 
+  AlertCircle, 
+  Heart,
+  Plus,
+  Minus,
+  Edit3,
+  ArrowRight,
+  Sparkles,
+  Users,
+  CheckCircle2
+} from "lucide-react";
 import Link from "next/link";
 import api from "@/lib/api";
 import { normalizeApiError } from "@/lib/errors";
@@ -20,11 +37,27 @@ interface ServiceItem {
   cost: number;
 }
 
+interface ActiveTicketData {
+  _id: string;
+  status: string;
+  selectedServices: Array<{
+    name: string;
+    durationMin: number;
+    cost: number;
+    quantity?: number;
+  }>;
+  joinedAt: string;
+  peopleAhead?: number;
+  currentEstimatedWait?: number;
+  verifiedAt?: string;
+}
+
 interface StoreData {
   _id: string;
   name?: string;
   email?: string;
   isFavorite?: boolean;
+  activeTicket?: ActiveTicketData | null;
   businessProfile?: {
     shopName?: string;
     address?: string;
@@ -45,10 +78,12 @@ export default function StorePage() {
 
   const [store, setStore] = useState<StoreData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [selectedServices, setSelectedServices] = useState<number[]>([]);
-  const [isJoining, setIsJoining] = useState(false);
+  const [serviceQuantities, setServiceQuantities] = useState<Record<string, number>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [isFavorite, setIsFavorite] = useState(false);
   const [isTogglingFavorite, setIsTogglingFavorite] = useState(false);
+  const [activeTicket, setActiveTicket] = useState<ActiveTicketData | null>(null);
+  const [isEditingActive, setIsEditingActive] = useState(false);
 
   useEffect(() => {
     if (qrCode) {
@@ -61,6 +96,9 @@ export default function StorePage() {
       const res = await api.get(`/queue/store/${qrCode}`);
       setStore(res.data);
       setIsFavorite(Boolean(res.data.isFavorite));
+      if (res.data.activeTicket) {
+        setActiveTicket(res.data.activeTicket);
+      }
     } catch {
       setStore(null);
     } finally {
@@ -93,54 +131,104 @@ export default function StorePage() {
     }
   };
 
-  const toggleService = (index: number) => {
-    if (selectedServices.includes(index)) {
-      setSelectedServices(selectedServices.filter((i) => i !== index));
-    } else {
-      setSelectedServices([...selectedServices, index]);
-    }
+  const servicesList = store?.businessProfile?.services || [];
+
+  const handleIncrement = (serviceName: string) => {
+    setServiceQuantities(prev => ({
+      ...prev,
+      [serviceName]: Math.min(50, (prev[serviceName] || 0) + 1)
+    }));
   };
 
-  const servicesList = store?.businessProfile?.services || [];
-  const totalCost = selectedServices.reduce((acc, idx) => acc + (servicesList[idx]?.cost || 0), 0);
-  const totalTime = selectedServices.reduce((acc, idx) => acc + (servicesList[idx]?.durationMin || 0), 0);
+  const handleDecrement = (serviceName: string) => {
+    setServiceQuantities(prev => {
+      const current = prev[serviceName] || 0;
+      if (current <= 1) {
+        const copy = { ...prev };
+        delete copy[serviceName];
+        return copy;
+      }
+      return { ...prev, [serviceName]: current - 1 };
+    });
+  };
 
-  const handleJoinQueue = async () => {
-    if (selectedServices.length === 0) {
-      toast.info("Please select at least one service to join the queue");
+  const handleStartEditing = () => {
+    if (!activeTicket) return;
+    const initialQty: Record<string, number> = {};
+    for (const s of activeTicket.selectedServices || []) {
+      initialQty[s.name] = s.quantity || 1;
+    }
+    setServiceQuantities(initialQty);
+    setIsEditingActive(true);
+    toast.info("Adjust your service quantities below, then tap Save Updated Services.");
+  };
+
+  const selectedCount = useMemo(() => {
+    return Object.values(serviceQuantities).reduce((acc, q) => acc + q, 0);
+  }, [serviceQuantities]);
+
+  const totalCost = useMemo(() => {
+    return Object.entries(serviceQuantities).reduce((acc, [name, qty]) => {
+      const found = servicesList.find(s => s.name === name);
+      return acc + (found?.cost || 0) * qty;
+    }, 0);
+  }, [serviceQuantities, servicesList]);
+
+  const totalTime = useMemo(() => {
+    return Object.entries(serviceQuantities).reduce((acc, [name, qty]) => {
+      const found = servicesList.find(s => s.name === name);
+      return acc + (found?.durationMin || 0) * qty;
+    }, 0);
+  }, [serviceQuantities, servicesList]);
+
+  const handleSubmit = async () => {
+    if (selectedCount === 0) {
+      toast.info("Please select at least one service with quantity 1 or more");
       return;
     }
 
-    const token = localStorage.getItem("token");
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
     if (!token) {
       toast.info("Please sign in or create an account to book your queue ticket");
       router.push(`/login?redirect=/store/${qrCode}`);
       return;
     }
 
-    setIsJoining(true);
+    setIsSubmitting(true);
     try {
-      const selectedServiceObjects = selectedServices.map((idx) => servicesList[idx]);
-      const res = await api.post("/queue/join", {
-        businessId: store?._id,
-        selectedServices: selectedServiceObjects
-      });
+      const payloadServices = Object.entries(serviceQuantities).map(([name, quantity]) => ({
+        name,
+        quantity
+      }));
 
-      toast.success("Joined queue successfully!");
-      router.push(`/status/${res.data._id}`);
+      if (isEditingActive && activeTicket?._id) {
+        const res = await api.put(`/queue/${activeTicket._id}/services`, {
+          selectedServices: payloadServices
+        });
+        toast.success("Services updated successfully!");
+        router.push(`/status/${activeTicket._id}`);
+      } else {
+        const res = await api.post("/queue/join", {
+          businessId: store?._id,
+          selectedServices: payloadServices
+        });
+        toast.success("Joined queue successfully!");
+        router.push(`/status/${res.data._id}`);
+      }
     } catch (error: any) {
       const normalized = normalizeApiError(error);
       if (normalized.isUnauthorized) {
         toast.info("Your session expired. Please sign in again.");
         router.push(`/login?redirect=/store/${qrCode}`);
-      } else if (normalized.isConflict && normalized.activeTicketId) {
-        toast.info("You already have an active ticket at this store. Redirecting to your ticket...");
-        router.push(`/status/${normalized.activeTicketId}`);
+      } else if (normalized.isConflict && (normalized.activeTicketId || (error.response?.data?.error?.activeTicket))) {
+        const ticketData = error.response?.data?.error?.activeTicket || { _id: normalized.activeTicketId, status: "waiting" };
+        setActiveTicket(ticketData);
+        toast.info("You already have an active ticket at this store. You can view or edit your services.");
       } else {
-        toast.error(normalized.message || "Failed to join queue. The store may be closed.");
+        toast.error(normalized.message || "Failed to process request. The store may be closed.");
       }
     } finally {
-      setIsJoining(false);
+      setIsSubmitting(false);
     }
   };
 
@@ -193,7 +281,7 @@ export default function StorePage() {
   const hours = store.businessProfile?.workingHours;
 
   return (
-    <div className="min-h-screen bg-background text-foreground pb-36">
+    <div className="min-h-screen bg-background text-foreground pb-40">
       <Navbar />
 
       <main className="container mx-auto max-w-2xl px-4 pt-24">
@@ -205,6 +293,71 @@ export default function StorePage() {
           <ArrowLeft className="w-3.5 h-3.5" />
           Back to Scanner
         </Link>
+
+        {/* Active Ticket Banner on Repeat Scan */}
+        {activeTicket && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-5 p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 shadow-xs"
+          >
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+                    #{activeTicket._id.slice(-4).toUpperCase()}
+                  </span>
+                  <h3 className="font-bold text-sm text-foreground">
+                    You're Already in Line at this Store!
+                  </h3>
+                  <StatusBadge status={activeTicket.status} />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {isEditingActive 
+                    ? "Editing your active ticket services below. Your spot in line is safely preserved."
+                    : "You already hold an active spot in this queue. Would you like to view your live ticket or adjust your requested services?"}
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                {!isEditingActive ? (
+                  <>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleStartEditing}
+                      className="border-amber-500/40 text-amber-700 dark:text-amber-300 hover:bg-amber-500/15 text-xs h-9 rounded-xl flex items-center gap-1.5"
+                    >
+                      <Edit3 className="w-3.5 h-3.5" />
+                      Edit Services
+                    </Button>
+                    <Link href={`/status/${activeTicket._id}`}>
+                      <Button
+                        size="sm"
+                        className="bg-primary hover:bg-primary/90 text-primary-foreground text-xs h-9 rounded-xl flex items-center gap-1.5 shadow-xs"
+                      >
+                        <span>View Ticket</span>
+                        <ArrowRight className="w-3.5 h-3.5" />
+                      </Button>
+                    </Link>
+                  </>
+                ) : (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      setIsEditingActive(false);
+                      setServiceQuantities({});
+                    }}
+                    className="text-xs text-muted-foreground hover:text-foreground h-9"
+                  >
+                    Cancel Editing
+                  </Button>
+                )}
+              </div>
+            </div>
+          </motion.div>
+        )}
 
         {/* Store Header Banner Card */}
         <motion.div
@@ -258,14 +411,14 @@ export default function StorePage() {
             </CardHeader>
           </Card>
 
-          {/* Service Selection List */}
+          {/* Service Selection List with Quantity Steppers */}
           <div className="mb-4 flex items-center justify-between">
             <h2 className="text-base font-bold text-foreground flex items-center gap-2">
               <Ticket className="w-4 h-4 text-primary" />
-              Select Your Services
+              {isEditingActive ? "Modify Your Services" : "Select Your Services"}
             </h2>
             <span className="text-xs font-medium text-muted-foreground bg-muted/60 px-2.5 py-0.5 rounded-full border border-border/40">
-              {selectedServices.length} selected
+              {selectedCount} item{selectedCount === 1 ? "" : "s"} selected
             </span>
           </div>
 
@@ -276,41 +429,78 @@ export default function StorePage() {
           ) : (
             <div className="space-y-3">
               {servicesList.map((service, idx) => {
-                const isSelected = selectedServices.includes(idx);
+                const quantity = serviceQuantities[service.name] || 0;
+                const isSelected = quantity > 0;
+
                 return (
                   <motion.div
                     key={idx}
-                    whileTap={{ scale: 0.985 }}
-                    onClick={() => toggleService(idx)}
-                    className={`p-4 rounded-2xl border cursor-pointer transition-all duration-200 flex items-center justify-between ${
+                    layout
+                    className={`p-4 rounded-2xl border transition-all duration-200 flex items-center justify-between gap-3 ${
                       isSelected
                         ? "bg-primary/8 border-primary shadow-xs ring-1 ring-primary/20"
-                        : "bg-card border-border/70 hover:border-border hover:bg-muted/40"
+                        : "bg-card border-border/70 hover:border-border"
                     }`}
                   >
-                    <div className="flex items-center gap-3.5">
-                      <div
-                        className={`w-5 h-5 rounded-lg border flex items-center justify-center transition-all ${
-                          isSelected
-                            ? "bg-primary border-primary shadow-xs"
-                            : "border-border/80 bg-background"
-                        }`}
-                      >
-                        {isSelected && <Check className="w-3.5 h-3.5 text-white stroke-[3]" />}
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="font-semibold text-sm text-foreground truncate">{service.name}</p>
+                        {quantity > 1 && (
+                          <span className="text-[11px] font-bold px-1.5 py-0.2 rounded bg-primary/20 text-primary">
+                            ×{quantity}
+                          </span>
+                        )}
                       </div>
-
-                      <div>
-                        <p className="font-semibold text-sm text-foreground">{service.name}</p>
-                        <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                      <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
+                        <span className="flex items-center gap-1">
                           <Clock className="w-3 h-3 text-primary" />
-                          ~{service.durationMin} mins
-                        </p>
+                          ~{service.durationMin * (quantity || 1)} mins
+                          {quantity > 1 && <span className="opacity-70">({service.durationMin}m ea)</span>}
+                        </span>
+                        <span>•</span>
+                        <span className="font-medium text-foreground">
+                          ${service.cost * (quantity || 1)}
+                          {quantity > 1 && <span className="text-muted-foreground font-normal"> (${service.cost} ea)</span>}
+                        </span>
                       </div>
                     </div>
 
-                    <span className="font-bold text-sm text-foreground tracking-tight">
-                      ${service.cost}
-                    </span>
+                    {/* Quantity Stepper Controls */}
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {isSelected ? (
+                        <div className="flex items-center bg-card border border-border rounded-xl p-1 shadow-xs">
+                          <button
+                            type="button"
+                            onClick={() => handleDecrement(service.name)}
+                            className="w-7 h-7 rounded-lg bg-muted/60 hover:bg-muted text-foreground flex items-center justify-center transition-colors active:scale-90"
+                            aria-label={`Decrease ${service.name}`}
+                          >
+                            <Minus className="w-3.5 h-3.5" />
+                          </button>
+                          <span className="w-8 text-center text-xs font-bold font-mono text-foreground">
+                            {quantity}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleIncrement(service.name)}
+                            className="w-7 h-7 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary flex items-center justify-center transition-colors active:scale-90"
+                            aria-label={`Increase ${service.name}`}
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleIncrement(service.name)}
+                          className="h-8 text-xs px-3 rounded-xl border-border/80 text-foreground hover:bg-primary hover:text-primary-foreground hover:border-primary transition-all active:scale-95"
+                        >
+                          <Plus className="w-3.5 h-3.5 mr-1" />
+                          Add
+                        </Button>
+                      )}
+                    </div>
                   </motion.div>
                 );
               })}
@@ -319,13 +509,13 @@ export default function StorePage() {
         </motion.div>
       </main>
 
-      {/* Fixed Checkout / Join Queue Bottom Bar (Apple Frosted Glass) */}
+      {/* Fixed Checkout / Join Queue Bottom Bar */}
       <div className="fixed bottom-0 left-0 right-0 bg-background/80 backdrop-blur-2xl border-t border-border/60 py-3.5 px-4 z-30 shadow-xs">
         <div className="container mx-auto max-w-2xl flex items-center justify-between gap-4">
           <div>
             <div className="text-xs text-muted-foreground flex items-center gap-1.5">
               <Clock className="w-3.5 h-3.5 text-primary" />
-              ~{totalTime} mins estimated wait
+              ~{totalTime} mins total service time
             </div>
             <div className="text-lg sm:text-xl font-bold text-foreground tracking-tight">
               Total: ${totalCost}
@@ -334,13 +524,15 @@ export default function StorePage() {
 
           <LoadingButton
             size="lg"
-            disabled={selectedServices.length === 0}
-            loading={isJoining}
-            loadingText="Securing Spot..."
-            onClick={handleJoinQueue}
+            disabled={selectedCount === 0}
+            loading={isSubmitting}
+            loadingText={isEditingActive ? "Updating Ticket..." : "Securing Spot..."}
+            onClick={handleSubmit}
             className="bg-primary hover:bg-primary/95 text-white font-semibold text-sm px-6 h-11 rounded-xl shadow-xs transition-transform active:scale-[0.98]"
           >
-            Join Queue ({selectedServices.length})
+            {isEditingActive 
+              ? `Save Updated Services (${selectedCount})` 
+              : `Join Queue (${selectedCount})`}
           </LoadingButton>
         </div>
       </div>

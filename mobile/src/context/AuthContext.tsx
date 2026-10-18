@@ -12,6 +12,8 @@ type RegisterPayload = {
   role: UserRole;
   businessName?: string;
   address?: string;
+  agreedToTerms?: boolean;
+  privacyPolicyAcknowledged?: boolean;
 };
 
 // Global authentication context contract

@@ -6,12 +6,19 @@ export interface INotificationLedger {
   yourTurnSentAt?: Date;
 }
 
+export interface IQueueEntryService {
+  name: string;
+  durationMin: number;
+  cost: number;
+  quantity?: number;
+}
+
 export interface IQueueEntry extends Document {
   businessId: mongoose.Types.ObjectId;
   customerId: mongoose.Types.ObjectId;
   date: Date; // Normalized to midnight
   status: "waiting" | "in_progress" | "completed" | "cancelled";
-  selectedServices: IService[];
+  selectedServices: IQueueEntryService[];
   totalEstimatedTime: number; // in minutes
   joinedAt: Date;
   serviceStartedAt?: Date;
@@ -25,6 +32,11 @@ export interface IQueueEntry extends Document {
   shareTokenCreatedAt?: Date;
   shareTokenExpiresAt?: Date;
   shareTokenRevoked?: boolean;
+  verificationToken?: string;
+  verificationTokenHash?: string;
+  verificationTokenRevoked?: boolean;
+  verifiedAt?: Date;
+  verifiedBy?: mongoose.Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -42,7 +54,8 @@ const QueueEntrySchema = new Schema<IQueueEntry>({
   selectedServices: [{
     name: { type: String, required: true },
     durationMin: { type: Number, required: true },
-    cost: { type: Number, required: true }
+    cost: { type: Number, required: true },
+    quantity: { type: Number, default: 1, min: 1 }
   }],
   totalEstimatedTime: { type: Number, required: true },
   joinedAt: { type: Date, default: Date.now, index: true },
@@ -59,13 +72,19 @@ const QueueEntrySchema = new Schema<IQueueEntry>({
   shareTokenHash: { type: String, sparse: true, index: true },
   shareTokenCreatedAt: { type: Date },
   shareTokenExpiresAt: { type: Date, index: true },
-  shareTokenRevoked: { type: Boolean, default: false }
+  shareTokenRevoked: { type: Boolean, default: false },
+  verificationToken: { type: String, sparse: true, index: true },
+  verificationTokenHash: { type: String, sparse: true, index: true },
+  verificationTokenRevoked: { type: Boolean, default: false },
+  verifiedAt: { type: Date },
+  verifiedBy: { type: Schema.Types.ObjectId, ref: "User" }
 }, {
   timestamps: true,
   toJSON: {
     transform: (_doc, ret: any) => {
       delete ret.shareTokenHash;
       delete ret.shareToken;
+      delete ret.verificationTokenHash;
       return ret;
     }
   },
@@ -73,6 +92,7 @@ const QueueEntrySchema = new Schema<IQueueEntry>({
     transform: (_doc, ret: any) => {
       delete ret.shareTokenHash;
       delete ret.shareToken;
+      delete ret.verificationTokenHash;
       return ret;
     }
   }

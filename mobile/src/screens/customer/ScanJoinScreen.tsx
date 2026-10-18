@@ -49,7 +49,9 @@ export default function ScanJoinScreen({ navigation, route }: Props) {
   const [scannerOpen, setScannerOpen] = useState(false);
   const [qrCode, setQrCode] = useState(route.params?.qrCode || "");
   const [store, setStore] = useState<StoreData | null>(null);
-  const [selected, setSelected] = useState<number[]>([]);
+  const [serviceQuantities, setServiceQuantities] = useState<Record<string, number>>({});
+  const [activeTicket, setActiveTicket] = useState<any | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
   const [loadingStore, setLoadingStore] = useState(false);
   const [joining, setJoining] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -99,13 +101,26 @@ export default function ScanJoinScreen({ navigation, route }: Props) {
       const response = await api.get(`/queue/store/${code}`);
       setStore(response.data);
       setIsFavorite(Boolean(response.data?.isFavorite));
-      setSelected([]);
+
+      if (response.data?.activeTicket) {
+        setActiveTicket(response.data.activeTicket);
+        const initQuantities: Record<string, number> = {};
+        response.data.activeTicket.selectedServices?.forEach((s: any) => {
+          initQuantities[s.name] = s.quantity || 1;
+        });
+        setServiceQuantities(initQuantities);
+      } else {
+        setActiveTicket(null);
+        setServiceQuantities({});
+        setIsEditing(false);
+      }
     } catch (error: any) {
       const msg = error?.response?.data?.message || "Store not found. Please verify the QR code.";
       setErrorMessage(msg);
       showAlert("Store not found", msg);
       setStore(null);
       setIsFavorite(false);
+      setActiveTicket(null);
     } finally {
       setLoadingStore(false);
     }
@@ -156,26 +171,60 @@ export default function ScanJoinScreen({ navigation, route }: Props) {
     }
   };
 
-  const toggleService = (index: number) => {
-    setSelected((prev) =>
-      prev.includes(index) ? prev.filter((item) => item !== index) : [...prev, index]
-    );
+  const setQuantity = (serviceName: string, delta: number) => {
+    setServiceQuantities((prev) => {
+      const current = prev[serviceName] || 0;
+      const next = Math.max(0, Math.min(50, current + delta));
+      if (next === 0) {
+        const copy = { ...prev };
+        delete copy[serviceName];
+        return copy;
+      }
+      return { ...prev, [serviceName]: next };
+    });
   };
 
   const selectedServices = useMemo(() => {
     const services = store?.businessProfile?.services || [];
-    return selected.map((idx) => services[idx]).filter(Boolean);
-  }, [selected, store]);
+    return services
+      .filter((s) => (serviceQuantities[s.name] || 0) > 0)
+      .map((s) => ({
+        name: s.name,
+        quantity: serviceQuantities[s.name],
+        durationMin: s.durationMin,
+        cost: s.cost,
+      }));
+  }, [serviceQuantities, store]);
 
   const totals = useMemo(() => {
     return selectedServices.reduce(
       (acc, s) => ({
-        duration: acc.duration + (s.durationMin || 0),
-        cost: acc.cost + (s.cost || 0),
+        duration: acc.duration + (s.durationMin || 0) * (s.quantity || 1),
+        cost: acc.cost + (s.cost || 0) * (s.quantity || 1),
       }),
       { duration: 0, cost: 0 }
     );
   }, [selectedServices]);
+
+  const handleUpdateServices = async () => {
+    if (!activeTicket?._id) return;
+    if (selectedServices.length === 0) {
+      showAlert("No services selected", "Please select at least one service.");
+      return;
+    }
+    setJoining(true);
+    try {
+      await api.put(`/queue/${activeTicket._id}/services`, {
+        selectedServices,
+      });
+      showAlert("Services Updated", "Your service requests have been updated while preserving your spot in line.");
+      rootNavigation.navigate("QueueStatus", { id: activeTicket._id });
+    } catch (error: any) {
+      showAlert("Update Failed", error.response?.data?.message || "Could not update services.");
+    } finally {
+      setJoining(false);
+    }
+  };
 
   const joinQueue = async () => {
     if (!store?._id) return;
@@ -192,9 +241,23 @@ export default function ScanJoinScreen({ navigation, route }: Props) {
         rootNavigation.navigate("QueueStatus", { id });
       }
     } catch (error: any) {
-      const msg = error?.response?.data?.message || "Please try again.";
-      setErrorMessage(msg);
-      showAlert("Could not join", msg);
+      if (error?.response?.status === 409 && error?.response?.data?.activeTicket) {
+        const existing = error.response.data.activeTicket;
+        setActiveTicket(existing);
+        const initQuantities: Record<string, number> = {};
+        existing.selectedServices?.forEach((s: any) => {
+          initQuantities[s.name] = s.quantity || 1;
+        });
+        setServiceQuantities(initQuantities);
+        showAlert(
+          "Already in Queue",
+          `You already have ticket #${existing._id?.slice(-4).toUpperCase()} in this queue. You can view your live status or edit your services.`
+        );
+      } else {
+        const msg = error?.response?.data?.message || "Please try again.";
+        setErrorMessage(msg);
+        showAlert("Could not join", msg);
+      }
     } finally {
       setJoining(false);
     }
@@ -350,31 +413,120 @@ export default function ScanJoinScreen({ navigation, route }: Props) {
 
           <View style={styles.dividerLine} />
 
+          {/* Repeat Scan Active Ticket Banner */}
+          {activeTicket ? (
+            <View style={styles.activeTicketBanner}>
+              <View style={styles.activeTicketHeader}>
+                <View style={styles.activeTicketIconWrap}>
+                  <Ionicons name="time" size={20} color={colors.primary} />
+                </View>
+                <View style={styles.flex1}>
+                  <Text style={styles.activeTicketTitle}>
+                    You're in Line! (#{activeTicket._id?.slice(-4).toUpperCase()})
+                  </Text>
+                  <Text style={styles.activeTicketSub}>
+                    Status: {activeTicket.status?.toUpperCase()} • {activeTicket.peopleAhead ?? 0} people ahead
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.activeTicketActions}>
+                <TouchableOpacity
+                  style={styles.activeTicketPrimaryBtn}
+                  onPress={() => rootNavigation.navigate("QueueStatus", { id: activeTicket._id })}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="eye-outline" size={15} color="#FFF" />
+                  <Text style={styles.activeTicketPrimaryBtnText}>View Ticket Status</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.activeTicketEditBtn, isEditing && styles.activeTicketEditBtnActive]}
+                  onPress={() => setIsEditing(!isEditing)}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="create-outline" size={15} color={isEditing ? colors.primary : colors.text} />
+                  <Text style={[styles.activeTicketEditText, isEditing && styles.activeTicketEditTextActive]}>
+                    {isEditing ? "Done Editing" : "Edit Services"}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : null}
+
           <View style={styles.servicesSection}>
-            <Text style={styles.servicesTitle}>Select Services Needed (Optional):</Text>
+            <Text style={styles.servicesTitle}>
+              {activeTicket && !isEditing
+                ? "Your Requested Services:"
+                : "Select Services & Quantities:"}
+            </Text>
 
             {store.businessProfile?.services?.length ? (
               <View style={styles.servicesList}>
                 {store.businessProfile.services.map((service, index) => {
-                  const isChecked = selected.includes(index);
+                  const qty = serviceQuantities[service.name] || 0;
+                  const isChecked = qty > 0;
+                  const canEdit = !activeTicket || isEditing;
+
                   return (
-                    <TouchableOpacity
+                    <View
                       key={`${service.name}_${index}`}
                       style={[styles.serviceItem, isChecked && styles.serviceItemChecked]}
-                      onPress={() => toggleService(index)}
-                      activeOpacity={0.7}
                     >
-                      <View style={[styles.checkbox, isChecked && styles.checkboxActive]}>
-                        {isChecked && <Ionicons name="checkmark" size={14} color="#FFF" />}
-                      </View>
-                      <View style={styles.serviceTextCol}>
+                      <TouchableOpacity
+                        style={styles.serviceTextCol}
+                        onPress={() => {
+                          if (canEdit) {
+                            setQuantity(service.name, qty > 0 ? -qty : 1);
+                          }
+                        }}
+                        activeOpacity={canEdit ? 0.7 : 1}
+                      >
                         <Text style={styles.serviceName}>{service.name}</Text>
-                        {service.durationMin ? (
-                          <Text style={styles.serviceMeta}>⏱ {service.durationMin} mins</Text>
+                        <Text style={styles.serviceMeta}>
+                          ⏱ {service.durationMin} mins • ${service.cost} each
+                        </Text>
+                        {qty > 1 ? (
+                          <Text style={styles.serviceSubtotal}>
+                            Total: ${service.cost * qty} (~{service.durationMin * qty} mins)
+                          </Text>
                         ) : null}
-                      </View>
-                      <Text style={styles.serviceCost}>${service.cost}</Text>
-                    </TouchableOpacity>
+                      </TouchableOpacity>
+
+                      {/* Stepper Controls */}
+                      {canEdit ? (
+                        <View style={styles.stepperWrap}>
+                          <TouchableOpacity
+                            style={[styles.stepperBtn, qty === 0 && styles.stepperBtnDisabled]}
+                            onPress={() => setQuantity(service.name, -1)}
+                            disabled={qty === 0}
+                            activeOpacity={0.7}
+                          >
+                            <Ionicons name="remove" size={16} color={qty === 0 ? colors.muted : colors.text} />
+                          </TouchableOpacity>
+
+                          <View style={[styles.countBadge, qty > 0 && styles.countBadgeActive]}>
+                            <Text style={[styles.countBadgeText, qty > 0 && styles.countBadgeTextActive]}>
+                              {qty}
+                            </Text>
+                          </View>
+
+                          <TouchableOpacity
+                            style={styles.stepperBtn}
+                            onPress={() => setQuantity(service.name, 1)}
+                            activeOpacity={0.7}
+                          >
+                            <Ionicons name="add" size={16} color={colors.primary} />
+                          </TouchableOpacity>
+                        </View>
+                      ) : (
+                        <View style={[styles.countBadge, qty > 0 && styles.countBadgeActive]}>
+                          <Text style={[styles.countBadgeText, qty > 0 && styles.countBadgeTextActive]}>
+                            ×{qty}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
                   );
                 })}
               </View>
@@ -401,14 +553,34 @@ export default function ScanJoinScreen({ navigation, route }: Props) {
             </View>
           )}
 
-          <AppButton
-            title="Confirm & Join Queue"
-            size="lg"
-            onPress={joinQueue}
-            loading={joining}
-            loadingText="Securing Spot..."
-            icon="ticket-outline"
-          />
+          {activeTicket ? (
+            isEditing ? (
+              <AppButton
+                title="Save Changes (Keep Spot)"
+                size="lg"
+                onPress={handleUpdateServices}
+                loading={joining}
+                loadingText="Updating Services..."
+                icon="checkmark-circle-outline"
+              />
+            ) : (
+              <AppButton
+                title="View My Live Ticket"
+                size="lg"
+                onPress={() => rootNavigation.navigate("QueueStatus", { id: activeTicket._id })}
+                icon="ticket-outline"
+              />
+            )
+          ) : (
+            <AppButton
+              title="Confirm & Join Queue"
+              size="lg"
+              onPress={joinQueue}
+              loading={joining}
+              loadingText="Securing Spot..."
+              icon="ticket-outline"
+            />
+          )}
         </Card>
       )}
 
@@ -460,6 +632,9 @@ export default function ScanJoinScreen({ navigation, route }: Props) {
 
 const createStyles = (colors: ThemeColors) =>
   StyleSheet.create({
+  flex1: {
+    flex: 1,
+  },
   header: {
     paddingBottom: spacing.xs,
   },
@@ -822,5 +997,133 @@ const createStyles = (colors: ThemeColors) =>
     color: colors.muted,
     lineHeight: 17,
     flexWrap: "wrap",
+  },
+
+  /* Repeat Scan Active Ticket Banner */
+  activeTicketBanner: {
+    backgroundColor: colors.cardElevated,
+    borderColor: colors.primaryBorder,
+    borderWidth: 1.5,
+    borderRadius: radii.lg,
+    padding: spacing.md,
+    gap: spacing.sm,
+    marginBottom: spacing.xs,
+  },
+  activeTicketHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  activeTicketIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.primarySubtle,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  activeTicketTitle: {
+    fontSize: 14,
+    fontWeight: "800",
+    color: colors.text,
+  },
+  activeTicketSub: {
+    fontSize: 11,
+    color: colors.muted,
+    marginTop: 1,
+  },
+  activeTicketActions: {
+    flexDirection: "row",
+    gap: spacing.xs,
+    paddingTop: spacing.xs,
+    borderTopColor: colors.border,
+    borderTopWidth: 1,
+  },
+  activeTicketPrimaryBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    backgroundColor: colors.primary,
+    paddingVertical: 8,
+    borderRadius: radii.md,
+  },
+  activeTicketPrimaryBtnText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
+  activeTicketEditBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 5,
+    backgroundColor: colors.cardSoft,
+    borderColor: colors.border,
+    borderWidth: 1,
+    paddingVertical: 8,
+    borderRadius: radii.md,
+  },
+  activeTicketEditBtnActive: {
+    borderColor: colors.primary,
+    backgroundColor: colors.primarySubtle,
+  },
+  activeTicketEditText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: colors.text,
+  },
+  activeTicketEditTextActive: {
+    color: colors.primary,
+  },
+
+  /* Stepper Controls */
+  stepperWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: colors.cardSoft,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    borderRadius: radii.full,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  stepperBtn: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: colors.cardElevated,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+  },
+  stepperBtnDisabled: {
+    opacity: 0.4,
+  },
+  countBadge: {
+    minWidth: 24,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  countBadgeActive: {
+    transform: [{ scale: 1.05 }],
+  },
+  countBadgeText: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: colors.muted,
+  },
+  countBadgeTextActive: {
+    color: colors.primary,
+  },
+  serviceSubtotal: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: colors.primary,
+    marginTop: 2,
   },
 });

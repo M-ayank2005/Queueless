@@ -25,6 +25,7 @@ export default function RegisterScreen({ navigation }: Props) {
   const [password, setPassword] = useState("");
   const [businessName, setBusinessName] = useState("");
   const [address, setAddress] = useState("");
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
@@ -54,6 +55,14 @@ export default function RegisterScreen({ navigation }: Props) {
       return;
     }
 
+    if (!agreedToTerms) {
+      const msg = "You must agree to the Terms and Conditions and acknowledge the Privacy Policy.";
+      setErrorMsg(msg);
+      if (Platform.OS === "web") window.alert(msg);
+      else Alert.alert("Consent Required", msg);
+      return;
+    }
+
     try {
       setLoading(true);
       await register({
@@ -64,6 +73,8 @@ export default function RegisterScreen({ navigation }: Props) {
         role,
         businessName: role === "business" ? businessName.trim() : undefined,
         address: role === "business" ? address.trim() : undefined,
+        agreedToTerms: true,
+        privacyPolicyAcknowledged: true,
       });
     } catch (error: any) {
       const msg =
@@ -233,6 +244,48 @@ export default function RegisterScreen({ navigation }: Props) {
             </View>
           ) : null}
 
+          {/* Registration Consent Agreement */}
+          <View style={styles.consentContainer}>
+            <TouchableOpacity
+              onPress={() => setAgreedToTerms(!agreedToTerms)}
+              style={styles.checkboxTouchable}
+              activeOpacity={0.7}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: agreedToTerms }}
+            >
+              <View
+                style={[
+                  styles.checkboxBox,
+                  agreedToTerms && styles.checkboxBoxChecked,
+                ]}
+              >
+                {agreedToTerms && (
+                  <Ionicons name="checkmark" size={14} color="#ffffff" />
+                )}
+              </View>
+            </TouchableOpacity>
+
+            <View style={styles.consentTextWrap}>
+              <Text style={styles.consentText}>
+                I have read and agree to the{" "}
+                <Text
+                  style={styles.legalLink}
+                  onPress={() => navigation.navigate("Terms")}
+                >
+                  Terms of Service
+                </Text>{" "}
+                and acknowledge the{" "}
+                <Text
+                  style={styles.legalLink}
+                  onPress={() => navigation.navigate("PrivacyPolicy")}
+                >
+                  Privacy Policy
+                </Text>
+                .
+              </Text>
+            </View>
+          </View>
+
           <AppButton
             title={`Register as ${role === "business" ? "Merchant" : "Customer"}`}
             size="lg"
@@ -390,6 +443,43 @@ topSection: {
     color: colors.primary,
     letterSpacing: 0.4,
     textTransform: "uppercase",
+  },
+  consentContainer: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: spacing.sm,
+    marginTop: spacing.xs,
+    paddingVertical: spacing.xs,
+  },
+  checkboxTouchable: {
+    paddingTop: 2,
+  },
+  checkboxBox: {
+    width: 20,
+    height: 20,
+    borderRadius: 5,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: colors.card,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  checkboxBoxChecked: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  consentTextWrap: {
+    flex: 1,
+  },
+  consentText: {
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.muted,
+  },
+  legalLink: {
+    color: colors.primary,
+    fontWeight: "700",
+    textDecorationLine: "underline",
   },
   footerRow: {
     flexDirection: "row",

@@ -1,7 +1,12 @@
 import { Request, Response, NextFunction } from "express";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
-import User, { IUser, IBusinessProfile } from "../models/User";
+import User, {
+  IUser,
+  IBusinessProfile,
+  CURRENT_TERMS_VERSION,
+  CURRENT_PRIVACY_POLICY_VERSION
+} from "../models/User";
 import QueueEntry from "../models/QueueEntry";
 import { v4 as uuidv4 } from "uuid";
 import { AuthRequest, getJwtSecret } from "../middleware/authMiddleware";
@@ -22,7 +27,18 @@ const sendValidationError = (res: Response, req: Request, field: string, message
 
 export const register = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { name, email, phone, password, role, businessName, address, timezone } = req.body;
+    const {
+      name,
+      email,
+      phone,
+      password,
+      role,
+      businessName,
+      address,
+      timezone,
+      agreedToTerms,
+      privacyPolicyAcknowledged
+    } = req.body;
 
     // 1. Validation
     if (!name || typeof name !== "string" || name.trim().length < 2) {
@@ -55,6 +71,15 @@ export const register = async (req: Request, res: Response, next: NextFunction) 
       }
     }
 
+    // 2. Legal Terms & Privacy Consent Enforcement (Server-Enforced)
+    if (agreedToTerms !== true) {
+      return sendValidationError(res, req, "agreedToTerms", "You must agree to the Terms and Conditions to create an account");
+    }
+
+    if (privacyPolicyAcknowledged !== true) {
+      return sendValidationError(res, req, "privacyPolicyAcknowledged", "You must acknowledge the Privacy Policy to create an account");
+    }
+
     const normalizedEmail = email.toLowerCase().trim();
     const existingUser = await User.findOne({ email: normalizedEmail });
     if (existingUser) {
@@ -71,11 +96,11 @@ export const register = async (req: Request, res: Response, next: NextFunction) 
       });
     }
 
-    // 2. Password Hashing
+    // 3. Password Hashing
     const salt = await bcrypt.genSalt(10);
     const passwordHash = await bcrypt.hash(password, salt);
 
-    // 3. Business Profile Setup
+    // 4. Business Profile Setup
     let businessProfile: IBusinessProfile | undefined;
     if (role === "business") {
       businessProfile = {
@@ -92,13 +117,29 @@ export const register = async (req: Request, res: Response, next: NextFunction) 
       };
     }
 
+    // 5. Authoritative Server-Generated Legal Consent Metadata
+    const acceptedAt = new Date();
+    const clientIp = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.socket?.remoteAddress;
+    const clientUserAgent = req.headers["user-agent"];
+
+    const legalConsent = {
+      agreedToTerms: true,
+      privacyPolicyAcknowledged: true,
+      acceptedAt,
+      termsVersion: CURRENT_TERMS_VERSION,
+      privacyPolicyVersion: CURRENT_PRIVACY_POLICY_VERSION,
+      ipAddress: clientIp,
+      userAgent: clientUserAgent
+    };
+
     const newUser = new User({
       name: name.trim(),
       email: normalizedEmail,
       phone: phone.trim(),
       passwordHash,
       role,
-      businessProfile
+      businessProfile,
+      legalConsent
     });
 
     await newUser.save();
@@ -116,7 +157,8 @@ export const register = async (req: Request, res: Response, next: NextFunction) 
         email: newUser.email,
         phone: newUser.phone,
         role: newUser.role,
-        businessProfile: newUser.businessProfile
+        businessProfile: newUser.businessProfile,
+        legalConsent: newUser.legalConsent
       },
       token
     });
@@ -178,7 +220,8 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
         email: user.email,
         phone: user.phone,
         role: user.role,
-        businessProfile: user.businessProfile
+        businessProfile: user.businessProfile,
+        legalConsent: user.legalConsent
       },
       token
     });
@@ -210,7 +253,64 @@ export const getProfile = async (req: AuthRequest, res: Response, next: NextFunc
       email: user.email,
       phone: user.phone,
       role: user.role,
-      businessProfile: user.businessProfile
+      businessProfile: user.businessProfile,
+      legalConsent: user.legalConsent
+    });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+// Update Legal Consent for Existing User
+export const updateConsent = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { agreedToTerms, privacyPolicyAcknowledged } = req.body;
+
+    if (agreedToTerms !== true) {
+      return sendValidationError(res, req, "agreedToTerms", "You must agree to the Terms and Conditions");
+    }
+
+    if (privacyPolicyAcknowledged !== true) {
+      return sendValidationError(res, req, "privacyPolicyAcknowledged", "You must acknowledge the Privacy Policy");
+    }
+
+    const user = await User.findById(req.user!.id);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+        error: {
+          code: "RESOURCE_NOT_FOUND",
+          message: "User not found",
+          details: [],
+          requestId: req.requestId
+        },
+        requestId: req.requestId
+      });
+    }
+
+    const clientIp = (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() || req.socket?.remoteAddress;
+    const clientUserAgent = req.headers["user-agent"];
+    const now = new Date();
+
+    user.legalConsent = {
+      agreedToTerms: true,
+      privacyPolicyAcknowledged: true,
+      acceptedAt: user.legalConsent?.acceptedAt || now, // preserve initial acceptance timestamp
+      latestAcceptedAt: now,
+      termsVersion: CURRENT_TERMS_VERSION,
+      privacyPolicyVersion: CURRENT_PRIVACY_POLICY_VERSION,
+      ipAddress: clientIp,
+      userAgent: clientUserAgent
+    };
+
+    await user.save();
+
+    return res.json({
+      success: true,
+      message: "Legal consent successfully recorded",
+      legalConsent: user.legalConsent,
+      requestId: req.requestId
     });
   } catch (error) {
     return next(error);

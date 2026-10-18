@@ -4,6 +4,7 @@ import authRoutes from "./routes/authRoutes";
 import businessRoutes from "./routes/businessRoutes";
 import queueRoutes from "./routes/queueRoutes";
 import healthRoutes from "./routes/healthRoutes";
+import supportRoutes from "./routes/supportRoutes";
 import { requestIdMiddleware } from "./middleware/requestId";
 import { generalApiRateLimiter } from "./middleware/rateLimiter";
 import { errorHandler, notFoundHandler } from "./middleware/errorHandler";
@@ -78,6 +79,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/business", businessRoutes);
 app.use("/api/queue", queueRoutes);
 app.use("/api/customer", queueRoutes);
+app.use("/api/support", supportRoutes);
 
 // Central 404 handler for unknown routes
 app.use(notFoundHandler);

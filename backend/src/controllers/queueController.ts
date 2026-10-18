@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
 import User from "../models/User";
+import QueueEntry from "../models/QueueEntry";
 import { AuthRequest } from "../middleware/authMiddleware";
 import {
   calculateTicketWaitEstimate,
@@ -16,7 +17,9 @@ import {
   quickRebookService,
   generateTicketShareTokenService,
   revokeTicketShareTokenService,
-  getSharedTicketService
+  getSharedTicketService,
+  editCustomerTicketService,
+  revokeTicketVerificationTokenService
 } from "../services/queueService";
 
 // Re-export timezone-aware open hours helper
@@ -74,6 +77,9 @@ const handleQueueError = (
   if (error.activeTicketId) {
     extraFields.activeTicketId = error.activeTicketId;
   }
+  if (error.activeTicket) {
+    extraFields.activeTicket = error.activeTicket;
+  }
 
   return res.status(status).json({
     success: false,
@@ -122,6 +128,8 @@ export const getStoreByQr = async (req: Request, res: Response, next: NextFuncti
     const openStatus = workingHours ? isStoreOpenNow(workingHours) : { isOpen: true };
 
     let isFavorite = false;
+    let activeTicket: any = null;
+
     const authHeader = req.headers.authorization;
     if (authHeader && authHeader.startsWith("Bearer ")) {
       try {
@@ -132,6 +140,33 @@ export const getStoreByQr = async (req: Request, res: Response, next: NextFuncti
           const user = await User.findById(decoded.id).select("favoriteBusinesses");
           if (user?.favoriteBusinesses) {
             isFavorite = user.favoriteBusinesses.some(id => id.toString() === store._id.toString());
+          }
+
+          const existingActiveTicket = await QueueEntry.findOne({
+            businessId: store._id,
+            customerId: decoded.id,
+            status: { $in: ["waiting", "in_progress"] }
+          });
+
+          if (existingActiveTicket) {
+            const estimate = await calculateTicketWaitEstimate(
+              store._id,
+              existingActiveTicket.joinedAt || existingActiveTicket.date,
+              existingActiveTicket.status,
+              existingActiveTicket.serviceStartedAt
+            );
+            activeTicket = {
+              _id: existingActiveTicket._id,
+              status: existingActiveTicket.status,
+              selectedServices: existingActiveTicket.selectedServices,
+              joinedAt: existingActiveTicket.joinedAt,
+              totalEstimatedTime: existingActiveTicket.totalEstimatedTime,
+              peopleAhead: estimate.peopleAhead,
+              currentEstimatedWait: estimate.currentEstimatedWait,
+              estimatedServiceStartTime: estimate.estimatedServiceStartTime,
+              verifiedAt: existingActiveTicket.verifiedAt,
+              verificationToken: existingActiveTicket.verificationToken
+            };
           }
         }
       } catch {}
@@ -150,7 +185,8 @@ export const getStoreByQr = async (req: Request, res: Response, next: NextFuncti
       qrCode: effectiveQrCode,
       isOpen: openStatus.isOpen,
       closedReason: openStatus.reason,
-      isFavorite
+      isFavorite,
+      activeTicket
     });
   } catch (error) {
     return next(error);
@@ -348,3 +384,38 @@ export const getSharedTicket = async (req: Request, res: Response, next: NextFun
     return handleQueueError(error, req, res, next, "Shared ticket not found");
   }
 };
+
+// Edit Active Ticket Services (Protected: Customer or Business)
+export const editTicketServices = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const { selectedServices } = req.body;
+
+    if (!selectedServices || !Array.isArray(selectedServices)) {
+      return sendValidationError(res, req, "selectedServices", "selectedServices must be provided as an array");
+    }
+
+    const io = req.app.get("io");
+    const result = await editCustomerTicketService(id, req.user!.id, selectedServices, io);
+    return res.json({
+      success: true,
+      message: "Ticket services updated successfully",
+      entry: result
+    });
+  } catch (error: any) {
+    return handleQueueError(error, req, res, next, "Failed to edit ticket services");
+  }
+};
+
+// Revoke or Regenerate Ticket Verification Token (Protected: Customer or Business)
+export const revokeTicketVerificationToken = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const regenerate = req.body.regenerate !== false;
+    const result = await revokeTicketVerificationTokenService(id, req.user!.id, regenerate);
+    return res.json(result);
+  } catch (error: any) {
+    return handleQueueError(error, req, res, next, "Failed to update verification token");
+  }
+};
+

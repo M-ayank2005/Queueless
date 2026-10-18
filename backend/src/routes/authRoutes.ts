@@ -4,7 +4,8 @@ import {
   login, 
   getProfile, 
   updateProfile, 
-  deleteProfile 
+  deleteProfile,
+  updateConsent
 } from "../controllers/authController";
 import { protect } from "../middleware/authMiddleware";
 import { authRateLimiter } from "../middleware/rateLimiter";
@@ -19,5 +20,6 @@ router.post("/login", authRateLimiter, login);
 router.get("/profile", protect, getProfile);
 router.put("/profile", protect, updateProfile);
 router.delete("/profile", protect, deleteProfile);
+router.post("/consent", protect, updateConsent);
 
 export default router;

@@ -19,6 +19,24 @@ export interface IBusinessProfile {
   };
 }
 
+export const CURRENT_TERMS_VERSION = "v1.0.0";
+export const CURRENT_PRIVACY_POLICY_VERSION = "v1.0.0";
+export const CURRENT_LEGAL_VERSIONS = {
+  termsVersion: CURRENT_TERMS_VERSION,
+  privacyPolicyVersion: CURRENT_PRIVACY_POLICY_VERSION
+};
+
+export interface ILegalConsent {
+  agreedToTerms: boolean;
+  privacyPolicyAcknowledged: boolean;
+  acceptedAt: Date;
+  termsVersion: string;
+  privacyPolicyVersion: string;
+  latestAcceptedAt?: Date;
+  ipAddress?: string;
+  userAgent?: string;
+}
+
 export interface IUser extends Document {
   name: string;
   email: string;
@@ -27,6 +45,7 @@ export interface IUser extends Document {
   role: "customer" | "business";
   businessProfile?: IBusinessProfile;
   favoriteBusinesses?: mongoose.Types.ObjectId[];
+  legalConsent?: ILegalConsent;
 }
 
 const ServiceSchema = new Schema<IService>({
@@ -48,6 +67,17 @@ const BusinessProfileSchema = new Schema<IBusinessProfile>({
   }
 });
 
+const LegalConsentSchema = new Schema<ILegalConsent>({
+  agreedToTerms: { type: Boolean, required: true, default: false },
+  privacyPolicyAcknowledged: { type: Boolean, required: true, default: false },
+  acceptedAt: { type: Date, required: true },
+  termsVersion: { type: String, required: true },
+  privacyPolicyVersion: { type: String, required: true },
+  latestAcceptedAt: { type: Date },
+  ipAddress: { type: String },
+  userAgent: { type: String }
+}, { _id: false });
+
 const UserSchema = new Schema<IUser>({
   name: { type: String, required: true },
   email: { type: String, required: true, unique: true },
@@ -56,6 +86,8 @@ const UserSchema = new Schema<IUser>({
   role: { type: String, enum: ["customer", "business"], required: true },
   businessProfile: { type: BusinessProfileSchema },
   favoriteBusinesses: [{ type: Schema.Types.ObjectId, ref: "User" }],
+  legalConsent: { type: LegalConsentSchema, required: false }
 }, { timestamps: true });
 
 export default mongoose.model<IUser>("User", UserSchema);
+

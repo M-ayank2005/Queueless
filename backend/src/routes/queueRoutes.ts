@@ -12,7 +12,9 @@ import {
   quickRebookQueue,
   generateTicketShareToken,
   revokeTicketShareToken,
-  getSharedTicket
+  getSharedTicket,
+  editTicketServices,
+  revokeTicketVerificationToken
 } from "../controllers/queueController";
 import { queueMutationRateLimiter, sharedTicketRateLimiter } from "../middleware/rateLimiter";
 
@@ -38,8 +40,14 @@ router.post("/quick-rebook", protect, queueMutationRateLimiter, quickRebookQueue
 // Protected: Ticket status tracking (authenticated customer or owning business)
 router.get("/status/:id", protect, getMyQueueStatus);
 
+// Protected: Edit services on active waiting ticket
+router.put("/:id/services", protect, queueMutationRateLimiter, editTicketServices);
+
 // Protected: Ticket share link generation and revocation
 router.post("/:id/share", protect, generateTicketShareToken);
 router.delete("/:id/share", protect, revokeTicketShareToken);
+
+// Protected: Ticket verification token revocation/regeneration
+router.post("/:id/verification/revoke", protect, revokeTicketVerificationToken);
 
 export default router;

@@ -21,6 +21,9 @@ import ScanJoinScreen from "../screens/customer/ScanJoinScreen";
 import BusinessDashboardScreen from "../screens/business/BusinessDashboardScreen";
 import ProfileScreen from "../screens/shared/ProfileScreen";
 import QueueStatusScreen from "../screens/shared/QueueStatusScreen";
+import PrivacyPolicyScreen from "../screens/shared/PrivacyPolicyScreen";
+import TermsScreen from "../screens/shared/TermsScreen";
+import HelpSupportScreen from "../screens/shared/HelpSupportScreen";
 import AppLoader from "../components/AppLoader";
 
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
@@ -35,6 +38,9 @@ function AuthNavigator() {
       <AuthStack.Screen name="Welcome" component={WelcomeScreen} />
       <AuthStack.Screen name="Login" component={LoginScreen} />
       <AuthStack.Screen name="Register" component={RegisterScreen} />
+      <AuthStack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
+      <AuthStack.Screen name="Terms" component={TermsScreen} />
+      <AuthStack.Screen name="HelpSupport" component={HelpSupportScreen} />
     </AuthStack.Navigator>
   );
 }
@@ -194,6 +200,9 @@ function AppNavigatorInner() {
       )}
       {/* Shared modal/detail screen accessible across tabs */}
       <RootStack.Screen name="QueueStatus" component={QueueStatusScreen} />
+      <RootStack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
+      <RootStack.Screen name="Terms" component={TermsScreen} />
+      <RootStack.Screen name="HelpSupport" component={HelpSupportScreen} />
     </RootStack.Navigator>
   );
 }

@@ -430,6 +430,73 @@ export default function ProfileScreen() {
         </View>
       )}
 
+      {/* Help & Support Card */}
+      <Card variant="default" style={styles.infoCard}>
+        <SectionHeader
+          title="Help & Support"
+          subtitle="Answers, AI Assistant, and Contact"
+          icon="help-buoy-outline"
+        />
+        <TouchableOpacity
+          style={styles.menuItemRow}
+          onPress={() => rootNavigation.navigate("HelpSupport")}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Open Help Center and AI Support"
+        >
+          <View style={[styles.iconBox, { backgroundColor: colors.primarySubtle, borderColor: colors.primaryBorder }]}>
+            <Ionicons name="chatbubbles-outline" size={17} color={colors.primary} />
+          </View>
+          <View style={styles.menuItemTextCol}>
+            <Text style={[styles.menuItemTitle, { color: colors.text }]}>Help Center & AI Assistant</Text>
+            <Text style={[styles.menuItemSubtitle, { color: colors.muted }]}>Browse FAQs or ask QueueLess AI</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+        </TouchableOpacity>
+      </Card>
+
+      {/* Legal & Compliance Card */}
+      <Card variant="default" style={styles.infoCard}>
+        <SectionHeader
+          title="Legal & Compliance"
+          subtitle="Privacy disclosure and terms of use"
+          icon="shield-checkmark-outline"
+        />
+        <TouchableOpacity
+          style={[styles.menuItemRow, { borderBottomWidth: 1, borderBottomColor: colors.borderSubtle }]}
+          onPress={() => rootNavigation.navigate("PrivacyPolicy")}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="View Privacy Policy"
+        >
+          <View style={[styles.iconBox, { backgroundColor: colors.cardSoft, borderColor: colors.border }]}>
+            <Ionicons name="lock-closed-outline" size={17} color={colors.primary} />
+          </View>
+          <View style={styles.menuItemTextCol}>
+            <Text style={[styles.menuItemTitle, { color: colors.text }]}>Privacy Policy</Text>
+            <Text style={[styles.menuItemSubtitle, { color: colors.muted }]}>How your data & AI interactions are handled</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.menuItemRow}
+          onPress={() => rootNavigation.navigate("Terms")}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="View Terms of Service"
+        >
+          <View style={[styles.iconBox, { backgroundColor: colors.cardSoft, borderColor: colors.border }]}>
+            <Ionicons name="document-text-outline" size={17} color={colors.primary} />
+          </View>
+          <View style={styles.menuItemTextCol}>
+            <Text style={[styles.menuItemTitle, { color: colors.text }]}>Terms of Service</Text>
+            <Text style={[styles.menuItemSubtitle, { color: colors.muted }]}>Rules, obligations, and service guidelines</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+        </TouchableOpacity>
+      </Card>
+
       {/* Simple, Smaller Centered Sign Out Button */}
       <View style={styles.signOutContainer}>
         <TouchableOpacity
@@ -648,6 +715,23 @@ const styles = StyleSheet.create({
   historyPrice: {
     fontSize: 16,
     fontWeight: "800",
+  },
+  menuItemRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    paddingVertical: spacing.md,
+  },
+  menuItemTextCol: {
+    flex: 1,
+    gap: 2,
+  },
+  menuItemTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  menuItemSubtitle: {
+    fontSize: 12,
   },
   signOutContainer: {
     alignItems: "center",

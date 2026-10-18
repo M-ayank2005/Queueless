@@ -11,7 +11,8 @@ import {
   Menu, 
   X, 
   Ticket, 
-  ArrowRight
+  ArrowRight,
+  HelpCircle
 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 
@@ -137,6 +138,20 @@ export default function Navbar() {
                     {user.name || "Profile"}
                   </span>
                 </Link>
+
+                {/* Help & Support Link */}
+                <Link
+                  href="/help"
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border transition-all ${
+                    pathname === "/help"
+                      ? "border-primary bg-primary/10 text-foreground font-semibold"
+                      : "border-border bg-card hover:border-primary/40 text-muted-foreground hover:text-foreground shadow-xs"
+                  }`}
+                  title="Help & AI Support"
+                >
+                  <HelpCircle className="w-3.5 h-3.5 text-primary" />
+                  <span className="text-xs font-medium">Help</span>
+                </Link>
               </div>
             ) : (
               /* Customer Navigation */
@@ -178,6 +193,20 @@ export default function Navbar() {
                   <span className="text-xs font-semibold max-w-[140px] truncate">
                     {user.name || "Profile"}
                   </span>
+                </Link>
+
+                {/* Help & Support Link */}
+                <Link
+                  href="/help"
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border transition-all ${
+                    pathname === "/help"
+                      ? "border-primary bg-primary/10 text-foreground font-semibold"
+                      : "border-border bg-card hover:border-primary/40 text-muted-foreground hover:text-foreground shadow-xs"
+                  }`}
+                  title="Help & AI Support"
+                >
+                  <HelpCircle className="w-3.5 h-3.5 text-primary" />
+                  <span className="text-xs font-medium">Help</span>
                 </Link>
               </div>
             )}
@@ -340,6 +369,19 @@ export default function Navbar() {
                       </Link>
                     </>
                   )}
+
+                  {/* Shared Help Link in Drawer */}
+                  <Link
+                    href="/help"
+                    className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-colors ${
+                      pathname === "/help"
+                        ? "bg-primary/10 text-primary font-semibold"
+                        : "text-foreground hover:bg-muted"
+                    }`}
+                  >
+                    <HelpCircle className="w-4 h-4 text-primary" />
+                    Help & Support
+                  </Link>
                 </div>
               </div>
 

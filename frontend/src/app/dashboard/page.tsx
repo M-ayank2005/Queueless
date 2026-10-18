@@ -36,7 +36,9 @@ import {
   Zap,
   Activity,
   Flame,
-  RefreshCw
+  RefreshCw,
+  ShieldCheck,
+  MessageSquare
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { QRCodeSVG as QRCode } from "qrcode.react";
@@ -74,6 +76,7 @@ interface QueueItem {
     name: string;
     durationMin?: number;
     cost?: number;
+    quantity?: number;
   }>;
   customerId?: {
     _id?: string;
@@ -81,6 +84,9 @@ interface QueueItem {
     phone?: string;
     email?: string;
   };
+  verifiedAt?: string;
+  verifiedBy?: string;
+  verificationToken?: string;
 }
 
 interface AnalyticsData {
@@ -145,6 +151,18 @@ export default function Dashboard() {
     closedDays: [] as number[]
   });
 
+  // Ticket Inspection & Verification States
+  const [selectedTicket, setSelectedTicket] = useState<QueueItem | null>(null);
+  const [isTicketModalOpen, setIsTicketModalOpen] = useState(false);
+  const [isVerifyModalOpen, setIsVerifyModalOpen] = useState(false);
+  const [verifyInput, setVerifyInput] = useState("");
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [verificationResult, setVerificationResult] = useState<{
+    success: boolean;
+    message: string;
+    ticket?: any;
+  } | null>(null);
+
   const socketRef = useRef<Socket | null>(null);
 
   const fetchAnalytics = async (range: string = analyticsRange) => {
@@ -180,13 +198,15 @@ export default function Dashboard() {
       if (e.key === "Escape") {
         setIsQrModalOpen(false);
         setIsSettingsOpen(false);
+        setIsTicketModalOpen(false);
+        setIsVerifyModalOpen(false);
       }
     };
-    if (isQrModalOpen || isSettingsOpen) {
+    if (isQrModalOpen || isSettingsOpen || isTicketModalOpen || isVerifyModalOpen) {
       window.addEventListener("keydown", handleKeyDown);
     }
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isQrModalOpen, isSettingsOpen]);
+  }, [isQrModalOpen, isSettingsOpen, isTicketModalOpen, isVerifyModalOpen]);
 
   useEffect(() => {
     if (status !== "authenticated" || user?.role !== "business") {
@@ -323,6 +343,57 @@ export default function Dashboard() {
       if (newStatus === "cancelled") toast.info("Ticket cancelled");
     } catch {
       toast.error("Failed to update queue ticket");
+    }
+  };
+
+  const handleVerifyTicket = async (ticketIdOrToken: string) => {
+    if (!ticketIdOrToken.trim()) {
+      toast.error("Please enter a ticket ID, code, or token");
+      return;
+    }
+    setIsVerifying(true);
+    try {
+      const res = await api.post("/business/queue/verify", {
+        ticketId: ticketIdOrToken.trim(),
+        token: ticketIdOrToken.trim()
+      });
+      setVerificationResult({
+        success: true,
+        message: res.data.message || "Customer verified successfully",
+        ticket: res.data.ticket
+      });
+      toast.success("Customer ticket verified at counter!");
+      await fetchQueueOnly();
+      if (selectedTicket && res.data.ticket && selectedTicket._id === res.data.ticket._id) {
+        setSelectedTicket(res.data.ticket);
+      }
+    } catch (err: any) {
+      const msg = err.response?.data?.message || "Failed to verify customer ticket";
+      setVerificationResult({
+        success: false,
+        message: msg
+      });
+      toast.error(msg);
+    } finally {
+      setIsVerifying(false);
+    }
+  };
+
+  const handleVerifySelectedTicket = async () => {
+    if (!selectedTicket) return;
+    setIsVerifying(true);
+    try {
+      const res = await api.post("/business/queue/verify", {
+        ticketId: selectedTicket._id,
+        token: selectedTicket.verificationToken || selectedTicket._id
+      });
+      toast.success("Ticket verified successfully!");
+      setSelectedTicket(res.data.ticket);
+      await fetchQueueOnly();
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Failed to verify ticket");
+    } finally {
+      setIsVerifying(false);
     }
   };
 
@@ -603,9 +674,24 @@ export default function Dashboard() {
                       </CardDescription>
                     </div>
                   </div>
-                  <span className="text-xs font-bold font-mono px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary">
-                    {activeQueueCount} In Line
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setVerificationResult(null);
+                        setVerifyInput("");
+                        setIsVerifyModalOpen(true);
+                      }}
+                      className="border-primary/30 hover:bg-primary/10 text-primary text-xs flex items-center gap-1.5"
+                    >
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      Verify Ticket
+                    </Button>
+                    <span className="text-xs font-bold font-mono px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-primary">
+                      {activeQueueCount} In Line
+                    </span>
+                  </div>
                 </div>
               </CardHeader>
 
@@ -625,9 +711,10 @@ export default function Dashboard() {
                     const customerName = item.customerId?.name || item.customerName || "Customer";
                     const customerPhone = item.customerId?.phone;
                     const ticketNumber = item._id.slice(-4).toUpperCase();
-                    const servicesString = item.selectedServices?.map(s => s.name).join(", ");
+                    const servicesString = item.selectedServices?.map(s => `${s.name}${s.quantity && s.quantity > 1 ? ` (×${s.quantity})` : ""}`).join(", ");
                     const isWaiting = item.status === "waiting";
                     const isInProgress = item.status === "in_progress";
+                    const isVerified = Boolean(item.verifiedAt);
 
                     return (
                       <motion.div
@@ -635,7 +722,11 @@ export default function Dashboard() {
                         layout
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className={`p-4 rounded-xl border transition-all ${
+                        onClick={() => {
+                          setSelectedTicket(item);
+                          setIsTicketModalOpen(true);
+                        }}
+                        className={`p-4 rounded-xl border transition-all cursor-pointer hover:border-primary/50 hover:shadow-md ${
                           isInProgress
                             ? "bg-primary/10 border-primary/40 shadow-sm"
                             : "bg-card border-border"
@@ -651,6 +742,12 @@ export default function Dashboard() {
                                 {customerName}
                               </h3>
                               <StatusBadge status={item.status} />
+                              {isVerified && (
+                                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/25 px-2 py-0.5 rounded-full">
+                                  <ShieldCheck className="w-3 h-3" />
+                                  Verified
+                                </span>
+                              )}
                             </div>
 
                             {customerPhone && (
@@ -668,11 +765,17 @@ export default function Dashboard() {
                           </div>
 
                           {/* Action Buttons for active tickets */}
-                          <div className="flex items-center gap-2 shrink-0 border-t sm:border-t-0 pt-2 sm:pt-0 border-border">
+                          <div 
+                            className="flex items-center gap-2 shrink-0 border-t sm:border-t-0 pt-2 sm:pt-0 border-border"
+                            onClick={(e) => e.stopPropagation()}
+                          >
                             {isWaiting && (
                               <Button
                                 size="sm"
-                                onClick={() => handleUpdateStatus(item._id, "in_progress")}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleUpdateStatus(item._id, "in_progress");
+                                }}
                                 className="bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold flex items-center gap-1.5 shadow-sm"
                               >
                                 <Play className="w-3.5 h-3.5 fill-current" />
@@ -683,7 +786,10 @@ export default function Dashboard() {
                             {isInProgress && (
                               <Button
                                 size="sm"
-                                onClick={() => handleUpdateStatus(item._id, "completed")}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleUpdateStatus(item._id, "completed");
+                                }}
                                 className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5 shadow-sm"
                               >
                                 <CheckCircle2 className="w-3.5 h-3.5" />
@@ -694,7 +800,10 @@ export default function Dashboard() {
                             <Button
                               size="sm"
                               variant="outline"
-                              onClick={() => handleUpdateStatus(item._id, "cancelled")}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleUpdateStatus(item._id, "cancelled");
+                              }}
                               className="border-red-500/30 hover:bg-red-500/10 text-red-500 dark:text-red-400 text-xs flex items-center gap-1"
                               title="Cancel Ticket"
                             >
@@ -749,16 +858,21 @@ export default function Dashboard() {
                     const customerName = item.customerId?.name || item.customerName || "Customer";
                     const customerPhone = item.customerId?.phone;
                     const ticketNumber = item._id.slice(-4).toUpperCase();
-                    const servicesString = item.selectedServices?.map(s => s.name).join(", ");
+                    const servicesString = item.selectedServices?.map(s => `${s.name}${s.quantity && s.quantity > 1 ? ` (×${s.quantity})` : ""}`).join(", ");
                     const processedTimestamp = item.updatedAt || item.joinedAt;
                     const processedTimeStr = processedTimestamp
                       ? new Date(processedTimestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
                       : "";
+                    const isVerified = Boolean(item.verifiedAt);
 
                     return (
                       <div
                         key={item._id}
-                        className="p-3.5 rounded-xl border border-border bg-card hover:bg-muted/40 transition-colors"
+                        onClick={() => {
+                          setSelectedTicket(item);
+                          setIsTicketModalOpen(true);
+                        }}
+                        className="p-3.5 rounded-xl border border-border bg-card hover:bg-muted/40 transition-colors cursor-pointer"
                       >
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
                           <div className="space-y-1">
@@ -770,6 +884,12 @@ export default function Dashboard() {
                                 {customerName}
                               </h3>
                               <StatusBadge status={item.status} />
+                              {isVerified && (
+                                <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-1.5 py-0.5 rounded-full">
+                                  <ShieldCheck className="w-3 h-3" />
+                                  Verified
+                                </span>
+                              )}
                             </div>
 
                             {customerPhone && (
@@ -1671,6 +1791,344 @@ export default function Dashboard() {
                   </div>
                 </div>
               </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Customer Ticket Details Modal */}
+      <AnimatePresence>
+        {isTicketModalOpen && selectedTicket && (
+          <motion.div
+            key="ticket-modal-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 10 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 10 }}
+              className="relative w-full max-w-lg bg-card border border-border rounded-2xl p-6 shadow-2xl overflow-hidden max-h-[90vh] flex flex-col"
+            >
+              <button
+                onClick={() => setIsTicketModalOpen(false)}
+                className="absolute top-4 right-4 p-2 text-muted-foreground hover:text-foreground rounded-lg hover:bg-muted transition-colors"
+                aria-label="Close"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              <div className="flex items-center gap-2 mb-4 shrink-0">
+                <span className="font-mono text-sm font-bold px-2.5 py-1 rounded-md bg-primary/10 border border-primary/25 text-primary">
+                  #{selectedTicket._id.slice(-4).toUpperCase()}
+                </span>
+                <StatusBadge status={selectedTicket.status} />
+                {selectedTicket.verifiedAt ? (
+                  <span className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/25 px-2.5 py-1 rounded-full">
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    Verified at Counter
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-600 dark:text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-full">
+                    Unverified
+                  </span>
+                )}
+              </div>
+
+              <div className="overflow-y-auto pr-1 space-y-4 flex-1">
+                {/* Customer Contact Card */}
+                <div className="p-4 rounded-xl bg-muted/40 border border-border/80 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h4 className="text-base font-bold text-foreground">
+                        {selectedTicket.customerId?.name || selectedTicket.customerName || "Customer"}
+                      </h4>
+                      <p className="text-xs text-muted-foreground">
+                        Joined: {new Date(selectedTicket.joinedAt || Date.now()).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                      </p>
+                    </div>
+                    {selectedTicket.customerId?.email && (
+                      <span className="text-xs text-muted-foreground truncate max-w-[180px]">
+                        {selectedTicket.customerId.email}
+                      </span>
+                    )}
+                  </div>
+
+                  {selectedTicket.customerId?.phone ? (
+                    <div className="flex items-center gap-2 pt-2 border-t border-border/60">
+                      <a
+                        href={`tel:${selectedTicket.customerId.phone}`}
+                        className="flex-1 inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary text-xs font-semibold transition-colors"
+                      >
+                        <Phone className="w-3.5 h-3.5" />
+                        Call ({selectedTicket.customerId.phone})
+                      </a>
+                      <a
+                        href={`sms:${selectedTicket.customerId.phone}`}
+                        className="flex-1 inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-card border border-border hover:bg-muted text-foreground text-xs font-semibold transition-colors"
+                      >
+                        <MessageSquare className="w-3.5 h-3.5 text-primary" />
+                        Chat / SMS
+                      </a>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground italic">No phone number provided for this guest</p>
+                  )}
+                </div>
+
+                {/* Requested Services Table */}
+                <div>
+                  <h5 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2 flex items-center justify-between">
+                    <span>Requested Services</span>
+                    <span>{selectedTicket.selectedServices?.reduce((sum, s) => sum + (s.quantity || 1), 0) || 0} Total Units</span>
+                  </h5>
+
+                  <div className="border border-border rounded-xl overflow-hidden divide-y divide-border/60">
+                    {selectedTicket.selectedServices?.map((srv, idx) => {
+                      const qty = srv.quantity || 1;
+                      const unitPrice = srv.cost || 0;
+                      const totalCost = unitPrice * qty;
+                      const totalDuration = (srv.durationMin || 0) * qty;
+
+                      return (
+                        <div key={idx} className="p-3 bg-card flex items-center justify-between gap-3 text-xs">
+                          <div>
+                            <p className="font-semibold text-foreground">
+                              {srv.name} <span className="text-primary font-bold">×{qty}</span>
+                            </p>
+                            <p className="text-[11px] text-muted-foreground">
+                              {totalDuration} mins {unitPrice > 0 && `(₹${unitPrice} each)`}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-bold text-foreground">
+                              ₹{totalCost}
+                            </p>
+                            <p className="text-[10px] text-muted-foreground">
+                              ~{totalDuration} min
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Subtotals & Totals */}
+                  <div className="flex items-center justify-between px-3 py-2 mt-2 bg-muted/30 rounded-lg text-xs font-semibold text-foreground">
+                    <span>Grand Total</span>
+                    <div className="flex items-center gap-4">
+                      <span className="text-muted-foreground">
+                        ~{selectedTicket.selectedServices?.reduce((sum, s) => sum + (s.durationMin || 0) * (s.quantity || 1), 0)} mins
+                      </span>
+                      <span className="text-primary font-bold">
+                        ₹{selectedTicket.selectedServices?.reduce((sum, s) => sum + (s.cost || 0) * (s.quantity || 1), 0)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Verification Action / Status */}
+                <div className="p-3 rounded-xl border border-dashed border-border flex items-center justify-between gap-3">
+                  <div className="text-xs">
+                    <p className="font-semibold text-foreground">Counter Verification</p>
+                    <p className="text-muted-foreground text-[11px]">
+                      {selectedTicket.verifiedAt 
+                        ? `Verified at ${new Date(selectedTicket.verifiedAt).toLocaleTimeString()}`
+                        : "Customer has not yet presented ticket QR code"}
+                    </p>
+                  </div>
+                  {!selectedTicket.verifiedAt && (
+                    <LoadingButton
+                      size="sm"
+                      loading={isVerifying}
+                      loadingText="Verifying..."
+                      onClick={handleVerifySelectedTicket}
+                      className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5"
+                    >
+                      <ShieldCheck className="w-3.5 h-3.5" />
+                      Verify Now
+                    </LoadingButton>
+                  )}
+                </div>
+              </div>
+
+              {/* Status Action Controls */}
+              <div className="flex items-center gap-2 pt-4 border-t border-border shrink-0 mt-2">
+                {selectedTicket.status === "waiting" && (
+                  <Button
+                    onClick={async () => {
+                      await handleUpdateStatus(selectedTicket._id, "in_progress");
+                      setSelectedTicket(prev => prev ? { ...prev, status: "in_progress" } : null);
+                    }}
+                    className="flex-1 bg-primary text-primary-foreground font-semibold text-xs py-2"
+                  >
+                    <Play className="w-3.5 h-3.5 mr-1.5 fill-current" />
+                    Call to Counter
+                  </Button>
+                )}
+
+                {selectedTicket.status === "in_progress" && (
+                  <Button
+                    onClick={async () => {
+                      await handleUpdateStatus(selectedTicket._id, "completed");
+                      setSelectedTicket(prev => prev ? { ...prev, status: "completed" } : null);
+                    }}
+                    className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs py-2"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" />
+                    Mark Completed
+                  </Button>
+                )}
+
+                {(selectedTicket.status === "waiting" || selectedTicket.status === "in_progress") && (
+                  <Button
+                    variant="outline"
+                    onClick={async () => {
+                      await handleUpdateStatus(selectedTicket._id, "cancelled");
+                      setSelectedTicket(prev => prev ? { ...prev, status: "cancelled" } : null);
+                    }}
+                    className="border-red-500/30 text-red-500 hover:bg-red-500/10 text-xs"
+                  >
+                    <XCircle className="w-3.5 h-3.5 mr-1" />
+                    Cancel Ticket
+                  </Button>
+                )}
+
+                <Button
+                  variant="ghost"
+                  onClick={() => setIsTicketModalOpen(false)}
+                  className="text-xs"
+                >
+                  Close
+                </Button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Counter Verification Modal */}
+      <AnimatePresence>
+        {isVerifyModalOpen && (
+          <motion.div
+            key="verify-modal-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 10 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 10 }}
+              className="relative w-full max-w-md bg-card border border-border rounded-2xl p-6 shadow-2xl"
+            >
+              <button
+                onClick={() => {
+                  setIsVerifyModalOpen(false);
+                  setVerificationResult(null);
+                  setVerifyInput("");
+                }}
+                className="absolute top-4 right-4 p-2 text-muted-foreground hover:text-foreground rounded-lg hover:bg-muted transition-colors"
+                aria-label="Close"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
+                  <ShieldCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-foreground">
+                    Counter Ticket Verification
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    Scan customer QR code or enter ticket ID / token
+                  </p>
+                </div>
+              </div>
+
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleVerifyTicket(verifyInput);
+                }}
+                className="space-y-4"
+              >
+                <div>
+                  <Label htmlFor="verify-token-input" className="text-xs font-semibold text-foreground">
+                    Ticket Code / QR Payload
+                  </Label>
+                  <div className="mt-1.5 flex gap-2">
+                    <Input
+                      id="verify-token-input"
+                      type="text"
+                      placeholder="e.g. ql-ticket:... or #ABCD or 68f..."
+                      value={verifyInput}
+                      onChange={(e) => setVerifyInput(e.target.value)}
+                      className="bg-background border-border text-foreground font-mono text-xs"
+                      autoFocus
+                    />
+                    <LoadingButton
+                      type="submit"
+                      loading={isVerifying}
+                      loadingText="Verifying..."
+                      className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs px-4 shrink-0"
+                    >
+                      Verify
+                    </LoadingButton>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    Accepts the scanned payload from the customer's live status QR code or ticket number.
+                  </p>
+                </div>
+
+                {verificationResult && (
+                  <div
+                    className={`p-3.5 rounded-xl border text-xs ${
+                      verificationResult.success
+                        ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
+                        : "bg-red-500/10 border-red-500/30 text-red-600 dark:text-red-400"
+                    }`}
+                  >
+                    <div className="flex items-start gap-2">
+                      {verificationResult.success ? (
+                        <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-emerald-600 dark:text-emerald-400" />
+                      ) : (
+                        <XCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-600 dark:text-red-400" />
+                      )}
+                      <div className="flex-1">
+                        <p className="font-semibold">{verificationResult.message}</p>
+                        {verificationResult.ticket && (
+                          <div className="mt-2 pt-2 border-t border-emerald-500/20 text-foreground font-sans space-y-0.5">
+                            <p><strong>Customer:</strong> {verificationResult.ticket.customerId?.name || verificationResult.ticket.customerName || "Customer"}</p>
+                            <p><strong>Ticket:</strong> #{verificationResult.ticket._id?.slice(-4).toUpperCase()}</p>
+                            <p><strong>Services:</strong> {verificationResult.ticket.selectedServices?.map((s: any) => `${s.name}${s.quantity > 1 ? ` (×${s.quantity})` : ""}`).join(", ")}</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-end gap-2 pt-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setIsVerifyModalOpen(false);
+                      setVerificationResult(null);
+                      setVerifyInput("");
+                    }}
+                    className="text-xs"
+                  >
+                    Done
+                  </Button>
+                </div>
+              </form>
             </motion.div>
           </motion.div>
         )}

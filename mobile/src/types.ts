@@ -4,6 +4,7 @@ export interface ServiceItem {
   name: string;
   durationMin: number;
   cost: number;
+  quantity?: number;
 }
 
 export interface WorkingHours {
@@ -85,6 +86,9 @@ export interface QueueEntry {
   businessId?: any;
   customerId?: any;
   shareToken?: string;
+  verificationToken?: string;
+  verifiedAt?: string;
+  verifiedBy?: string;
 }
 
 export interface AnalyticsSummary {
