@@ -355,79 +355,41 @@ export default function ProfileScreen() {
         </View>
       </Card>
 
-      {/* Role-Specific Content: Customer Booking History */}
+      {/* Role-Specific Content: Customer Booking History Entry Card */}
       {!isBusiness && (
-        <View style={styles.sectionWrap}>
+        <Card variant="default" style={styles.infoCard}>
           <SectionHeader
             title="Booking History"
             subtitle="Past visits and completed counter tickets"
             icon="receipt-outline"
             count={history.length}
           />
-
-          {history.length === 0 ? (
-            <EmptyState
-              icon="calendar-outline"
-              title="No Past Visits Yet"
-              description="When you join queues and complete visits, your receipts will be archived here."
-            />
-          ) : (
-            <View style={styles.historyList}>
-              {history.map((entry) => {
-                const shopName =
-                  entry.businessId?.businessProfile?.shopName ||
-                  entry.businessId?.shopName ||
-                  "QueueLess Store";
-
-                const dateVal = entry.date || entry.joinedAt;
-                const dateStr = dateVal ? new Date(dateVal).toLocaleDateString() : "Today";
-
-                const totalCost = (entry.selectedServices || []).reduce(
-                  (acc, s) => acc + (Number(s.cost) || 0),
-                  0
-                );
-
-                return (
-                  <Card
-                    key={entry._id}
-                    variant="default"
-                    onPress={() => rootNavigation.navigate("QueueStatus", { id: entry._id })}
-                    style={styles.historyCard}
-                  >
-                    <View style={styles.historyCardTop}>
-                      <View style={styles.historyStoreCol}>
-                        <Text style={[styles.historyShopName, { color: colors.text }]}>{shopName}</Text>
-                        <Text style={[styles.historyTicket, { color: colors.muted }]}>
-                          Ticket #{entry._id.slice(-4).toUpperCase()}
-                        </Text>
-                      </View>
-                      <StatusBadge status={entry.status} size="sm" />
-                    </View>
-
-                    {/* Services Chips */}
-                    {entry.selectedServices?.length ? (
-                      <View style={styles.historyServicesRow}>
-                        {entry.selectedServices.map((s, idx) => (
-                          <View 
-                            key={`${s.name}_${idx}`} 
-                            style={[styles.historyServiceChip, { backgroundColor: colors.cardSoft, borderColor: colors.border }]}
-                          >
-                            <Text style={[styles.historyServiceChipText, { color: colors.textSecondary }]}>{s.name}</Text>
-                          </View>
-                        ))}
-                      </View>
-                    ) : null}
-
-                    <View style={[styles.historyCardBottom, { borderTopColor: colors.borderSubtle }]}>
-                      <Text style={[styles.historyDate, { color: colors.muted }]}>🗓 {dateStr}</Text>
-                      <Text style={[styles.historyPrice, { color: colors.primary }]}>${totalCost}</Text>
-                    </View>
-                  </Card>
-                );
-              })}
+          <TouchableOpacity
+            style={styles.menuItemRow}
+            onPress={() => rootNavigation.navigate("BookingHistory")}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="View full booking history"
+          >
+            <View style={[styles.iconBox, { backgroundColor: colors.primarySubtle, borderColor: colors.primaryBorder }]}>
+              <Ionicons name="receipt-outline" size={17} color={colors.primary} />
             </View>
-          )}
-        </View>
+            <View style={styles.menuItemTextCol}>
+              <Text style={[styles.menuItemTitle, { color: colors.text }]}>View Booking History</Text>
+              <Text style={[styles.menuItemSubtitle, { color: colors.muted }]}>
+                {history.length === 0
+                  ? "No past visits yet — tap to open history"
+                  : `${history.length} past ${history.length === 1 ? "ticket" : "tickets"} & visit receipts`}
+              </Text>
+            </View>
+            {history.length > 0 && (
+              <View style={[styles.countBadge, { backgroundColor: colors.cardSoft, borderColor: colors.border }]}>
+                <Text style={[styles.countBadgeText, { color: colors.textSecondary }]}>{history.length}</Text>
+              </View>
+            )}
+            <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+          </TouchableOpacity>
+        </Card>
       )}
 
       {/* Help & Support Card */}
@@ -732,6 +694,16 @@ const styles = StyleSheet.create({
   },
   menuItemSubtitle: {
     fontSize: 12,
+  },
+  countBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: radii.full,
+    borderWidth: 1,
+  },
+  countBadgeText: {
+    fontSize: 11,
+    fontWeight: "700",
   },
   signOutContainer: {
     alignItems: "center",

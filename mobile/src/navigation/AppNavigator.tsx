@@ -24,6 +24,7 @@ import QueueStatusScreen from "../screens/shared/QueueStatusScreen";
 import PrivacyPolicyScreen from "../screens/shared/PrivacyPolicyScreen";
 import TermsScreen from "../screens/shared/TermsScreen";
 import HelpSupportScreen from "../screens/shared/HelpSupportScreen";
+import BookingHistoryScreen from "../screens/customer/BookingHistoryScreen";
 import AppLoader from "../components/AppLoader";
 
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
@@ -203,6 +204,7 @@ function AppNavigatorInner() {
       <RootStack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
       <RootStack.Screen name="Terms" component={TermsScreen} />
       <RootStack.Screen name="HelpSupport" component={HelpSupportScreen} />
+      <RootStack.Screen name="BookingHistory" component={BookingHistoryScreen} />
     </RootStack.Navigator>
   );
 }

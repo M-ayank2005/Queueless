@@ -25,4 +25,5 @@ export type RootStackParamList = {
   PrivacyPolicy: undefined;
   Terms: undefined;
   HelpSupport: undefined;
+  BookingHistory: undefined;
 };

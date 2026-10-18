@@ -135,6 +135,11 @@ export default function ProfilePage() {
       } catch {}
     };
 
+    if (status === "unauthenticated") {
+      router.push("/login");
+      return;
+    }
+
     if (status === "authenticated") {
       fetchProfile();
     }
@@ -370,28 +375,49 @@ export default function ProfilePage() {
                 </CardHeader>
                 <CardContent className="pt-4">
                   <div className="grid grid-cols-2 gap-4 mb-4">
-                    <div className="p-4 rounded-xl bg-secondary border border-border text-center">
-                      <div className="text-2xl font-bold text-primary">
+                    <Link
+                      href="/"
+                      className="p-4 rounded-xl bg-secondary border border-border text-center hover:border-primary/50 hover:bg-secondary/80 transition-all group block"
+                      title="View active queue tickets"
+                    >
+                      <div className="text-2xl font-bold text-primary group-hover:scale-105 transition-transform">
                         {activeQueuesCount ?? "—"}
                       </div>
-                      <div className="text-xs text-muted-foreground mt-1">Active Tickets</div>
-                    </div>
-                    <div className="p-4 rounded-xl bg-secondary border border-border text-center">
-                      <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
+                      <div className="text-xs text-muted-foreground mt-1 flex items-center justify-center gap-1 group-hover:text-foreground">
+                        Active Tickets
+                        <ArrowRight className="w-3 h-3 transition-transform group-hover:translate-x-0.5" />
+                      </div>
+                    </Link>
+
+                    <Link
+                      href="/history"
+                      className="p-4 rounded-xl bg-secondary border border-border text-center hover:border-emerald-500/50 hover:bg-secondary/80 transition-all group block"
+                      title="Open full booking history page"
+                    >
+                      <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400 group-hover:scale-105 transition-transform">
                         {historyCount ?? "—"}
                       </div>
-                      <div className="text-xs text-muted-foreground mt-1">Past Bookings</div>
-                    </div>
+                      <div className="text-xs text-muted-foreground mt-1 flex items-center justify-center gap-1 group-hover:text-foreground">
+                        Past Bookings
+                        <ArrowRight className="w-3 h-3 transition-transform group-hover:translate-x-0.5" />
+                      </div>
+                    </Link>
                   </div>
                   <p className="text-xs text-muted-foreground leading-relaxed">
-                    Track your current position in line or discover new stores to join digital queues without waiting on site.
+                    View active lines or browse your complete booking archive, past tickets, and receipts on the dedicated history page.
                   </p>
                 </CardContent>
               </div>
-              <div className="p-6 pt-0 flex flex-col sm:flex-row gap-3">
+              <div className="p-6 pt-0 flex flex-col sm:flex-row gap-2.5">
+                <Link href="/history" className="flex-1">
+                  <Button variant="outline" className="w-full flex items-center justify-center gap-1.5 border-border hover:border-primary/40 text-foreground font-medium">
+                    <FileText className="w-4 h-4 text-primary" />
+                    View Booking History
+                  </Button>
+                </Link>
                 <Link href="/" className="flex-1">
                   <Button variant="outline" className="w-full">
-                    View My Queues
+                    Active Queues
                   </Button>
                 </Link>
                 <Link href="/scan" className="flex-1">

@@ -76,6 +76,7 @@ export interface QueueEntry {
   selectedServices: ServiceItem[];
   date: string;
   joinedAt?: string;
+  createdAt?: string;
   updatedAt?: string;
   customerName?: string;
   peopleAhead?: number;
