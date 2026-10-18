@@ -8,7 +8,21 @@ import { useToast } from "@/components/ui/Toast";
 import { Camera, AlertCircle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-export default function QRScanner() {
+export interface QRScannerProps {
+  onScan?: (data: string) => void;
+  scannerId?: string;
+  title?: string;
+  description?: string;
+  hideCardWrap?: boolean;
+}
+
+export default function QRScanner({
+  onScan,
+  scannerId = "reader",
+  title = "Point Camera at QR",
+  description = "Hold steady inside the viewfinder frame.",
+  hideCardWrap = false,
+}: QRScannerProps = {}) {
   const router = useRouter();
   const { toast } = useToast();
   const [scanResult, setScanResult] = useState<string | null>(null);
@@ -17,6 +31,10 @@ export default function QRScanner() {
   const scannerRef = useRef<Html5QrcodeScanner | null>(null);
 
   const handleScan = (data: string) => {
+    if (onScan) {
+      onScan(data);
+      return;
+    }
     try {
       if (data.includes("/store/")) {
         const parts = data.split("/store/");
@@ -36,7 +54,7 @@ export default function QRScanner() {
 
     try {
       const scanner = new Html5QrcodeScanner(
-        "reader",
+        scannerId,
         {
           fps: 10,
           qrbox: { width: 220, height: 220 },
@@ -52,7 +70,7 @@ export default function QRScanner() {
 
       scanner.render(
         (decodedText) => {
-          scanner.clear();
+          scanner.clear().catch(() => {});
           setScanResult(decodedText);
           handleScan(decodedText);
         },
@@ -72,7 +90,44 @@ export default function QRScanner() {
         scannerRef.current.clear().catch(() => {});
       }
     };
-  }, [scanKey]);
+  }, [scanKey, scannerId]);
+
+  const scannerContent = hasCameraError ? (
+    <div className="p-6 text-center rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-300">
+      <AlertCircle className="w-8 h-8 text-rose-500 dark:text-rose-400 mx-auto mb-2" />
+      <h4 className="text-sm font-bold text-foreground mb-1">
+        Camera Access Required
+      </h4>
+      <p className="text-xs text-muted-foreground mb-4">
+        Please grant camera permissions in your browser or switch to manual code entry.
+      </p>
+      <Button
+        size="sm"
+        onClick={() => setScanKey(prev => prev + 1)}
+        variant="outline"
+        className="border-rose-500/40 text-rose-600 dark:text-rose-300 hover:bg-rose-500/10 text-xs"
+      >
+        <RefreshCw className="w-3.5 h-3.5 mr-1" />
+        Retry Camera
+      </Button>
+    </div>
+  ) : (
+    <div className="relative">
+      <div
+        id={scannerId}
+        className="w-full overflow-hidden rounded-xl bg-muted border border-border"
+      />
+      {scanResult && (
+        <p className="text-center text-xs font-semibold text-emerald-600 dark:text-emerald-400 mt-3">
+          Detected: {scanResult}
+        </p>
+      )}
+    </div>
+  );
+
+  if (hideCardWrap) {
+    return scannerContent;
+  }
 
   return (
     <Card className="w-full bg-card border-border shadow-md overflow-hidden">
@@ -81,46 +136,15 @@ export default function QRScanner() {
           <Camera className="w-5 h-5" />
         </div>
         <CardTitle className="text-base font-bold text-foreground">
-          Point Camera at QR
+          {title}
         </CardTitle>
         <CardDescription className="text-xs text-muted-foreground">
-          Hold steady inside the viewfinder frame.
+          {description}
         </CardDescription>
       </CardHeader>
 
       <CardContent className="pt-2">
-        {hasCameraError ? (
-          <div className="p-6 text-center rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-600 dark:text-rose-300">
-            <AlertCircle className="w-8 h-8 text-rose-500 dark:text-rose-400 mx-auto mb-2" />
-            <h4 className="text-sm font-bold text-foreground mb-1">
-              Camera Access Required
-            </h4>
-            <p className="text-xs text-muted-foreground mb-4">
-              Please grant camera permissions in your browser or switch to manual store code entry above.
-            </p>
-            <Button
-              size="sm"
-              onClick={() => setScanKey(prev => prev + 1)}
-              variant="outline"
-              className="border-rose-500/40 text-rose-600 dark:text-rose-300 hover:bg-rose-500/10 text-xs"
-            >
-              <RefreshCw className="w-3.5 h-3.5 mr-1" />
-              Retry Camera
-            </Button>
-          </div>
-        ) : (
-          <div className="relative">
-            <div
-              id="reader"
-              className="w-full overflow-hidden rounded-xl bg-muted border border-border"
-            />
-            {scanResult && (
-              <p className="text-center text-xs font-semibold text-emerald-600 dark:text-emerald-400 mt-3">
-                Detected: {scanResult}
-              </p>
-            )}
-          </div>
-        )}
+        {scannerContent}
       </CardContent>
     </Card>
   );

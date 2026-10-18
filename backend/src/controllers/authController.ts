@@ -126,6 +126,7 @@ export const register = async (req: Request, res: Response, next: NextFunction) 
       agreedToTerms: true,
       privacyPolicyAcknowledged: true,
       acceptedAt,
+      latestAcceptedAt: acceptedAt,
       termsVersion: CURRENT_TERMS_VERSION,
       privacyPolicyVersion: CURRENT_PRIVACY_POLICY_VERSION,
       ipAddress: clientIp,

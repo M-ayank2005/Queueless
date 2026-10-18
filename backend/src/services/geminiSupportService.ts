@@ -15,12 +15,24 @@ export interface SupportChatRequest {
   requestId?: string;
 }
 
+export type SupportFailureCategory =
+  | "INVALID_CONFIG"
+  | "QUOTA_EXHAUSTED"
+  | "TIMEOUT"
+  | "MODEL_NOT_FOUND"
+  | "TEMPORARY_PROVIDER_FAILURE"
+  | "UNKNOWN";
+
 export interface SupportChatResult {
   reply: string;
   provider: "gemini" | "fallback";
   modelUsed?: string;
   suggestedEscalationEmail?: string;
+  failureCategory?: SupportFailureCategory;
+  durationMs?: number;
 }
+
+export const FALLBACK_MODEL_NAME = "gemini-flash-latest";
 
 const DEFAULT_TIMEOUT_MS = 15000;
 const MAX_HISTORY_TURNS = 6;
@@ -58,6 +70,91 @@ export const isSupportAiEnabled = (): boolean => {
 
 export const getSupportContactEmail = (): string => {
   return process.env.SUPPORT_CONTACT_EMAIL || "support@queueless.local";
+};
+
+/**
+ * Categorizes provider errors for granular internal metrics and tailored escalation.
+ */
+export const categorizeSupportError = (error: any): SupportFailureCategory => {
+  if (!error) return "UNKNOWN";
+
+  const status = error?.status || error?.statusCode || error?.response?.status;
+  const message = String(error?.message || "").toLowerCase();
+  const code = String(error?.code || "").toLowerCase();
+  const name = String(error?.name || "").toLowerCase();
+
+  // 1. Timeout / Abort
+  if (name === "aborterror" || name === "timeouterror" || message.includes("timed out") || code === "etimedout") {
+    return "TIMEOUT";
+  }
+
+  // 2. Quota / Rate limits
+  if (
+    status === 429 ||
+    message.includes("quota") ||
+    message.includes("rate limit") ||
+    message.includes("resource_exhausted") ||
+    message.includes("too many requests")
+  ) {
+    return "QUOTA_EXHAUSTED";
+  }
+
+  // 3. Model Not Found
+  if (status === 404 || message.includes("404") || message.includes("not found")) {
+    return "MODEL_NOT_FOUND";
+  }
+
+  // 4. Invalid configuration / auth
+  if (
+    (status === 400 && (message.includes("api key") || message.includes("api_key"))) ||
+    status === 401 ||
+    status === 403 ||
+    message.includes("unauthorized") ||
+    message.includes("forbidden") ||
+    message.includes("invalid argument") ||
+    message.includes("api_key_invalid")
+  ) {
+    return "INVALID_CONFIG";
+  }
+
+  // 5. Temporary provider failure / 5xx / Network connection issues
+  if (
+    (status >= 500 && status < 600) ||
+    code === "econnrefused" ||
+    code === "enotfound" ||
+    code === "econnreset" ||
+    code === "fetch failed" ||
+    message.includes("fetch failed") ||
+    message.includes("unavailable") ||
+    message.includes("bad gateway") ||
+    message.includes("internal error") ||
+    message.includes("service unavailable")
+  ) {
+    return "TEMPORARY_PROVIDER_FAILURE";
+  }
+
+  return "UNKNOWN";
+};
+
+/**
+ * Maps failure categories to polite user-facing guidance.
+ */
+export const getFailureEscalationMessage = (
+  category: SupportFailureCategory,
+  contactEmail: string
+): string => {
+  switch (category) {
+    case "QUOTA_EXHAUSTED":
+      return `QueueLess AI Support is currently experiencing exceptionally high demand. Please try asking again in a few moments or email our desk at ${contactEmail}.`;
+    case "TIMEOUT":
+      return `Your support request timed out while contacting the support engine. Please try asking again or reach out to our team at ${contactEmail}.`;
+    case "TEMPORARY_PROVIDER_FAILURE":
+      return `The AI support engine is temporarily unavailable. Please retry in a few moments or email our support desk directly at ${contactEmail}.`;
+    case "INVALID_CONFIG":
+      return `AI Support service configuration is currently under administrative maintenance. For prompt assistance, please email our support desk at ${contactEmail}.`;
+    default:
+      return `I'm having trouble connecting to the QueueLess support engine at this moment. You can try refreshing or ask again in a few moments. If your issue is urgent, please email our support desk at ${contactEmail}.`;
+  }
 };
 
 /**
@@ -144,14 +241,79 @@ export const cleanAiReply = (text: string): string => {
 };
 
 /**
+ * Executes a chat turn with timeout cleanup and AbortController cancellation.
+ * Guarantees that the timer is cleared in a finally block so abandoned timers
+ * never linger in the Node.js event loop.
+ */
+async function executeChatTurnWithTimeout(
+  genAI: GoogleGenerativeAI,
+  modelName: string,
+  systemInstruction: string,
+  history: any[],
+  message: string,
+  timeoutMs: number = DEFAULT_TIMEOUT_MS
+): Promise<string> {
+  const abortController = new AbortController();
+  let timerHandle: NodeJS.Timeout | null = null;
+
+  try {
+    const model = genAI.getGenerativeModel(
+      {
+        model: modelName,
+        systemInstruction: {
+          role: "system",
+          parts: [{ text: systemInstruction }]
+        },
+        generationConfig: {
+          maxOutputTokens: 1024,
+          temperature: 0.6
+        }
+      },
+      {
+        timeout: timeoutMs
+      }
+    );
+
+    const chatSession = model.startChat({
+      history
+    });
+
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timerHandle = setTimeout(() => {
+        try {
+          abortController.abort();
+        } catch {}
+        const timeoutErr = new Error("Gemini API request timed out");
+        (timeoutErr as any).name = "TimeoutError";
+        reject(timeoutErr);
+      }, timeoutMs);
+    });
+
+    const sendPromise = chatSession.sendMessage(message, {
+      signal: abortController.signal,
+      timeout: timeoutMs
+    });
+    const result = await Promise.race([sendPromise, timeoutPromise]);
+    return result.response.text();
+  } finally {
+    if (timerHandle) {
+      clearTimeout(timerHandle);
+      timerHandle = null;
+    }
+  }
+}
+
+/**
  * Executes a support chat conversation with the Gemini API, protected by timeouts,
- * rate-limiting, bounded history, and graceful degradation.
+ * timer cleanup in finally, AbortController cancellation, bounded history,
+ * fallback model retry, and structured error categorization.
  */
 export const executeSupportChat = async (
   request: SupportChatRequest
 ): Promise<SupportChatResult> => {
   const { message, history = [], context, requestId } = request;
   const contactEmail = getSupportContactEmail();
+  const startTime = Date.now();
 
   // 1. Sanitize user message
   const cleanMessage = (message || "").trim().slice(0, MAX_MESSAGE_CHARS);
@@ -162,19 +324,20 @@ export const executeSupportChat = async (
   // 2. Check if AI support is enabled and API key is present
   const apiKey = getGeminiApiKey();
   if (!apiKey || !isSupportAiEnabled()) {
-    logger.warn(`[SupportAI] Gemini API Key missing or SUPPORT_AI_ENABLED=false. Serving safe fallback.`, { requestId });
+    logger.warn(`[SupportAI] Gemini API Key missing or SUPPORT_AI_ENABLED=false. Serving safe fallback.`, {
+      requestId,
+      failureCategory: "INVALID_CONFIG"
+    });
     return {
       reply: `QueueLess AI Support is currently in offline maintenance mode. For immediate assistance with your tickets or account, please contact our human support team at ${contactEmail}.`,
       provider: "fallback",
-      suggestedEscalationEmail: contactEmail
+      suggestedEscalationEmail: contactEmail,
+      failureCategory: "INVALID_CONFIG",
+      durationMs: Date.now() - startTime
     };
   }
 
   // 3. Format, validate, and bound conversation history
-  // CRITICAL: Google Gemini startChat requires:
-  // - First message MUST have role 'user'
-  // - Turns must alternate user -> model -> user -> model
-  // - Trailing message cannot be 'user' since the new message is appended as user
   const rawHistory = history
     .filter((h) => h && typeof h.content === "string" && h.content.trim().length > 0)
     .map((h) => ({
@@ -201,94 +364,115 @@ export const executeSupportChat = async (
   }
 
   const sanitizedHistory = alternatingHistory.slice(-MAX_HISTORY_TURNS);
-
-  const modelName = getGeminiModelName();
+  const primaryModel = getGeminiModelName();
+  const fallbackModel = FALLBACK_MODEL_NAME;
   const systemInstruction = buildPromptWithContext(context);
+  const genAI = new GoogleGenerativeAI(apiKey);
+
+  let activeModelUsed = primaryModel;
 
   try {
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({
-      model: modelName,
-      systemInstruction: {
-        role: "system",
-        parts: [{ text: systemInstruction }]
-      },
-      generationConfig: {
-        maxOutputTokens: 1024,
-        temperature: 0.6
-      }
-    });
-
-    const chatSession = model.startChat({
-      history: sanitizedHistory
-    });
-
-    // 4. Execute with strict timeout safeguard
-    const sendPromise = chatSession.sendMessage(cleanMessage);
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(() => reject(new Error("Gemini API request timed out")), DEFAULT_TIMEOUT_MS);
-    });
-
-    const startTime = Date.now();
-    const result = await Promise.race([sendPromise, timeoutPromise]);
+    const rawText = await executeChatTurnWithTimeout(
+      genAI,
+      primaryModel,
+      systemInstruction,
+      sanitizedHistory,
+      cleanMessage,
+      DEFAULT_TIMEOUT_MS
+    );
     const durationMs = Date.now() - startTime;
-    const responseText = result.response.text();
+
     logger.info(`[SupportAI] Gemini response generated successfully in ${durationMs}ms`, {
       requestId,
-      model: modelName
+      model: primaryModel,
+      durationMs
     });
 
     return {
-      reply: cleanAiReply(responseText),
+      reply: cleanAiReply(rawText),
       provider: "gemini",
-      modelUsed: modelName,
-      suggestedEscalationEmail: contactEmail
+      modelUsed: primaryModel,
+      suggestedEscalationEmail: contactEmail,
+      durationMs
     };
-  } catch (error: any) {
-    const isNotFound = error?.status === 404 || String(error?.message || "").includes("404") || String(error?.message || "").toLowerCase().includes("not found");
-    if (isNotFound && modelName !== "gemini-flash-latest") {
-      logger.warn(`[SupportAI] Model ${modelName} returned 404/not found. Retrying with gemini-flash-latest...`, { requestId });
+  } catch (primaryError: any) {
+    const primaryCategory = categorizeSupportError(primaryError);
+
+    // If 404 / model not found on primary, attempt verified fallback model
+    if (primaryCategory === "MODEL_NOT_FOUND" && primaryModel !== fallbackModel) {
+      logger.warn(`[SupportAI] Primary model ${primaryModel} returned 404/not-found. Retrying with fallback model ${fallbackModel}...`, {
+        requestId,
+        primaryModel,
+        fallbackModel
+      });
+
       try {
-        const genAI = new GoogleGenerativeAI(apiKey);
-        const fallbackModel = genAI.getGenerativeModel({
-          model: "gemini-flash-latest",
-          systemInstruction: {
-            role: "system",
-            parts: [{ text: systemInstruction }]
-          },
-          generationConfig: {
-            maxOutputTokens: 1024,
-            temperature: 0.6
-          }
+        activeModelUsed = fallbackModel;
+        const fallbackText = await executeChatTurnWithTimeout(
+          genAI,
+          fallbackModel,
+          systemInstruction,
+          sanitizedHistory,
+          cleanMessage,
+          DEFAULT_TIMEOUT_MS
+        );
+        const durationMs = Date.now() - startTime;
+
+        logger.info(`[SupportAI] Fallback model ${fallbackModel} responded successfully in ${durationMs}ms`, {
+          requestId,
+          model: fallbackModel,
+          durationMs
         });
-        const chatSession = fallbackModel.startChat({ history: sanitizedHistory });
-        const sendPromise = chatSession.sendMessage(cleanMessage);
-        const timeoutPromise = new Promise<never>((_, reject) => {
-          setTimeout(() => reject(new Error("Gemini API request timed out")), DEFAULT_TIMEOUT_MS);
-        });
-        const result = await Promise.race([sendPromise, timeoutPromise]);
-        const responseText = result.response.text();
+
         return {
-          reply: cleanAiReply(responseText),
+          reply: cleanAiReply(fallbackText),
           provider: "gemini",
-          modelUsed: "gemini-flash-latest",
-          suggestedEscalationEmail: contactEmail
+          modelUsed: fallbackModel,
+          suggestedEscalationEmail: contactEmail,
+          durationMs
         };
-      } catch (retryErr: any) {
-        logger.error(`[SupportAI] Fallback model gemini-flash-latest also failed: ${retryErr?.message || retryErr}`, { requestId });
+      } catch (fallbackError: any) {
+        const fallbackCategory = categorizeSupportError(fallbackError);
+        const durationMs = Date.now() - startTime;
+
+        logger.error(`[SupportAI] Both primary (${primaryModel}) and fallback (${fallbackModel}) models failed`, {
+          requestId,
+          primaryCategory,
+          fallbackCategory,
+          primaryError: primaryError?.message || primaryError,
+          fallbackError: fallbackError?.message || fallbackError,
+          durationMs
+        });
+
+        return {
+          reply: getFailureEscalationMessage(fallbackCategory, contactEmail),
+          provider: "fallback",
+          modelUsed: activeModelUsed,
+          suggestedEscalationEmail: contactEmail,
+          failureCategory: fallbackCategory,
+          durationMs
+        };
       }
     }
 
-    logger.error(`[SupportAI] Gemini provider error: ${error?.message || error}`, {
+    // Direct failure (e.g. quota, timeout, bad config, or provider unavailable)
+    const durationMs = Date.now() - startTime;
+    logger.error(`[SupportAI] Gemini support inquiry failed`, {
       requestId,
-      errorCode: error?.status || error?.code
+      failureCategory: primaryCategory,
+      errorCode: primaryError?.status || primaryError?.code,
+      model: primaryModel,
+      durationMs,
+      errorMessage: primaryError?.message || String(primaryError)
     });
 
-    // Graceful error recovery: Return friendly advice and escalation rather than a raw 500 crash
     return {
-      reply: `I'm having trouble connecting to the QueueLess support engine at this moment. You can try refreshing or ask again in a few moments. If your issue is urgent, please email our support desk at ${contactEmail}.`,
+      reply: getFailureEscalationMessage(primaryCategory, contactEmail),
       provider: "fallback",
-      suggestedEscalationEmail: contactEmail
+      modelUsed: primaryModel,
+      suggestedEscalationEmail: contactEmail,
+      failureCategory: primaryCategory,
+      durationMs
     };
   }
 };

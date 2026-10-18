@@ -7,7 +7,15 @@ import QueueEntry from "../models/QueueEntry";
 import { getJwtSecret } from "../middleware/authMiddleware";
 import { getSupportSystemPrompt } from "../services/knowledgeService";
 import { buildPersonalSupportContext } from "../services/supportContextService";
-import { buildPromptWithContext, executeSupportChat } from "../services/geminiSupportService";
+import {
+  buildPromptWithContext,
+  executeSupportChat,
+  categorizeSupportError,
+  getFailureEscalationMessage,
+  getGeminiModelName,
+  normalizeModelName,
+  FALLBACK_MODEL_NAME
+} from "../services/geminiSupportService";
 
 describe("QueueLess Phase 2 — Legal Consent & AI Support Security", () => {
   const customerAId = new Types.ObjectId();
@@ -215,9 +223,11 @@ describe("QueueLess Phase 2 — Legal Consent & AI Support Security", () => {
       expect(res.body.user.legalConsent.privacyPolicyAcknowledged).toBe(true);
       expect(res.body.user.legalConsent.termsVersion).toBe(CURRENT_TERMS_VERSION);
       expect(res.body.user.legalConsent.privacyPolicyVersion).toBe(CURRENT_PRIVACY_POLICY_VERSION);
+      expect(res.body.user.legalConsent.latestAcceptedAt).toBeDefined();
 
       const recordedDate = new Date(res.body.user.legalConsent.acceptedAt);
       expect(recordedDate.getTime()).toBeGreaterThanOrEqual(beforeSubmit.getTime() - 2000);
+      expect(new Date(res.body.user.legalConsent.latestAcceptedAt).getTime()).toBe(recordedDate.getTime());
 
       saveSpy.mockRestore();
     });
@@ -461,6 +471,120 @@ describe("QueueLess Phase 2 — Legal Consent & AI Support Security", () => {
       expect(res.body.legalVersions).toBeDefined();
       expect(res.body.legalVersions.termsVersion).toBe(CURRENT_TERMS_VERSION);
       expect(res.body.legalVersions.privacyPolicyVersion).toBe(CURRENT_PRIVACY_POLICY_VERSION);
+    });
+  });
+
+  // ============================================================================
+  // 4. GEMINI SUPPORT FALLBACK, TIMEOUT & ERROR CATEGORIZATION
+  // ============================================================================
+  describe("Gemini Support Fallback, Timeout & Error Categorization", () => {
+    describe("categorizeSupportError", () => {
+      it("should categorize timeout and abort errors as TIMEOUT", () => {
+        expect(categorizeSupportError({ name: "TimeoutError", message: "Request timed out" })).toBe("TIMEOUT");
+        expect(categorizeSupportError({ name: "AbortError", message: "The operation was aborted" })).toBe("TIMEOUT");
+        expect(categorizeSupportError({ message: "Gemini API request timed out after 15000ms" })).toBe("TIMEOUT");
+        expect(categorizeSupportError({ code: "ETIMEDOUT" })).toBe("TIMEOUT");
+      });
+
+      it("should categorize 429 and rate-limiting errors as QUOTA_EXHAUSTED", () => {
+        expect(categorizeSupportError({ status: 429, message: "Too Many Requests" })).toBe("QUOTA_EXHAUSTED");
+        expect(categorizeSupportError({ statusCode: 429 })).toBe("QUOTA_EXHAUSTED");
+        expect(categorizeSupportError({ message: "Resource has been exhausted (e.g. check quota)." })).toBe("QUOTA_EXHAUSTED");
+        expect(categorizeSupportError({ message: "Rate limit reached for requests per minute" })).toBe("QUOTA_EXHAUSTED");
+      });
+
+      it("should categorize 404 errors as MODEL_NOT_FOUND", () => {
+        expect(categorizeSupportError({ status: 404, message: "models/gemini-1.5-flash is not found for API version v1beta" })).toBe("MODEL_NOT_FOUND");
+        expect(categorizeSupportError({ response: { status: 404 } })).toBe("MODEL_NOT_FOUND");
+      });
+
+      it("should categorize bad credentials and auth errors as INVALID_CONFIG", () => {
+        expect(categorizeSupportError({ status: 400, message: "API key not valid. Please pass a valid API key." })).toBe("INVALID_CONFIG");
+        expect(categorizeSupportError({ status: 401, message: "Unauthorized" })).toBe("INVALID_CONFIG");
+        expect(categorizeSupportError({ status: 403, message: "Forbidden: Caller does not have permission" })).toBe("INVALID_CONFIG");
+        expect(categorizeSupportError({ message: "API_KEY_INVALID: Key was revoked" })).toBe("INVALID_CONFIG");
+      });
+
+      it("should categorize 5xx and network drop errors as TEMPORARY_PROVIDER_FAILURE", () => {
+        expect(categorizeSupportError({ status: 500, message: "Internal server error" })).toBe("TEMPORARY_PROVIDER_FAILURE");
+        expect(categorizeSupportError({ status: 503, message: "The service is temporarily unavailable" })).toBe("TEMPORARY_PROVIDER_FAILURE");
+        expect(categorizeSupportError({ code: "ECONNREFUSED" })).toBe("TEMPORARY_PROVIDER_FAILURE");
+        expect(categorizeSupportError({ code: "ENOTFOUND" })).toBe("TEMPORARY_PROVIDER_FAILURE");
+        expect(categorizeSupportError({ message: "fetch failed" })).toBe("TEMPORARY_PROVIDER_FAILURE");
+      });
+
+      it("should return UNKNOWN for unrecognized errors or empty values", () => {
+        expect(categorizeSupportError(null)).toBe("UNKNOWN");
+        expect(categorizeSupportError(undefined)).toBe("UNKNOWN");
+        expect(categorizeSupportError(new Error("Random syntax issue in client code"))).toBe("UNKNOWN");
+      });
+    });
+
+    describe("getFailureEscalationMessage", () => {
+      const email = "support@queueless.local";
+
+      it("should produce clear, category-specific escalation text containing the contact email", () => {
+        const quotaMsg = getFailureEscalationMessage("QUOTA_EXHAUSTED", email);
+        expect(quotaMsg).toContain("high demand");
+        expect(quotaMsg).toContain(email);
+
+        const timeoutMsg = getFailureEscalationMessage("TIMEOUT", email);
+        expect(timeoutMsg).toContain("timed out");
+        expect(timeoutMsg).toContain(email);
+
+        const tempMsg = getFailureEscalationMessage("TEMPORARY_PROVIDER_FAILURE", email);
+        expect(tempMsg).toContain("temporarily unavailable");
+        expect(tempMsg).toContain(email);
+
+        const configMsg = getFailureEscalationMessage("INVALID_CONFIG", email);
+        expect(configMsg).toContain("administrative maintenance");
+        expect(configMsg).toContain(email);
+
+        const unknownMsg = getFailureEscalationMessage("UNKNOWN", email);
+        expect(unknownMsg).toContain("having trouble connecting");
+        expect(unknownMsg).toContain(email);
+      });
+    });
+
+    describe("Model Configuration & Fallback Verification", () => {
+      it("should normalize legacy/obsolete model names to gemini-3.8-flash", () => {
+        expect(normalizeModelName("gemini-1.5-flash")).toBe("gemini-3.8-flash");
+        expect(normalizeModelName("gemini-1.5-pro")).toBe("gemini-3.8-flash");
+        expect(normalizeModelName("gemini-2.0-flash")).toBe("gemini-3.8-flash");
+        expect(normalizeModelName("gemini-2.5-flash")).toBe("gemini-3.8-flash");
+        expect(normalizeModelName("")).toBe("gemini-3.8-flash");
+        expect(normalizeModelName(undefined)).toBe("gemini-3.8-flash");
+        expect(normalizeModelName("gemini-3.8-flash")).toBe("gemini-3.8-flash");
+        expect(normalizeModelName("custom-gemini-preview")).toBe("custom-gemini-preview");
+      });
+
+      it("should define a valid fallback model name", () => {
+        expect(FALLBACK_MODEL_NAME).toBe("gemini-flash-latest");
+      });
+
+      it("should verify primary model and fallback model against provider API if key is present", async () => {
+        const apiKey = process.env.GEMINI_API_KEY;
+        if (!apiKey) {
+          return;
+        }
+
+        const primary = getGeminiModelName();
+        expect(primary).toBe("gemini-3.8-flash");
+        expect(FALLBACK_MODEL_NAME).toBe("gemini-flash-latest");
+
+        const result = await executeSupportChat({
+          message: "Hello",
+          context: {
+            role: "customer",
+            userName: "Alice"
+          }
+        });
+
+        expect(result).toBeDefined();
+        expect(result.reply).toBeDefined();
+        expect(result.reply.length).toBeGreaterThan(0);
+        expect(["gemini", "fallback"]).toContain(result.provider);
+      }, 30000);
     });
   });
 });

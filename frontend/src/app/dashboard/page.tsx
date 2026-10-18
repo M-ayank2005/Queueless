@@ -38,13 +38,16 @@ import {
   Flame,
   RefreshCw,
   ShieldCheck,
-  MessageSquare
+  MessageSquare,
+  Camera,
+  Keyboard
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { QRCodeSVG as QRCode } from "qrcode.react";
 import { Label } from "@/components/ui/label";
 import { io, Socket } from "socket.io-client";
 import { useAuth } from "@/context/AuthContext";
+import QRScanner from "@/components/QRScanner";
 
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -153,6 +156,8 @@ export default function Dashboard() {
 
   // Ticket Inspection & Verification States
   const [selectedTicket, setSelectedTicket] = useState<QueueItem | null>(null);
+  const [targetTicketForVerification, setTargetTicketForVerification] = useState<QueueItem | null>(null);
+  const [isManualInputMode, setIsManualInputMode] = useState(false);
   const [isTicketModalOpen, setIsTicketModalOpen] = useState(false);
   const [isVerifyModalOpen, setIsVerifyModalOpen] = useState(false);
   const [verifyInput, setVerifyInput] = useState("");
@@ -162,6 +167,14 @@ export default function Dashboard() {
     message: string;
     ticket?: any;
   } | null>(null);
+
+  const openVerifyModalForTicket = (ticket?: QueueItem | null) => {
+    setTargetTicketForVerification(ticket || null);
+    setIsManualInputMode(false); // Default to primary camera QR scanner
+    setVerificationResult(null);
+    setVerifyInput("");
+    setIsVerifyModalOpen(true);
+  };
 
   const socketRef = useRef<Socket | null>(null);
 
@@ -200,6 +213,7 @@ export default function Dashboard() {
         setIsSettingsOpen(false);
         setIsTicketModalOpen(false);
         setIsVerifyModalOpen(false);
+        setTargetTicketForVerification(null);
       }
     };
     if (isQrModalOpen || isSettingsOpen || isTicketModalOpen || isVerifyModalOpen) {
@@ -353,19 +367,32 @@ export default function Dashboard() {
     }
     setIsVerifying(true);
     try {
-      const res = await api.post("/business/queue/verify", {
-        ticketId: ticketIdOrToken.trim(),
-        token: ticketIdOrToken.trim()
-      });
+      const cleanInput = ticketIdOrToken.trim();
+      const payload: { ticketId?: string; token?: string } = {
+        token: cleanInput
+      };
+      if (targetTicketForVerification) {
+        payload.ticketId = targetTicketForVerification._id;
+      } else {
+        payload.ticketId = cleanInput;
+      }
+
+      const res = await api.post("/business/queue/verify", payload);
+      const verifiedTicket = res.data.ticket;
+
       setVerificationResult({
         success: true,
         message: res.data.message || "Customer verified successfully",
-        ticket: res.data.ticket
+        ticket: verifiedTicket
       });
       toast.success("Customer ticket verified at counter!");
       await fetchQueueOnly();
-      if (selectedTicket && res.data.ticket && selectedTicket._id === res.data.ticket._id) {
-        setSelectedTicket(res.data.ticket);
+
+      if (selectedTicket && verifiedTicket && selectedTicket._id === verifiedTicket._id) {
+        setSelectedTicket(verifiedTicket);
+      }
+      if (targetTicketForVerification && verifiedTicket && targetTicketForVerification._id === verifiedTicket._id) {
+        setTargetTicketForVerification(verifiedTicket);
       }
     } catch (err: any) {
       const msg = err.response?.data?.message || "Failed to verify customer ticket";
@@ -377,6 +404,11 @@ export default function Dashboard() {
     } finally {
       setIsVerifying(false);
     }
+  };
+
+  const handleScanFromCamera = async (decodedText: string) => {
+    if (!decodedText || isVerifying) return;
+    await handleVerifyTicket(decodedText);
   };
 
   const handleVerifySelectedTicket = async () => {
@@ -678,11 +710,7 @@ export default function Dashboard() {
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => {
-                        setVerificationResult(null);
-                        setVerifyInput("");
-                        setIsVerifyModalOpen(true);
-                      }}
+                      onClick={() => openVerifyModalForTicket(null)}
                       className="border-primary/30 hover:bg-primary/10 text-primary text-xs flex items-center gap-1.5"
                     >
                       <ShieldCheck className="w-3.5 h-3.5" />
@@ -770,17 +798,34 @@ export default function Dashboard() {
                             onClick={(e) => e.stopPropagation()}
                           >
                             {isWaiting && (
-                              <Button
-                                size="sm"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleUpdateStatus(item._id, "in_progress");
-                                }}
-                                className="bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold flex items-center gap-1.5 shadow-sm"
-                              >
-                                <Play className="w-3.5 h-3.5 fill-current" />
-                                Call Customer
-                              </Button>
+                              <>
+                                {!isVerified && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      openVerifyModalForTicket(item);
+                                    }}
+                                    className="border-emerald-500/40 hover:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-semibold flex items-center gap-1.5 shadow-sm"
+                                    title="Scan Customer Ticket QR"
+                                  >
+                                    <QrCode className="w-3.5 h-3.5" />
+                                    Scan QR
+                                  </Button>
+                                )}
+                                <Button
+                                  size="sm"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleUpdateStatus(item._id, "in_progress");
+                                  }}
+                                  className="bg-primary hover:bg-primary/90 text-primary-foreground text-xs font-semibold flex items-center gap-1.5 shadow-sm"
+                                >
+                                  <Play className="w-3.5 h-3.5 fill-current" />
+                                  Call Customer
+                                </Button>
+                              </>
                             )}
 
                             {isInProgress && (
@@ -1930,28 +1975,65 @@ export default function Dashboard() {
                 </div>
 
                 {/* Verification Action / Status */}
-                <div className="p-3 rounded-xl border border-dashed border-border flex items-center justify-between gap-3">
-                  <div className="text-xs">
-                    <p className="font-semibold text-foreground">Counter Verification</p>
-                    <p className="text-muted-foreground text-[11px]">
-                      {selectedTicket.verifiedAt 
-                        ? `Verified at ${new Date(selectedTicket.verifiedAt).toLocaleTimeString()}`
-                        : "Customer has not yet presented ticket QR code"}
-                    </p>
+                {(selectedTicket.status === "completed" || selectedTicket.status === "cancelled") ? (
+                  selectedTicket.verifiedAt ? (
+                    <div className="p-3 rounded-xl border border-emerald-500/20 bg-emerald-500/5 flex items-center justify-between gap-3">
+                      <div className="text-xs">
+                        <p className="font-semibold text-foreground flex items-center gap-1.5">
+                          <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" />
+                          Verified at Counter
+                        </p>
+                        <p className="text-muted-foreground text-[11px]">
+                          Verified at {new Date(selectedTicket.verifiedAt).toLocaleTimeString()}
+                        </p>
+                      </div>
+                      <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                        Verified
+                      </span>
+                    </div>
+                  ) : null
+                ) : (
+                  <div className="p-3 rounded-xl border border-dashed border-border flex items-center justify-between gap-3">
+                    <div className="text-xs">
+                      <p className="font-semibold text-foreground">Counter Verification</p>
+                      <p className="text-muted-foreground text-[11px]">
+                        {selectedTicket.verifiedAt 
+                          ? `Verified at ${new Date(selectedTicket.verifiedAt).toLocaleTimeString()}`
+                          : "Customer has not yet presented ticket QR code"}
+                      </p>
+                    </div>
+                    {!selectedTicket.verifiedAt ? (
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setIsTicketModalOpen(false);
+                            openVerifyModalForTicket(selectedTicket);
+                          }}
+                          className="border-emerald-500/40 hover:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-semibold flex items-center gap-1.5"
+                        >
+                          <QrCode className="w-3.5 h-3.5" />
+                          Scan QR
+                        </Button>
+                        <LoadingButton
+                          size="sm"
+                          loading={isVerifying}
+                          loadingText="Verifying..."
+                          onClick={handleVerifySelectedTicket}
+                          className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5"
+                        >
+                          <ShieldCheck className="w-3.5 h-3.5" />
+                          Verify
+                        </LoadingButton>
+                      </div>
+                    ) : (
+                      <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                        Verified
+                      </span>
+                    )}
                   </div>
-                  {!selectedTicket.verifiedAt && (
-                    <LoadingButton
-                      size="sm"
-                      loading={isVerifying}
-                      loadingText="Verifying..."
-                      onClick={handleVerifySelectedTicket}
-                      className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5"
-                    >
-                      <ShieldCheck className="w-3.5 h-3.5" />
-                      Verify Now
-                    </LoadingButton>
-                  )}
-                </div>
+                )}
               </div>
 
               {/* Status Action Controls */}
@@ -2009,7 +2091,7 @@ export default function Dashboard() {
         )}
       </AnimatePresence>
 
-      {/* Counter Verification Modal */}
+      {/* Counter Verification Modal with Live QR Camera Scanner & Manual Fallback */}
       <AnimatePresence>
         {isVerifyModalOpen && (
           <motion.div
@@ -2023,11 +2105,12 @@ export default function Dashboard() {
               initial={{ scale: 0.95, opacity: 0, y: 10 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
               exit={{ scale: 0.95, opacity: 0, y: 10 }}
-              className="relative w-full max-w-md bg-card border border-border rounded-2xl p-6 shadow-2xl"
+              className="relative w-full max-w-md bg-card border border-border rounded-2xl p-6 shadow-2xl max-h-[90vh] overflow-y-auto"
             >
               <button
                 onClick={() => {
                   setIsVerifyModalOpen(false);
+                  setTargetTicketForVerification(null);
                   setVerificationResult(null);
                   setVerifyInput("");
                 }}
@@ -2051,84 +2134,165 @@ export default function Dashboard() {
                 </div>
               </div>
 
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  handleVerifyTicket(verifyInput);
-                }}
-                className="space-y-4"
-              >
-                <div>
-                  <Label htmlFor="verify-token-input" className="text-xs font-semibold text-foreground">
-                    Ticket Code / QR Payload
-                  </Label>
-                  <div className="mt-1.5 flex gap-2">
-                    <Input
-                      id="verify-token-input"
-                      type="text"
-                      placeholder="e.g. ql-ticket:... or #ABCD or 68f..."
-                      value={verifyInput}
-                      onChange={(e) => setVerifyInput(e.target.value)}
-                      className="bg-background border-border text-foreground font-mono text-xs"
-                      autoFocus
-                    />
-                    <LoadingButton
-                      type="submit"
-                      loading={isVerifying}
-                      loadingText="Verifying..."
-                      className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs px-4 shrink-0"
-                    >
-                      Verify
-                    </LoadingButton>
+              {/* Target Ticket Banner if opened for a specific ticket */}
+              {targetTicketForVerification && (
+                <div className="mb-4 p-2.5 rounded-xl bg-primary/10 border border-primary/25 flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="w-4 h-4 text-primary shrink-0" />
+                    <span className="text-foreground">
+                      Verifying for: <strong className="font-semibold">{targetTicketForVerification.customerId?.name || targetTicketForVerification.customerName || "Customer"}</strong> (Ticket #{targetTicketForVerification._id.slice(-4).toUpperCase()})
+                    </span>
                   </div>
-                  <p className="text-[11px] text-muted-foreground mt-1">
-                    Accepts the scanned payload from the customer's live status QR code or ticket number.
+                  <span className="text-[10px] uppercase font-mono font-bold text-primary px-1.5 py-0.5 rounded bg-primary/15">
+                    {targetTicketForVerification.status}
+                  </span>
+                </div>
+              )}
+
+              {/* Scanner Mode Toggle Tabs */}
+              <div className="flex rounded-xl bg-muted p-1 mb-4 border border-border">
+                <button
+                  type="button"
+                  onClick={() => setIsManualInputMode(false)}
+                  className={`flex-1 py-1.5 text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 transition-all ${
+                    !isManualInputMode
+                      ? "bg-card text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <Camera className="w-3.5 h-3.5" />
+                  Camera Scanner
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsManualInputMode(true)}
+                  className={`flex-1 py-1.5 text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 transition-all ${
+                    isManualInputMode
+                      ? "bg-card text-foreground shadow-sm"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <Keyboard className="w-3.5 h-3.5" />
+                  Manual Code
+                </button>
+              </div>
+
+              {/* Mode 1: Live QR Camera Scanner (Primary) */}
+              {!isManualInputMode ? (
+                <div className="space-y-3">
+                  <div className="overflow-hidden rounded-xl border border-border bg-black/5 dark:bg-black/30">
+                    <QRScanner
+                      onScan={handleScanFromCamera}
+                      scannerId="dashboard-ticket-scanner"
+                      hideCardWrap={true}
+                    />
+                  </div>
+                  <p className="text-center text-[11px] text-muted-foreground">
+                    {isVerifying ? "Verifying scanned ticket with server..." : "Align customer's ticket QR code within the camera frame."}
                   </p>
                 </div>
+              ) : (
+                /* Mode 2: Manual Code Input (Fallback) */
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    handleVerifyTicket(verifyInput);
+                  }}
+                  className="space-y-3"
+                >
+                  <div>
+                    <Label htmlFor="verify-token-input" className="text-xs font-semibold text-foreground">
+                      Ticket Code / QR Payload
+                    </Label>
+                    <div className="mt-1.5 flex gap-2">
+                      <Input
+                        id="verify-token-input"
+                        type="text"
+                        placeholder="e.g. ql-ticket:... or #ABCD or 68f..."
+                        value={verifyInput}
+                        onChange={(e) => setVerifyInput(e.target.value)}
+                        className="bg-background border-border text-foreground font-mono text-xs"
+                        autoFocus
+                      />
+                      <LoadingButton
+                        type="submit"
+                        loading={isVerifying}
+                        loadingText="Verifying..."
+                        className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs px-4 shrink-0"
+                      >
+                        Verify
+                      </LoadingButton>
+                    </div>
+                    <p className="text-[11px] text-muted-foreground mt-1">
+                      Enter the 6-character Ticket ID or token string shown on customer's phone.
+                    </p>
+                  </div>
+                </form>
+              )}
 
-                {verificationResult && (
-                  <div
-                    className={`p-3.5 rounded-xl border text-xs ${
-                      verificationResult.success
-                        ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
-                        : "bg-red-500/10 border-red-500/30 text-red-600 dark:text-red-400"
-                    }`}
-                  >
-                    <div className="flex items-start gap-2">
-                      {verificationResult.success ? (
-                        <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-emerald-600 dark:text-emerald-400" />
-                      ) : (
-                        <XCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-600 dark:text-red-400" />
+              {/* Verification Result Feedback */}
+              {verificationResult && (
+                <div
+                  className={`mt-4 p-3.5 rounded-xl border text-xs ${
+                    verificationResult.success
+                      ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
+                      : "bg-red-500/10 border-red-500/30 text-red-600 dark:text-red-400"
+                  }`}
+                >
+                  <div className="flex items-start gap-2">
+                    {verificationResult.success ? (
+                      <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5 text-emerald-600 dark:text-emerald-400" />
+                    ) : (
+                      <XCircle className="w-4 h-4 shrink-0 mt-0.5 text-red-600 dark:text-red-400" />
+                    )}
+                    <div className="flex-1">
+                      <p className="font-semibold">{verificationResult.message}</p>
+                      {verificationResult.ticket && (
+                        <div className="mt-2 pt-2 border-t border-emerald-500/20 text-foreground font-sans space-y-1">
+                          <p><strong>Customer:</strong> {verificationResult.ticket.customerId?.name || verificationResult.ticket.customerName || "Customer"}</p>
+                          <p><strong>Ticket:</strong> #{verificationResult.ticket._id?.slice(-4).toUpperCase()}</p>
+                          <p><strong>Services:</strong> {verificationResult.ticket.selectedServices?.map((s: any) => `${s.name}${s.quantity > 1 ? ` (×${s.quantity})` : ""}`).join(", ")}</p>
+
+                          {verificationResult.ticket.status === "waiting" && (
+                            <div className="pt-2">
+                              <Button
+                                size="sm"
+                                onClick={async () => {
+                                  await handleUpdateStatus(verificationResult.ticket._id, "in_progress");
+                                  setIsVerifyModalOpen(false);
+                                  setTargetTicketForVerification(null);
+                                  setVerificationResult(null);
+                                  setVerifyInput("");
+                                }}
+                                className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-xs py-2 flex items-center justify-center gap-1.5"
+                              >
+                                <Play className="w-3.5 h-3.5 fill-current" />
+                                Start Customer Service Now
+                              </Button>
+                            </div>
+                          )}
+                        </div>
                       )}
-                      <div className="flex-1">
-                        <p className="font-semibold">{verificationResult.message}</p>
-                        {verificationResult.ticket && (
-                          <div className="mt-2 pt-2 border-t border-emerald-500/20 text-foreground font-sans space-y-0.5">
-                            <p><strong>Customer:</strong> {verificationResult.ticket.customerId?.name || verificationResult.ticket.customerName || "Customer"}</p>
-                            <p><strong>Ticket:</strong> #{verificationResult.ticket._id?.slice(-4).toUpperCase()}</p>
-                            <p><strong>Services:</strong> {verificationResult.ticket.selectedServices?.map((s: any) => `${s.name}${s.quantity > 1 ? ` (×${s.quantity})` : ""}`).join(", ")}</p>
-                          </div>
-                        )}
-                      </div>
                     </div>
                   </div>
-                )}
-
-                <div className="flex items-center justify-end gap-2 pt-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => {
-                      setIsVerifyModalOpen(false);
-                      setVerificationResult(null);
-                      setVerifyInput("");
-                    }}
-                    className="text-xs"
-                  >
-                    Done
-                  </Button>
                 </div>
-              </form>
+              )}
+
+              <div className="flex items-center justify-end gap-2 pt-3 border-t border-border mt-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setIsVerifyModalOpen(false);
+                    setTargetTicketForVerification(null);
+                    setVerificationResult(null);
+                    setVerifyInput("");
+                  }}
+                  className="text-xs"
+                >
+                  Close
+                </Button>
+              </div>
             </motion.div>
           </motion.div>
         )}
