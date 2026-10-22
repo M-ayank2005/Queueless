@@ -74,6 +74,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     width: '100%',
+    alignSelf: 'center',
   },
   iconCircle: {
     width: 72, // 72px circle

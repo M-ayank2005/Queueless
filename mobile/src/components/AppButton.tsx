@@ -185,6 +185,8 @@ const styles = StyleSheet.create({
   },
   fitContent: {
     alignSelf: 'center',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   pressable: {
     width: '100%',
