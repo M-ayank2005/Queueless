@@ -132,9 +132,10 @@ export default function AppButton({
   return (
     <Animated.View
       style={[
-        fullWidth && styles.fullWidth,
+        fullWidth ? styles.fullWidth : styles.fitContent,
         isPrimary && shadows.primaryButton,
         { transform: [{ scale }] },
+        style,
       ]}
     >
       <Pressable
@@ -146,7 +147,6 @@ export default function AppButton({
           styles.pressable,
           { height: heights },
           (disabled || loading) && styles.disabled,
-          style,
         ]}
       >
         {isPrimary ? (
@@ -182,6 +182,9 @@ export default function AppButton({
 const styles = StyleSheet.create({
   fullWidth: {
     width: '100%',
+  },
+  fitContent: {
+    alignSelf: 'center',
   },
   pressable: {
     width: '100%',

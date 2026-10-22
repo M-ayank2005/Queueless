@@ -58,6 +58,8 @@ export default function EmptyState({
             icon={actionIcon}
             size="md"
             variant="primary"
+            fullWidth={false}
+            style={styles.actionBtn}
           />
         </View>
       )}
@@ -100,8 +102,13 @@ const styles = StyleSheet.create({
   },
   buttonWrap: {
     marginTop: 20,
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionBtn: {
     minWidth: 180,
-    maxWidth: 260,
+    maxWidth: 240,
     alignSelf: 'center',
   },
 });

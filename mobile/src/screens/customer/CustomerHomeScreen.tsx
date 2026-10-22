@@ -486,6 +486,7 @@ const createStyles = (colors: ThemeColors) =>
     listContainer: {
       paddingHorizontal: 21,
       gap: 12,
+      width: "100%",
     },
     savedActionRow: {
       flexDirection: "row",

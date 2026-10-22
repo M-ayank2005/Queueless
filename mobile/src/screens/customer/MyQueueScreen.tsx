@@ -181,6 +181,9 @@ function createStyles(colors: ThemeColors) {
     emptyWrap: {
       paddingTop: 60,
       paddingHorizontal: 24,
+      width: "100%",
+      alignItems: "center",
+      justifyContent: "center",
     },
     rowItem: {
       height: 106,
