@@ -1,0 +1,2395 @@
+{
+  "id": "10:1574",
+  "name": "home-1",
+  "type": "FRAME",
+  "x": 0,
+  "y": 0,
+  "width": 390,
+  "height": 844,
+  "fills": [
+    {
+      "type": "SOLID",
+      "hex": "#FFFFFF",
+      "alpha": 1
+    }
+  ],
+  "cornerRadius": 30,
+  "children": [
+    {
+      "id": "10:1575",
+      "name": "Frame 1000006359",
+      "type": "FRAME",
+      "x": 16,
+      "y": 43,
+      "width": 146,
+      "height": 48,
+      "autoLayout": {
+        "layoutMode": "VERTICAL",
+        "itemSpacing": 9,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0
+      },
+      "children": [
+        {
+          "id": "10:1576",
+          "name": "Frame 1000006358",
+          "type": "FRAME",
+          "x": 16,
+          "y": 43,
+          "width": 146,
+          "height": 24,
+          "autoLayout": {
+            "layoutMode": "HORIZONTAL",
+            "itemSpacing": 0,
+            "paddingTop": 0,
+            "paddingRight": 0,
+            "paddingBottom": 0,
+            "paddingLeft": 0,
+            "counterAxisAlignItems": "CENTER"
+          },
+          "children": [
+            {
+              "id": "10:1577",
+              "name": "Frame 1000006357",
+              "type": "FRAME",
+              "x": 16,
+              "y": 43,
+              "width": 122,
+              "height": 24,
+              "autoLayout": {
+                "layoutMode": "HORIZONTAL",
+                "itemSpacing": 3,
+                "paddingTop": 0,
+                "paddingRight": 0,
+                "paddingBottom": 0,
+                "paddingLeft": 0,
+                "counterAxisAlignItems": "CENTER"
+              },
+              "children": [
+                {
+                  "id": "10:1578",
+                  "name": "mdi:location",
+                  "type": "FRAME",
+                  "x": 16,
+                  "y": 43,
+                  "width": 24,
+                  "height": 24,
+                  "fills": [],
+                  "children": [
+                    {
+                      "id": "10:1579",
+                      "name": "Vector",
+                      "type": "VECTOR",
+                      "x": 21,
+                      "y": 45,
+                      "width": 14,
+                      "height": 20,
+                      "fills": [
+                        {
+                          "type": "SOLID",
+                          "hex": "#363636",
+                          "alpha": 1
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "id": "10:1580",
+                  "name": "Roha-Kolad...",
+                  "type": "TEXT",
+                  "x": 43,
+                  "y": 46,
+                  "width": 95,
+                  "height": 18,
+                  "fills": [
+                    {
+                      "type": "SOLID",
+                      "hex": "#000000",
+                      "alpha": 1
+                    }
+                  ],
+                  "text": {
+                    "characters": "Roha-Kolad...",
+                    "fontFamily": "Inter",
+                    "fontSize": 15,
+                    "fontWeight": 400,
+                    "lineHeightPx": 18.2,
+                    "letterSpacing": 0,
+                    "textAlignHorizontal": "LEFT",
+                    "textAlignVertical": "TOP"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "10:1581",
+              "name": "iconamoon:arrow-up-2-thin",
+              "type": "FRAME",
+              "x": 138,
+              "y": 43,
+              "width": 24,
+              "height": 24,
+              "fills": [],
+              "children": [
+                {
+                  "id": "10:1582",
+                  "name": "Vector",
+                  "type": "VECTOR",
+                  "x": 145,
+                  "y": 53,
+                  "width": 10,
+                  "height": 5,
+                  "strokes": [
+                    {
+                      "type": "SOLID",
+                      "hex": "#000000",
+                      "alpha": 1
+                    }
+                  ],
+                  "strokeWeight": 1,
+                  "strokeAlign": "CENTER"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "10:1583",
+          "name": "Sambhe",
+          "type": "TEXT",
+          "x": 16,
+          "y": 76,
+          "width": 146,
+          "height": 15,
+          "fills": [
+            {
+              "type": "SOLID",
+              "hex": "#000000",
+              "alpha": 1
+            }
+          ],
+          "text": {
+            "characters": "Sambhe",
+            "fontFamily": "Inter",
+            "fontSize": 12,
+            "fontWeight": 400,
+            "lineHeightPx": 14.5,
+            "letterSpacing": 0,
+            "textAlignHorizontal": "LEFT",
+            "textAlignVertical": "TOP"
+          }
+        }
+      ]
+    },
+    {
+      "id": "10:1586",
+      "name": "Frame 1000006381",
+      "type": "FRAME",
+      "x": 16,
+      "y": 251,
+      "width": 357,
+      "height": 18,
+      "autoLayout": {
+        "layoutMode": "HORIZONTAL",
+        "itemSpacing": 112,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "primaryAxisAlignItems": "SPACE_BETWEEN",
+        "counterAxisAlignItems": "CENTER"
+      },
+      "children": [
+        {
+          "id": "10:1587",
+          "name": "Nearby Services",
+          "type": "TEXT",
+          "x": 16,
+          "y": 251,
+          "width": 125,
+          "height": 18,
+          "fills": [
+            {
+              "type": "SOLID",
+              "hex": "#000000",
+              "alpha": 1
+            }
+          ],
+          "text": {
+            "characters": "Nearby Services",
+            "fontFamily": "Inter",
+            "fontSize": 16,
+            "fontWeight": 400,
+            "lineHeightPx": 18,
+            "letterSpacing": 0,
+            "textAlignHorizontal": "LEFT",
+            "textAlignVertical": "CENTER"
+          }
+        },
+        {
+          "id": "10:1588",
+          "name": "See more",
+          "type": "TEXT",
+          "x": 319,
+          "y": 251,
+          "width": 54,
+          "height": 18,
+          "fills": [
+            {
+              "type": "SOLID",
+              "hex": "#858585",
+              "alpha": 1
+            }
+          ],
+          "text": {
+            "characters": "See more",
+            "fontFamily": "Inter",
+            "fontSize": 12,
+            "fontWeight": 400,
+            "lineHeightPx": 18,
+            "letterSpacing": 0,
+            "textAlignHorizontal": "LEFT",
+            "textAlignVertical": "CENTER"
+          }
+        }
+      ]
+    },
+    {
+      "id": "10:1589",
+      "name": "Frame 1000006382",
+      "type": "FRAME",
+      "x": 21,
+      "y": 603,
+      "width": 357,
+      "height": 19,
+      "autoLayout": {
+        "layoutMode": "HORIZONTAL",
+        "itemSpacing": 112,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "primaryAxisAlignItems": "SPACE_BETWEEN",
+        "counterAxisAlignItems": "CENTER"
+      },
+      "children": [
+        {
+          "id": "10:1590",
+          "name": "Best for you",
+          "type": "TEXT",
+          "x": 21,
+          "y": 603,
+          "width": 92,
+          "height": 19,
+          "fills": [
+            {
+              "type": "SOLID",
+              "hex": "#000000",
+              "alpha": 1
+            }
+          ],
+          "text": {
+            "characters": "Best for you",
+            "fontFamily": "Inter",
+            "fontSize": 16,
+            "fontWeight": 400,
+            "lineHeightPx": 19.4,
+            "letterSpacing": 0,
+            "textAlignHorizontal": "LEFT",
+            "textAlignVertical": "CENTER"
+          }
+        },
+        {
+          "id": "10:1591",
+          "name": "See more",
+          "type": "TEXT",
+          "x": 324,
+          "y": 603.5,
+          "width": 54,
+          "height": 18,
+          "fills": [
+            {
+              "type": "SOLID",
+              "hex": "#858585",
+              "alpha": 1
+            }
+          ],
+          "text": {
+            "characters": "See more",
+            "fontFamily": "Inter",
+            "fontSize": 12,
+            "fontWeight": 400,
+            "lineHeightPx": 18,
+            "letterSpacing": 0,
+            "textAlignHorizontal": "LEFT",
+            "textAlignVertical": "CENTER"
+          }
+        }
+      ]
+    },
+    {
+      "id": "10:1592",
+      "name": "Category",
+      "type": "GROUP",
+      "x": 28,
+      "y": 179,
+      "width": 401,
+      "height": 40,
+      "cornerRadius": 10,
+      "children": [
+        {
+          "id": "10:1593",
+          "name": "clinic",
+          "type": "GROUP",
+          "x": 28,
+          "y": 179,
+          "width": 70,
+          "height": 39,
+          "cornerRadius": 10,
+          "children": [
+            {
+              "id": "10:1594",
+              "name": "Shadow",
+              "type": "RECTANGLE",
+              "x": 33,
+              "y": 198,
+              "width": 57,
+              "height": 20,
+              "opacity": 0.24,
+              "fills": [
+                {
+                  "type": "GRADIENT_LINEAR",
+                  "gradientHandlePositions": [
+                    {
+                      "x": 0.5000000000000037,
+                      "y": -0.4807692184250618
+                    },
+                    {
+                      "x": 0.4999999999999899,
+                      "y": 1.3141025874193173
+                    },
+                    {
+                      "x": -0.3974359029221859,
+                      "y": -0.48076921842508263
+                    }
+                  ],
+                  "stops": [
+                    {
+                      "position": 0.14,
+                      "hex": "#284D83",
+                      "alpha": 1
+                    },
+                    {
+                      "position": 1,
+                      "hex": "#3F6DB5",
+                      "alpha": 1
+                    }
+                  ]
+                }
+              ],
+              "cornerRadius": 10,
+              "effects": []
+            },
+            {
+              "id": "10:1595",
+              "name": "clnic/Active",
+              "type": "FRAME",
+              "x": 28,
+              "y": 179,
+              "width": 70,
+              "height": 38,
+              "fills": [
+                {
+                  "type": "GRADIENT_LINEAR",
+                  "gradientHandlePositions": [
+                    {
+                      "x": 0.5000000000000037,
+                      "y": -0.4807692184250618
+                    },
+                    {
+                      "x": 0.4999999999999899,
+                      "y": 1.3141025874193173
+                    },
+                    {
+                      "x": -0.3974359029221859,
+                      "y": -0.48076921842508263
+                    }
+                  ],
+                  "stops": [
+                    {
+                      "position": 0.14,
+                      "hex": "#284D83",
+                      "alpha": 1
+                    },
+                    {
+                      "position": 1,
+                      "hex": "#3F6DB5",
+                      "alpha": 1
+                    }
+                  ]
+                }
+              ],
+              "cornerRadius": 10,
+              "effects": [
+                {
+                  "type": "DROP_SHADOW",
+                  "offset": {
+                    "x": 0,
+                    "y": 8
+                  },
+                  "radius": 24,
+                  "spread": 2,
+                  "color": {
+                    "hex": "#363B64",
+                    "alpha": 0.08
+                  }
+                }
+              ],
+              "autoLayout": {
+                "layoutMode": "HORIZONTAL",
+                "itemSpacing": 10,
+                "paddingTop": 10,
+                "paddingRight": 16,
+                "paddingBottom": 10,
+                "paddingLeft": 16,
+                "primaryAxisAlignItems": "CENTER",
+                "counterAxisAlignItems": "CENTER"
+              },
+              "children": [
+                {
+                  "id": "10:1596",
+                  "name": "Clinics",
+                  "type": "TEXT",
+                  "x": 44,
+                  "y": 189,
+                  "width": 38,
+                  "height": 18,
+                  "fills": [
+                    {
+                      "type": "SOLID",
+                      "hex": "#FFFFFF",
+                      "alpha": 1
+                    }
+                  ],
+                  "text": {
+                    "characters": "Clinics",
+                    "fontFamily": "Inter",
+                    "fontSize": 12,
+                    "fontWeight": 400,
+                    "lineHeightPx": 18,
+                    "letterSpacing": 0,
+                    "textAlignHorizontal": "LEFT",
+                    "textAlignVertical": "TOP"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "10:1597",
+          "name": "banks",
+          "type": "FRAME",
+          "x": 200,
+          "y": 181,
+          "width": 67,
+          "height": 38,
+          "fills": [
+            {
+              "type": "SOLID",
+              "hex": "#F7F7F7",
+              "alpha": 1
+            }
+          ],
+          "cornerRadius": 10,
+          "autoLayout": {
+            "layoutMode": "HORIZONTAL",
+            "itemSpacing": 10,
+            "paddingTop": 10,
+            "paddingRight": 16,
+            "paddingBottom": 10,
+            "paddingLeft": 16,
+            "primaryAxisAlignItems": "CENTER",
+            "counterAxisAlignItems": "CENTER"
+          },
+          "children": [
+            {
+              "id": "10:1598",
+              "name": "Banks",
+              "type": "TEXT",
+              "x": 216,
+              "y": 191,
+              "width": 35,
+              "height": 18,
+              "fills": [
+                {
+                  "type": "SOLID",
+                  "hex": "#000000",
+                  "alpha": 1
+                }
+              ],
+              "text": {
+                "characters": "Banks",
+                "fontFamily": "Inter",
+                "fontSize": 12,
+                "fontWeight": 400,
+                "lineHeightPx": 18,
+                "letterSpacing": 0,
+                "textAlignHorizontal": "LEFT",
+                "textAlignVertical": "TOP"
+              }
+            }
+          ]
+        },
+        {
+          "id": "10:1599",
+          "name": "gov",
+          "type": "FRAME",
+          "x": 283,
+          "y": 181,
+          "width": 146,
+          "height": 38,
+          "fills": [
+            {
+              "type": "SOLID",
+              "hex": "#F7F7F7",
+              "alpha": 1
+            }
+          ],
+          "cornerRadius": 10,
+          "autoLayout": {
+            "layoutMode": "HORIZONTAL",
+            "itemSpacing": 10,
+            "paddingTop": 10,
+            "paddingRight": 16,
+            "paddingBottom": 10,
+            "paddingLeft": 16,
+            "primaryAxisAlignItems": "CENTER",
+            "counterAxisAlignItems": "CENTER"
+          },
+          "children": [
+            {
+              "id": "10:1600",
+              "name": "Government Offices",
+              "type": "TEXT",
+              "x": 299,
+              "y": 191,
+              "width": 114,
+              "height": 18,
+              "fills": [
+                {
+                  "type": "SOLID",
+                  "hex": "#000000",
+                  "alpha": 1
+                }
+              ],
+              "text": {
+                "characters": "Government Offices",
+                "fontFamily": "Inter",
+                "fontSize": 12,
+                "fontWeight": 400,
+                "lineHeightPx": 18,
+                "letterSpacing": 0,
+                "textAlignHorizontal": "LEFT",
+                "textAlignVertical": "TOP"
+              }
+            }
+          ]
+        },
+        {
+          "id": "10:1601",
+          "name": "salon",
+          "type": "FRAME",
+          "x": 114,
+          "y": 181,
+          "width": 70,
+          "height": 38,
+          "fills": [
+            {
+              "type": "SOLID",
+              "hex": "#F7F7F7",
+              "alpha": 1
+            }
+          ],
+          "cornerRadius": 10,
+          "autoLayout": {
+            "layoutMode": "HORIZONTAL",
+            "itemSpacing": 10,
+            "paddingTop": 10,
+            "paddingRight": 16,
+            "paddingBottom": 10,
+            "paddingLeft": 16,
+            "primaryAxisAlignItems": "CENTER",
+            "counterAxisAlignItems": "CENTER"
+          },
+          "children": [
+            {
+              "id": "10:1602",
+              "name": "Salons",
+              "type": "TEXT",
+              "x": 130,
+              "y": 191,
+              "width": 38,
+              "height": 18,
+              "fills": [
+                {
+                  "type": "SOLID",
+                  "hex": "#000000",
+                  "alpha": 1
+                }
+              ],
+              "text": {
+                "characters": "Salons",
+                "fontFamily": "Inter",
+                "fontSize": 12,
+                "fontWeight": 400,
+                "lineHeightPx": 18,
+                "letterSpacing": 0,
+                "textAlignHorizontal": "LEFT",
+                "textAlignVertical": "TOP"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "10:1606",
+      "name": "card",
+      "type": "GROUP",
+      "x": 21,
+      "y": 293,
+      "width": 222,
+      "height": 278,
+      "rectangleCornerRadii": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "children": [
+        {
+          "id": "10:1607",
+          "name": "Dreamsvile House",
+          "type": "GROUP",
+          "x": 21,
+          "y": 293,
+          "width": 222,
+          "height": 278,
+          "rectangleCornerRadii": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "children": [
+            {
+              "id": "10:1608",
+              "name": "Image",
+              "type": "GROUP",
+              "x": 21,
+              "y": 293,
+              "width": 222,
+              "height": 278,
+              "rectangleCornerRadii": [
+                0,
+                0,
+                0,
+                0
+              ],
+              "children": [
+                {
+                  "id": "10:1609",
+                  "name": "Rectangle 8",
+                  "type": "RECTANGLE",
+                  "x": 21,
+                  "y": 293,
+                  "width": 222,
+                  "height": 278,
+                  "fills": [
+                    {
+                      "type": "SOLID",
+                      "hex": "#FFFFFF",
+                      "alpha": 1
+                    }
+                  ],
+                  "cornerRadius": 20,
+                  "effects": [
+                    {
+                      "type": "DROP_SHADOW",
+                      "offset": {
+                        "x": 0,
+                        "y": 0
+                      },
+                      "radius": 1,
+                      "spread": 0,
+                      "color": {
+                        "hex": "#000000",
+                        "alpha": 0.04
+                      }
+                    },
+                    {
+                      "type": "DROP_SHADOW",
+                      "offset": {
+                        "x": 0,
+                        "y": 2
+                      },
+                      "radius": 6,
+                      "spread": 0,
+                      "color": {
+                        "hex": "#000000",
+                        "alpha": 0.04
+                      }
+                    },
+                    {
+                      "type": "DROP_SHADOW",
+                      "offset": {
+                        "x": 0,
+                        "y": 16
+                      },
+                      "radius": 24,
+                      "spread": 0,
+                      "color": {
+                        "hex": "#000000",
+                        "alpha": 0.06
+                      }
+                    }
+                  ]
+                },
+                {
+                  "id": "10:1610",
+                  "name": "webaliser-_TPTXZd9mOo-unsplash 1",
+                  "type": "RECTANGLE",
+                  "x": 21,
+                  "y": 287.9,
+                  "width": 222,
+                  "height": 295.4,
+                  "fills": [
+                    {
+                      "type": "IMAGE"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "10:1611",
+              "name": "Rectangle 7",
+              "type": "RECTANGLE",
+              "x": 21,
+              "y": 293,
+              "width": 222,
+              "height": 278,
+              "fills": [
+                {
+                  "type": "GRADIENT_LINEAR",
+                  "gradientHandlePositions": [
+                    {
+                      "x": 0.5,
+                      "y": -3.0616171314629196e-17
+                    },
+                    {
+                      "x": 0.5,
+                      "y": 0.9999999999999999
+                    },
+                    {
+                      "x": 0,
+                      "y": 0
+                    }
+                  ],
+                  "stops": [
+                    {
+                      "position": 0.38,
+                      "hex": "#0D0D0D",
+                      "alpha": 0
+                    },
+                    {
+                      "position": 1,
+                      "hex": "#000000",
+                      "alpha": 0.8
+                    }
+                  ]
+                }
+              ],
+              "cornerRadius": 20
+            },
+            {
+              "id": "10:1612",
+              "name": "Smile Dental Care",
+              "type": "TEXT",
+              "x": 41,
+              "y": 512.7,
+              "width": 141,
+              "height": 19.4,
+              "fills": [
+                {
+                  "type": "SOLID",
+                  "hex": "#FFFFFF",
+                  "alpha": 1
+                }
+              ],
+              "text": {
+                "characters": "Smile Dental Care",
+                "fontFamily": "Inter",
+                "fontSize": 16,
+                "fontWeight": 400,
+                "lineHeightPx": 18,
+                "letterSpacing": 0,
+                "textAlignHorizontal": "LEFT",
+                "textAlignVertical": "TOP"
+              }
+            },
+            {
+              "id": "10:1613",
+              "name": "4 people waiting",
+              "type": "TEXT",
+              "x": 41,
+              "y": 540.3,
+              "width": 134,
+              "height": 14.3,
+              "fills": [
+                {
+                  "type": "SOLID",
+                  "hex": "#D7D7D7",
+                  "alpha": 1
+                }
+              ],
+              "text": {
+                "characters": "4 people waiting",
+                "fontFamily": "Inter",
+                "fontSize": 12,
+                "fontWeight": 500,
+                "lineHeightPx": 18,
+                "letterSpacing": 0,
+                "textAlignHorizontal": "LEFT",
+                "textAlignVertical": "TOP"
+              }
+            },
+            {
+              "id": "10:1614",
+              "name": "IC_near",
+              "type": "FRAME",
+              "x": 154,
+              "y": 313.4,
+              "width": 73,
+              "height": 24.5,
+              "fills": [
+                {
+                  "type": "SOLID",
+                  "hex": "#000000",
+                  "alpha": 0.24
+                }
+              ],
+              "cornerRadius": 20,
+              "autoLayout": {
+                "layoutMode": "HORIZONTAL",
+                "itemSpacing": 4,
+                "paddingTop": 4,
+                "paddingRight": 10,
+                "paddingBottom": 4,
+                "paddingLeft": 8,
+                "primaryAxisAlignItems": "CENTER",
+                "counterAxisAlignItems": "CENTER"
+              },
+              "children": [
+                {
+                  "id": "10:1615",
+                  "name": "IC_Location",
+                  "type": "FRAME",
+                  "x": 162,
+                  "y": 317.7,
+                  "width": 16,
+                  "height": 16,
+                  "fills": [],
+                  "children": [
+                    {
+                      "id": "10:1616",
+                      "name": "Vector",
+                      "type": "VECTOR",
+                      "x": 165,
+                      "y": 319.7,
+                      "width": 10,
+                      "height": 12,
+                      "fills": [
+                        {
+                          "type": "SOLID",
+                          "hex": "#FFFFFF",
+                          "alpha": 1
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "id": "10:1617",
+                  "name": "1.8 km",
+                  "type": "TEXT",
+                  "x": 182,
+                  "y": 318.7,
+                  "width": 35,
+                  "height": 14,
+                  "fills": [
+                    {
+                      "type": "SOLID",
+                      "hex": "#FFFFFF",
+                      "alpha": 1
+                    }
+                  ],
+                  "text": {
+                    "characters": "1.8 km",
+                    "fontFamily": "Raleway",
+                    "fontSize": 12,
+                    "fontWeight": 400,
+                    "lineHeightPx": 14.1,
+                    "letterSpacing": 0,
+                    "textAlignHorizontal": "LEFT",
+                    "textAlignVertical": "TOP"
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "10:1618",
+      "name": "Shadow",
+      "type": "RECTANGLE",
+      "x": 41,
+      "y": 529,
+      "width": 182,
+      "height": 54,
+      "opacity": 0.1,
+      "fills": [
+        {
+          "type": "SOLID",
+          "hex": "#000000",
+          "alpha": 1
+        }
+      ],
+      "cornerRadius": 20,
+      "effects": []
+    },
+    {
+      "id": "10:1619",
+      "name": "Ascot House",
+      "type": "GROUP",
+      "x": 267,
+      "y": 293,
+      "width": 222,
+      "height": 278,
+      "rectangleCornerRadii": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "children": [
+        {
+          "id": "10:1620",
+          "name": "Image",
+          "type": "GROUP",
+          "x": 267,
+          "y": 293,
+          "width": 222,
+          "height": 278,
+          "rectangleCornerRadii": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "children": [
+            {
+              "id": "10:1621",
+              "name": "Rectangle 8",
+              "type": "RECTANGLE",
+              "x": 267,
+              "y": 293,
+              "width": 222,
+              "height": 278,
+              "fills": [
+                {
+                  "type": "SOLID",
+                  "hex": "#FFFFFF",
+                  "alpha": 1
+                }
+              ],
+              "cornerRadius": 20,
+              "effects": [
+                {
+                  "type": "DROP_SHADOW",
+                  "offset": {
+                    "x": 0,
+                    "y": 0
+                  },
+                  "radius": 1,
+                  "spread": 0,
+                  "color": {
+                    "hex": "#000000",
+                    "alpha": 0.04
+                  }
+                },
+                {
+                  "type": "DROP_SHADOW",
+                  "offset": {
+                    "x": 0,
+                    "y": 2
+                  },
+                  "radius": 6,
+                  "spread": 0,
+                  "color": {
+                    "hex": "#000000",
+                    "alpha": 0.04
+                  }
+                },
+                {
+                  "type": "DROP_SHADOW",
+                  "offset": {
+                    "x": 0,
+                    "y": 16
+                  },
+                  "radius": 24,
+                  "spread": 0,
+                  "color": {
+                    "hex": "#000000",
+                    "alpha": 0.06
+                  }
+                }
+              ]
+            },
+            {
+              "id": "10:1622",
+              "name": "digital-marketing-agency-ntwrk-g39p1kDjvSY-unsplash 1",
+              "type": "RECTANGLE",
+              "x": 185,
+              "y": 285.8,
+              "width": 429,
+              "height": 292.3,
+              "fills": [
+                {
+                  "type": "IMAGE"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "10:1623",
+          "name": "Rectangle 7",
+          "type": "RECTANGLE",
+          "x": 267,
+          "y": 293,
+          "width": 222,
+          "height": 278,
+          "fills": [
+            {
+              "type": "GRADIENT_LINEAR",
+              "gradientHandlePositions": [
+                {
+                  "x": 0.5,
+                  "y": -3.0616171314629196e-17
+                },
+                {
+                  "x": 0.5,
+                  "y": 0.9999999999999999
+                },
+                {
+                  "x": 0,
+                  "y": 0
+                }
+              ],
+              "stops": [
+                {
+                  "position": 0.38,
+                  "hex": "#0D0D0D",
+                  "alpha": 0
+                },
+                {
+                  "position": 1,
+                  "hex": "#000000",
+                  "alpha": 0.8
+                }
+              ]
+            }
+          ],
+          "cornerRadius": 20
+        },
+        {
+          "id": "10:1624",
+          "name": "Glow Beauty Salon",
+          "type": "TEXT",
+          "x": 287,
+          "y": 512.7,
+          "width": 142,
+          "height": 18.4,
+          "fills": [
+            {
+              "type": "SOLID",
+              "hex": "#FFFFFF",
+              "alpha": 1
+            }
+          ],
+          "text": {
+            "characters": "Glow Beauty Salon",
+            "fontFamily": "Inter",
+            "fontSize": 16,
+            "fontWeight": 400,
+            "lineHeightPx": 18,
+            "letterSpacing": 0,
+            "textAlignHorizontal": "LEFT",
+            "textAlignVertical": "TOP"
+          }
+        },
+        {
+          "id": "10:1625",
+          "name": "7 people waiting",
+          "type": "TEXT",
+          "x": 287,
+          "y": 540.3,
+          "width": 94,
+          "height": 18.4,
+          "fills": [
+            {
+              "type": "SOLID",
+              "hex": "#D7D7D7",
+              "alpha": 1
+            }
+          ],
+          "text": {
+            "characters": "7 people waiting",
+            "fontFamily": "Inter",
+            "fontSize": 12,
+            "fontWeight": 400,
+            "lineHeightPx": 18,
+            "letterSpacing": 0,
+            "textAlignHorizontal": "LEFT",
+            "textAlignVertical": "TOP"
+          }
+        },
+        {
+          "id": "10:1626",
+          "name": "IC_near",
+          "type": "FRAME",
+          "x": 400,
+          "y": 313.4,
+          "width": 75,
+          "height": 24.5,
+          "fills": [
+            {
+              "type": "SOLID",
+              "hex": "#000000",
+              "alpha": 0.24
+            }
+          ],
+          "cornerRadius": 20,
+          "autoLayout": {
+            "layoutMode": "HORIZONTAL",
+            "itemSpacing": 4,
+            "paddingTop": 4,
+            "paddingRight": 10,
+            "paddingBottom": 4,
+            "paddingLeft": 8,
+            "primaryAxisAlignItems": "CENTER",
+            "counterAxisAlignItems": "CENTER"
+          },
+          "children": [
+            {
+              "id": "10:1627",
+              "name": "IC_Location",
+              "type": "FRAME",
+              "x": 408,
+              "y": 317.7,
+              "width": 16,
+              "height": 16,
+              "fills": [],
+              "children": [
+                {
+                  "id": "10:1628",
+                  "name": "Vector",
+                  "type": "VECTOR",
+                  "x": 411,
+                  "y": 319.7,
+                  "width": 10,
+                  "height": 12,
+                  "fills": [
+                    {
+                      "type": "SOLID",
+                      "hex": "#FFFFFF",
+                      "alpha": 1
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "10:1629",
+              "name": "3.0 km",
+              "type": "TEXT",
+              "x": 428,
+              "y": 318.7,
+              "width": 37,
+              "height": 14,
+              "fills": [
+                {
+                  "type": "SOLID",
+                  "hex": "#FFFFFF",
+                  "alpha": 1
+                }
+              ],
+              "text": {
+                "characters": "3.0 km",
+                "fontFamily": "Raleway",
+                "fontSize": 12,
+                "fontWeight": 400,
+                "lineHeightPx": 14.1,
+                "letterSpacing": 0,
+                "textAlignHorizontal": "LEFT",
+                "textAlignVertical": "TOP"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "10:1630",
+      "name": "Group 6142",
+      "type": "GROUP",
+      "x": 21,
+      "y": 641,
+      "width": 356.7,
+      "height": 168,
+      "rectangleCornerRadii": [
+        0,
+        0,
+        0,
+        0
+      ],
+      "children": [
+        {
+          "id": "10:1631",
+          "name": "Group 6141",
+          "type": "GROUP",
+          "x": 21,
+          "y": 641,
+          "width": 356.7,
+          "height": 70,
+          "rectangleCornerRadii": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "children": [
+            {
+              "id": "10:1632",
+              "name": "CityCare Clinic",
+              "type": "TEXT",
+              "x": 118.1,
+              "y": 641,
+              "width": 119,
+              "height": 18,
+              "fills": [
+                {
+                  "type": "SOLID",
+                  "hex": "#000000",
+                  "alpha": 1
+                }
+              ],
+              "text": {
+                "characters": "CityCare Clinic",
+                "fontFamily": "Inter",
+                "fontSize": 16,
+                "fontWeight": 500,
+                "lineHeightPx": 18,
+                "letterSpacing": 0,
+                "textAlignHorizontal": "LEFT",
+                "textAlignVertical": "TOP"
+              }
+            },
+            {
+              "id": "10:1633",
+              "name": "6 people waiting",
+              "type": "TEXT",
+              "x": 118.1,
+              "y": 664,
+              "width": 98.1,
+              "height": 18,
+              "fills": [
+                {
+                  "type": "SOLID",
+                  "hex": "#284D83",
+                  "alpha": 1
+                }
+              ],
+              "text": {
+                "characters": "6 people waiting",
+                "fontFamily": "Inter",
+                "fontSize": 12,
+                "fontWeight": 400,
+                "lineHeightPx": 18,
+                "letterSpacing": 0,
+                "textAlignHorizontal": "LEFT",
+                "textAlignVertical": "TOP"
+              }
+            },
+            {
+              "id": "10:1634",
+              "name": "Bathroom",
+              "type": "GROUP",
+              "x": 333,
+              "y": 641,
+              "width": 44.7,
+              "height": 18,
+              "rectangleCornerRadii": [
+                0,
+                0,
+                0,
+                0
+              ],
+              "children": [
+                {
+                  "id": "10:1635",
+                  "name": "50 min",
+                  "type": "TEXT",
+                  "x": 333,
+                  "y": 641,
+                  "width": 44.7,
+                  "height": 18,
+                  "fills": [
+                    {
+                      "type": "SOLID",
+                      "hex": "#858585",
+                      "alpha": 1
+                    }
+                  ],
+                  "text": {
+                    "characters": "50 min",
+                    "fontFamily": "Inter",
+                    "fontSize": 12,
+                    "fontWeight": 400,
+                    "lineHeightPx": 18,
+                    "letterSpacing": 0,
+                    "textAlignHorizontal": "LEFT",
+                    "textAlignVertical": "TOP"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "10:1636",
+              "name": "Image",
+              "type": "GROUP",
+              "x": 21,
+              "y": 641,
+              "width": 77.2,
+              "height": 70,
+              "rectangleCornerRadii": [
+                0,
+                0,
+                0,
+                0
+              ],
+              "children": [
+                {
+                  "id": "10:1637",
+                  "name": "Rectangle 1",
+                  "type": "RECTANGLE",
+                  "x": 21,
+                  "y": 641,
+                  "width": 77.2,
+                  "height": 70,
+                  "fills": [
+                    {
+                      "type": "SOLID",
+                      "hex": "#EFEFEF",
+                      "alpha": 1
+                    }
+                  ],
+                  "cornerRadius": 10,
+                  "effects": [
+                    {
+                      "type": "DROP_SHADOW",
+                      "offset": {
+                        "x": 0,
+                        "y": 0
+                      },
+                      "radius": 1,
+                      "spread": 0,
+                      "color": {
+                        "hex": "#000000",
+                        "alpha": 0.04
+                      }
+                    },
+                    {
+                      "type": "DROP_SHADOW",
+                      "offset": {
+                        "x": 0,
+                        "y": 2
+                      },
+                      "radius": 6,
+                      "spread": 0,
+                      "color": {
+                        "hex": "#000000",
+                        "alpha": 0.04
+                      }
+                    },
+                    {
+                      "type": "DROP_SHADOW",
+                      "offset": {
+                        "x": 0,
+                        "y": 16
+                      },
+                      "radius": 24,
+                      "spread": 0,
+                      "color": {
+                        "hex": "#000000",
+                        "alpha": 0.06
+                      }
+                    }
+                  ]
+                },
+                {
+                  "id": "10:1638",
+                  "name": "Rectangle 2",
+                  "type": "RECTANGLE",
+                  "x": 21,
+                  "y": 641,
+                  "width": 77.2,
+                  "height": 70,
+                  "fills": [
+                    {
+                      "type": "SOLID",
+                      "hex": "#EFEFEF",
+                      "alpha": 1
+                    }
+                  ],
+                  "cornerRadius": 10
+                },
+                {
+                  "id": "10:1639",
+                  "name": "Ellipse 84",
+                  "type": "VECTOR",
+                  "x": 10,
+                  "y": 622,
+                  "width": 104,
+                  "height": 101,
+                  "fills": [
+                    {
+                      "type": "SOLID",
+                      "hex": "#D9D9D9",
+                      "alpha": 1
+                    },
+                    {
+                      "type": "IMAGE"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "10:1640",
+              "name": "Frame 1000006516",
+              "type": "FRAME",
+              "x": 118.1,
+              "y": 689,
+              "width": 149.9,
+              "height": 18,
+              "autoLayout": {
+                "layoutMode": "HORIZONTAL",
+                "itemSpacing": 10,
+                "paddingTop": 0,
+                "paddingRight": 0,
+                "paddingBottom": 0,
+                "paddingLeft": 0,
+                "counterAxisAlignItems": "CENTER"
+              },
+              "children": [
+                {
+                  "id": "10:1641",
+                  "name": "Group 6140",
+                  "type": "GROUP",
+                  "x": 118.1,
+                  "y": 689,
+                  "width": 76.9,
+                  "height": 18,
+                  "rectangleCornerRadii": [
+                    0,
+                    0,
+                    0,
+                    0
+                  ],
+                  "children": [
+                    {
+                      "id": "10:1642",
+                      "name": "Bedroom",
+                      "type": "GROUP",
+                      "x": 118.1,
+                      "y": 689,
+                      "width": 76.9,
+                      "height": 18,
+                      "rectangleCornerRadii": [
+                        0,
+                        0,
+                        0,
+                        0
+                      ],
+                      "children": [
+                        {
+                          "id": "10:1643",
+                          "name": "0.9 km away",
+                          "type": "TEXT",
+                          "x": 118.1,
+                          "y": 689,
+                          "width": 76.9,
+                          "height": 18,
+                          "fills": [
+                            {
+                              "type": "SOLID",
+                              "hex": "#858585",
+                              "alpha": 1
+                            }
+                          ],
+                          "text": {
+                            "characters": "0.9 km away",
+                            "fontFamily": "Inter",
+                            "fontSize": 12,
+                            "fontWeight": 400,
+                            "lineHeightPx": 18,
+                            "letterSpacing": 0,
+                            "textAlignHorizontal": "LEFT",
+                            "textAlignVertical": "TOP"
+                          }
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "id": "10:1644",
+                  "name": "Frame 1000006508",
+                  "type": "FRAME",
+                  "x": 205,
+                  "y": 690,
+                  "width": 63,
+                  "height": 16,
+                  "fills": [
+                    {
+                      "type": "SOLID",
+                      "hex": "#71BF8D",
+                      "alpha": 0.4
+                    }
+                  ],
+                  "cornerRadius": 13,
+                  "children": [
+                    {
+                      "id": "10:1645",
+                      "name": "Open",
+                      "type": "TEXT",
+                      "x": 223,
+                      "y": 692,
+                      "width": 26,
+                      "height": 12,
+                      "fills": [
+                        {
+                          "type": "SOLID",
+                          "hex": "#047857",
+                          "alpha": 1
+                        }
+                      ],
+                      "text": {
+                        "characters": "Open",
+                        "fontFamily": "Inter",
+                        "fontSize": 10,
+                        "fontWeight": 500,
+                        "lineHeightPx": 18,
+                        "letterSpacing": 0,
+                        "textAlignHorizontal": "CENTER",
+                        "textAlignVertical": "CENTER"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "10:1646",
+          "name": "Group 6141",
+          "type": "GROUP",
+          "x": 21,
+          "y": 736,
+          "width": 356.7,
+          "height": 73,
+          "rectangleCornerRadii": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "children": [
+            {
+              "id": "10:1647",
+              "name": "Beauty parlor",
+              "type": "TEXT",
+              "x": 118,
+              "y": 739,
+              "width": 222,
+              "height": 18,
+              "fills": [
+                {
+                  "type": "SOLID",
+                  "hex": "#000000",
+                  "alpha": 1
+                }
+              ],
+              "text": {
+                "characters": "Beauty parlor",
+                "fontFamily": "Inter",
+                "fontSize": 16,
+                "fontWeight": 400,
+                "lineHeightPx": 18,
+                "letterSpacing": 0,
+                "textAlignHorizontal": "LEFT",
+                "textAlignVertical": "TOP"
+              }
+            },
+            {
+              "id": "10:1648",
+              "name": "10 people waiting",
+              "type": "TEXT",
+              "x": 118,
+              "y": 762,
+              "width": 121,
+              "height": 18,
+              "fills": [
+                {
+                  "type": "SOLID",
+                  "hex": "#284D83",
+                  "alpha": 1
+                }
+              ],
+              "text": {
+                "characters": "10 people waiting",
+                "fontFamily": "Inter",
+                "fontSize": 12,
+                "fontWeight": 400,
+                "lineHeightPx": 18,
+                "letterSpacing": 0,
+                "textAlignHorizontal": "LEFT",
+                "textAlignVertical": "TOP"
+              }
+            },
+            {
+              "id": "10:1649",
+              "name": "Bathroom",
+              "type": "GROUP",
+              "x": 349,
+              "y": 736,
+              "width": 28.7,
+              "height": 18,
+              "rectangleCornerRadii": [
+                0,
+                0,
+                0,
+                0
+              ],
+              "children": [
+                {
+                  "id": "10:1650",
+                  "name": "1 Hr",
+                  "type": "TEXT",
+                  "x": 349,
+                  "y": 736,
+                  "width": 28.7,
+                  "height": 18,
+                  "fills": [
+                    {
+                      "type": "SOLID",
+                      "hex": "#858585",
+                      "alpha": 1
+                    }
+                  ],
+                  "text": {
+                    "characters": "1 Hr",
+                    "fontFamily": "Inter",
+                    "fontSize": 12,
+                    "fontWeight": 400,
+                    "lineHeightPx": 18,
+                    "letterSpacing": 0,
+                    "textAlignHorizontal": "LEFT",
+                    "textAlignVertical": "TOP"
+                  }
+                }
+              ]
+            },
+            {
+              "id": "10:1651",
+              "name": "Image",
+              "type": "GROUP",
+              "x": 21,
+              "y": 739,
+              "width": 77.2,
+              "height": 70,
+              "rectangleCornerRadii": [
+                0,
+                0,
+                0,
+                0
+              ],
+              "children": [
+                {
+                  "id": "10:1652",
+                  "name": "Rectangle 1",
+                  "type": "RECTANGLE",
+                  "x": 21,
+                  "y": 739,
+                  "width": 77.2,
+                  "height": 70,
+                  "fills": [
+                    {
+                      "type": "SOLID",
+                      "hex": "#EFEFEF",
+                      "alpha": 1
+                    }
+                  ],
+                  "cornerRadius": 10,
+                  "effects": [
+                    {
+                      "type": "DROP_SHADOW",
+                      "offset": {
+                        "x": 0,
+                        "y": 0
+                      },
+                      "radius": 1,
+                      "spread": 0,
+                      "color": {
+                        "hex": "#000000",
+                        "alpha": 0.04
+                      }
+                    },
+                    {
+                      "type": "DROP_SHADOW",
+                      "offset": {
+                        "x": 0,
+                        "y": 2
+                      },
+                      "radius": 6,
+                      "spread": 0,
+                      "color": {
+                        "hex": "#000000",
+                        "alpha": 0.04
+                      }
+                    },
+                    {
+                      "type": "DROP_SHADOW",
+                      "offset": {
+                        "x": 0,
+                        "y": 16
+                      },
+                      "radius": 24,
+                      "spread": 0,
+                      "color": {
+                        "hex": "#000000",
+                        "alpha": 0.06
+                      }
+                    }
+                  ]
+                },
+                {
+                  "id": "10:1653",
+                  "name": "Rectangle 2",
+                  "type": "RECTANGLE",
+                  "x": 21,
+                  "y": 739,
+                  "width": 77.2,
+                  "height": 70,
+                  "fills": [
+                    {
+                      "type": "SOLID",
+                      "hex": "#EFEFEF",
+                      "alpha": 1
+                    }
+                  ],
+                  "cornerRadius": 10
+                },
+                {
+                  "id": "10:1654",
+                  "name": "Rectangle 6451",
+                  "type": "RECTANGLE",
+                  "x": 21,
+                  "y": 739,
+                  "width": 77,
+                  "height": 70,
+                  "fills": [
+                    {
+                      "type": "IMAGE"
+                    }
+                  ],
+                  "cornerRadius": 4
+                }
+              ]
+            },
+            {
+              "id": "10:1655",
+              "name": "Frame 1000006517",
+              "type": "FRAME",
+              "x": 118.1,
+              "y": 787,
+              "width": 135.9,
+              "height": 18,
+              "autoLayout": {
+                "layoutMode": "HORIZONTAL",
+                "itemSpacing": 10,
+                "paddingTop": 0,
+                "paddingRight": 0,
+                "paddingBottom": 0,
+                "paddingLeft": 0,
+                "counterAxisAlignItems": "MAX"
+              },
+              "children": [
+                {
+                  "id": "10:1656",
+                  "name": "Bedroom",
+                  "type": "GROUP",
+                  "x": 118.1,
+                  "y": 787,
+                  "width": 62.9,
+                  "height": 18,
+                  "rectangleCornerRadii": [
+                    0,
+                    0,
+                    0,
+                    0
+                  ],
+                  "children": [
+                    {
+                      "id": "10:1657",
+                      "name": "2 km away",
+                      "type": "TEXT",
+                      "x": 118.1,
+                      "y": 787,
+                      "width": 62.9,
+                      "height": 18,
+                      "fills": [
+                        {
+                          "type": "SOLID",
+                          "hex": "#858585",
+                          "alpha": 1
+                        }
+                      ],
+                      "text": {
+                        "characters": "2 km away",
+                        "fontFamily": "Inter",
+                        "fontSize": 12,
+                        "fontWeight": 400,
+                        "lineHeightPx": 18,
+                        "letterSpacing": 0,
+                        "textAlignHorizontal": "LEFT",
+                        "textAlignVertical": "TOP"
+                      }
+                    }
+                  ]
+                },
+                {
+                  "id": "10:1658",
+                  "name": "Frame 1000006508",
+                  "type": "FRAME",
+                  "x": 191,
+                  "y": 789,
+                  "width": 63,
+                  "height": 16,
+                  "fills": [
+                    {
+                      "type": "SOLID",
+                      "hex": "#71BF8D",
+                      "alpha": 0.4
+                    }
+                  ],
+                  "cornerRadius": 13,
+                  "children": [
+                    {
+                      "id": "10:1659",
+                      "name": "Open",
+                      "type": "TEXT",
+                      "x": 209,
+                      "y": 791,
+                      "width": 26,
+                      "height": 12,
+                      "fills": [
+                        {
+                          "type": "SOLID",
+                          "hex": "#047857",
+                          "alpha": 1
+                        }
+                      ],
+                      "text": {
+                        "characters": "Open",
+                        "fontFamily": "Inter",
+                        "fontSize": 10,
+                        "fontWeight": 500,
+                        "lineHeightPx": 18,
+                        "letterSpacing": 0,
+                        "textAlignHorizontal": "CENTER",
+                        "textAlignVertical": "CENTER"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "10:1660",
+      "name": "Button Icon",
+      "type": "FRAME",
+      "x": 0,
+      "y": 746,
+      "width": 390,
+      "height": 98,
+      "fills": [
+        {
+          "type": "SOLID",
+          "hex": "#FFFFFF",
+          "alpha": 1
+        }
+      ],
+      "rectangleCornerRadii": [
+        24,
+        24,
+        0,
+        0
+      ],
+      "effects": [
+        {
+          "type": "DROP_SHADOW",
+          "offset": {
+            "x": 0,
+            "y": -1
+          },
+          "radius": 24.5,
+          "spread": 0,
+          "color": {
+            "hex": "#000000",
+            "alpha": 0.25
+          }
+        }
+      ],
+      "autoLayout": {
+        "layoutMode": "HORIZONTAL",
+        "itemSpacing": 56,
+        "paddingTop": 24,
+        "paddingRight": 24,
+        "paddingBottom": 24,
+        "paddingLeft": 24,
+        "primaryAxisAlignItems": "CENTER"
+      },
+      "children": [
+        {
+          "id": "10:1661",
+          "name": "Home",
+          "type": "FRAME",
+          "x": 63,
+          "y": 770,
+          "width": 24,
+          "height": 35,
+          "autoLayout": {
+            "layoutMode": "VERTICAL",
+            "itemSpacing": 6,
+            "paddingTop": 0,
+            "paddingRight": 0,
+            "paddingBottom": 0,
+            "paddingLeft": 0,
+            "counterAxisAlignItems": "CENTER"
+          },
+          "children": [
+            {
+              "id": "10:1662",
+              "name": "Iconly/Bulk/Home",
+              "type": "FRAME",
+              "x": 63,
+              "y": 770,
+              "width": 24,
+              "height": 24,
+              "fills": [],
+              "children": [
+                {
+                  "id": "10:1663",
+                  "name": "Home",
+                  "type": "GROUP",
+                  "x": 65.5,
+                  "y": 772,
+                  "width": 19,
+                  "height": 20,
+                  "fills": [],
+                  "children": [
+                    {
+                      "id": "10:1664",
+                      "name": "Home",
+                      "type": "VECTOR",
+                      "x": 65.5,
+                      "y": 772,
+                      "width": 19,
+                      "height": 20,
+                      "fills": [
+                        {
+                          "type": "SOLID",
+                          "hex": "#284D83",
+                          "alpha": 1
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "10:1665",
+              "name": "Dot",
+              "type": "RECTANGLE",
+              "x": 70,
+              "y": 800,
+              "width": 10,
+              "height": 5,
+              "fills": [
+                {
+                  "type": "SOLID",
+                  "hex": "#284D83",
+                  "alpha": 1
+                }
+              ],
+              "cornerRadius": 18
+            }
+          ]
+        },
+        {
+          "id": "10:1666",
+          "name": "stash:bell-duotone",
+          "type": "FRAME",
+          "x": 143,
+          "y": 770,
+          "width": 24,
+          "height": 24,
+          "fills": [],
+          "children": [
+            {
+              "id": "10:1667",
+              "name": "Vector",
+              "type": "VECTOR",
+              "x": 146.3,
+              "y": 771.5,
+              "width": 17.5,
+              "height": 17.8,
+              "fills": [
+                {
+                  "type": "SOLID",
+                  "hex": "#A2A2A2",
+                  "alpha": 1
+                }
+              ]
+            },
+            {
+              "id": "10:1668",
+              "name": "Vector",
+              "type": "VECTOR",
+              "x": 149.3,
+              "y": 788.9,
+              "width": 6.7,
+              "height": 3.8,
+              "opacity": 0.5,
+              "fills": [
+                {
+                  "type": "SOLID",
+                  "hex": "#A2A2A2",
+                  "alpha": 1
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "10:1669",
+          "name": "fluent:megaphone-28-regular",
+          "type": "FRAME",
+          "x": 223,
+          "y": 770,
+          "width": 24,
+          "height": 24,
+          "fills": [],
+          "children": [
+            {
+              "id": "10:1670",
+              "name": "Vector",
+              "type": "VECTOR",
+              "x": 224.7,
+              "y": 773.9,
+              "width": 20.6,
+              "height": 16.6,
+              "fills": [
+                {
+                  "type": "SOLID",
+                  "hex": "#A2A2A2",
+                  "alpha": 1
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "10:1671",
+          "name": "arcticons:quora",
+          "type": "FRAME",
+          "x": 303,
+          "y": 770,
+          "width": 24,
+          "height": 24,
+          "children": [
+            {
+              "id": "10:1672",
+              "name": "Vector",
+              "type": "VECTOR",
+              "x": 308.2,
+              "y": 775.2,
+              "width": 13.6,
+              "height": 13.6,
+              "strokes": [
+                {
+                  "type": "SOLID",
+                  "hex": "#A2A2A2",
+                  "alpha": 1
+                }
+              ],
+              "strokeWeight": 1,
+              "strokeAlign": "CENTER"
+            },
+            {
+              "id": "10:1673",
+              "name": "Vector",
+              "type": "VECTOR",
+              "x": 304.3,
+              "y": 771.3,
+              "width": 21.5,
+              "height": 21.5,
+              "strokes": [
+                {
+                  "type": "SOLID",
+                  "hex": "#A2A2A2",
+                  "alpha": 1
+                }
+              ],
+              "strokeWeight": 1,
+              "strokeAlign": "CENTER"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "10:1674",
+      "name": "Group 6146",
+      "type": "GROUP",
+      "x": 28,
+      "y": 109,
+      "width": 335,
+      "height": 48,
+      "cornerRadius": 10,
+      "children": [
+        {
+          "id": "10:1675",
+          "name": "Group 6145",
+          "type": "GROUP",
+          "x": 28,
+          "y": 109,
+          "width": 335,
+          "height": 48,
+          "cornerRadius": 10,
+          "children": [
+            {
+              "id": "10:1676",
+              "name": "Search Bar",
+              "type": "FRAME",
+              "x": 28,
+              "y": 109,
+              "width": 279,
+              "height": 48,
+              "fills": [
+                {
+                  "type": "SOLID",
+                  "hex": "#F7F7F7",
+                  "alpha": 1
+                }
+              ],
+              "cornerRadius": 10,
+              "children": [
+                {
+                  "id": "10:1677",
+                  "name": "Search",
+                  "type": "TEXT",
+                  "x": 80,
+                  "y": 126,
+                  "width": 39,
+                  "height": 14,
+                  "fills": [
+                    {
+                      "type": "SOLID",
+                      "hex": "#858585",
+                      "alpha": 1
+                    }
+                  ],
+                  "text": {
+                    "characters": "Search ",
+                    "fontFamily": "Raleway",
+                    "fontSize": 12,
+                    "fontWeight": 400,
+                    "lineHeightPx": 14.1,
+                    "letterSpacing": 0,
+                    "textAlignHorizontal": "LEFT",
+                    "textAlignVertical": "TOP"
+                  }
+                },
+                {
+                  "id": "10:1678",
+                  "name": "IC_Search",
+                  "type": "GROUP",
+                  "x": 44.5,
+                  "y": 121,
+                  "width": 24.7,
+                  "height": 24,
+                  "children": [
+                    {
+                      "id": "10:1679",
+                      "name": "Vector",
+                      "type": "VECTOR",
+                      "x": 44.5,
+                      "y": 121,
+                      "width": 24.7,
+                      "height": 24
+                    },
+                    {
+                      "id": "10:1680",
+                      "name": "Vector",
+                      "type": "VECTOR",
+                      "x": 48.6,
+                      "y": 125,
+                      "width": 16.5,
+                      "height": 16,
+                      "fills": [
+                        {
+                          "type": "SOLID",
+                          "hex": "#838383",
+                          "alpha": 1
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "id": "10:1681",
+              "name": "IC_Filter",
+              "type": "FRAME",
+              "x": 315,
+              "y": 109,
+              "width": 48,
+              "height": 48,
+              "fills": [
+                {
+                  "type": "GRADIENT_LINEAR",
+                  "gradientHandlePositions": [
+                    {
+                      "x": 0.5000000000000037,
+                      "y": -0.4807692184250618
+                    },
+                    {
+                      "x": 0.4999999999999899,
+                      "y": 1.3141025874193173
+                    },
+                    {
+                      "x": -0.3974359029221859,
+                      "y": -0.48076921842508263
+                    }
+                  ],
+                  "stops": [
+                    {
+                      "position": 0.14,
+                      "hex": "#284D83",
+                      "alpha": 1
+                    },
+                    {
+                      "position": 1,
+                      "hex": "#3F6DB5",
+                      "alpha": 1
+                    }
+                  ]
+                }
+              ],
+              "cornerRadius": 10,
+              "children": [
+                {
+                  "id": "10:1682",
+                  "name": "IC_Filter",
+                  "type": "GROUP",
+                  "x": 327,
+                  "y": 121,
+                  "width": 24,
+                  "height": 24,
+                  "children": [
+                    {
+                      "id": "10:1683",
+                      "name": "Vector",
+                      "type": "VECTOR",
+                      "x": 327,
+                      "y": 121,
+                      "width": 24,
+                      "height": 24
+                    },
+                    {
+                      "id": "10:1684",
+                      "name": "Vector",
+                      "type": "VECTOR",
+                      "x": 331,
+                      "y": 125,
+                      "width": 16,
+                      "height": 16,
+                      "fills": [
+                        {
+                          "type": "SOLID",
+                          "hex": "#FFFFFF",
+                          "alpha": 1
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "23:268",
+      "name": "Ellipse 49",
+      "type": "ELLIPSE",
+      "x": 315,
+      "y": 31,
+      "width": 48.1,
+      "height": 48.1,
+      "fills": [
+        {
+          "type": "IMAGE"
+        }
+      ]
+    }
+  ]
+}

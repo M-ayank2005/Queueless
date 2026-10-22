@@ -8,6 +8,11 @@ import {
   verifyTicketService
 } from "../services/queueService";
 import { getBusinessAnalyticsService } from "../services/analyticsService";
+import {
+  createBusinessUpdateService,
+  getBusinessUpdatesService,
+  deleteBusinessUpdateService
+} from "../services/notificationService";
 
 const sendValidationError = (res: Response, req: Request, field: string, message: string) => {
   return res.status(400).json({
@@ -271,4 +276,75 @@ export const verifyQueueTicket = async (req: AuthRequest, res: Response, next: N
     });
   }
 };
+
+// Create Business Announcement Update
+export const createBusinessUpdate = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { type, title, message, validForDays } = req.body;
+    if (!type || !["alert", "offer", "info"].includes(type)) {
+      return sendValidationError(res, req, "type", "type must be alert, offer, or info");
+    }
+    if (!title || typeof title !== "string" || !title.trim()) {
+      return sendValidationError(res, req, "title", "title is required");
+    }
+    if (title.trim().length > 60) {
+      return sendValidationError(res, req, "title", "title must be at most 60 characters");
+    }
+    if (!message || typeof message !== "string" || !message.trim()) {
+      return sendValidationError(res, req, "message", "message is required");
+    }
+    if (message.trim().length > 200) {
+      return sendValidationError(res, req, "message", "message must be at most 200 characters");
+    }
+    if (type === "offer" && validForDays !== undefined) {
+      const days = Number(validForDays);
+      if (isNaN(days) || days < 1 || days > 30) {
+        return sendValidationError(res, req, "validForDays", "validForDays must be between 1 and 30");
+      }
+    }
+
+    const update = await createBusinessUpdateService(req.user!.id, {
+      type,
+      title,
+      message,
+      validForDays: validForDays !== undefined ? Number(validForDays) : undefined
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: "Update created successfully",
+      update
+    });
+  } catch (error: any) {
+    return next(error);
+  }
+};
+
+// Get Own Business Updates
+export const getBusinessUpdates = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const updates = await getBusinessUpdatesService(req.user!.id);
+    return res.json(updates);
+  } catch (error: any) {
+    return next(error);
+  }
+};
+
+// Delete Own Business Update
+export const deleteBusinessUpdate = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const deleted = await deleteBusinessUpdateService(req.user!.id, id);
+    if (!deleted) {
+      return sendNotFoundError(res, req, "Update not found or unauthorized");
+    }
+    return res.json({
+      success: true,
+      message: "Update deleted successfully"
+    });
+  } catch (error: any) {
+    return next(error);
+  }
+};
+
 

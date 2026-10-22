@@ -4,22 +4,24 @@
     "slug": "queueless-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
-    "userInterfaceStyle": "dark",
+    "userInterfaceStyle": "light",
     "assetBundlePatterns": [
       "**/*"
     ],
     "icon": "./assets/icon.png",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "QueueLess uses the camera to scan store QR codes"
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#050B18"
+        "backgroundColor": "#284D83"
       },
       "permissions": [
-        "CAMERA",
-        "RECORD_AUDIO"
+        "CAMERA"
       ],
       "package": "com.anonymous.queuelessmobile"
     },
@@ -31,7 +33,7 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#050B18",
+          "backgroundColor": "#284D83",
           "resizeMode": "contain"
         }
       ]

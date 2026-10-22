@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="100%" height="100%" fill="none">
+  <!-- High-legibility Q Loop in solid brand blue -->
+  <path d="
+    M 30 6
+    C 16.7 6 6 16.7 6 30
+    C 6 43.3 16.7 54 30 54
+    C 36.5 54 42.4 51.4 46.8 47.1
+    L 41.5 40.5
+    C 38.3 43.3 34.3 45 30 45
+    C 21.7 45 15 38.3 15 30
+    C 15 21.7 21.7 15 30 15
+    C 38.3 15 45 21.7 45 30
+    C 45 33.6 43.7 37 41.6 39.5
+    L 48.5 44.5
+    C 51.9 40.4 54 35.4 54 30
+    C 54 16.7 43.3 6 30 6 Z"
+    fill="#3B82F6"
+  />
+
+  <!-- High-legibility Central Real-Time Dot -->
+  <circle cx="30" cy="30" r="4.5" fill="#3B82F6" />
+  <circle cx="30" cy="30" r="2" fill="#FFFFFF" />
+
+  <!-- High-legibility Breakout Arrow -->
+  <path d="
+    M 32 40
+    C 38 40 44 42 49 46
+    C 53 41 57 34 60 25
+    L 61 30
+    L 63 21
+    L 54 23
+    L 57 25
+    C 54 32 50 37 46 40
+    C 42 37 36 36 32 36
+    Z"
+    fill="#60A5FA"
+  />
+</svg>

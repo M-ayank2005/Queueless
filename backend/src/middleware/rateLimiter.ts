@@ -89,6 +89,23 @@ export const supportRateLimiter = rateLimit({
 });
 
 /**
+ * Rate limiter for business announcements and updates posting.
+ * Max 10 per hour.
+ */
+export const businessUpdateRateLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour
+  limit: 10, // 10 updates per hour per IP/user
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: () => process.env.NODE_ENV === "test",
+  message: {
+    success: false,
+    message: "Rate limit exceeded. Businesses can post up to 10 updates per hour.",
+  },
+  handler: createRateLimitHandler("Rate limit exceeded. Businesses can post up to 10 updates per hour.")
+});
+
+/**
  * General baseline rate limiter for API routes.
  */
 export const generalApiRateLimiter = rateLimit({

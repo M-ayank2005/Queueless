@@ -1,10 +1,8 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { NavigationContainer, DefaultTheme, DarkTheme } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
-import { Ionicons } from "@expo/vector-icons";
-import { StyleSheet, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import {
@@ -13,10 +11,14 @@ import {
   CustomerTabParamList,
   RootStackParamList,
 } from "./types";
-import WelcomeScreen from "../screens/auth/WelcomeScreen";
+import SplashScreen, { ONBOARDING_SEEN_KEY } from "../screens/auth/SplashScreen";
+import OnboardingScreen from "../screens/auth/OnboardingScreen";
 import LoginScreen from "../screens/auth/LoginScreen";
 import RegisterScreen from "../screens/auth/RegisterScreen";
 import CustomerHomeScreen from "../screens/customer/CustomerHomeScreen";
+import NotificationsScreen from "../screens/customer/NotificationsScreen";
+import UpdatesScreen from "../screens/customer/UpdatesScreen";
+import MyQueueScreen from "../screens/customer/MyQueueScreen";
 import ScanJoinScreen from "../screens/customer/ScanJoinScreen";
 import BusinessDashboardScreen from "../screens/business/BusinessDashboardScreen";
 import ProfileScreen from "../screens/shared/ProfileScreen";
@@ -25,18 +27,19 @@ import PrivacyPolicyScreen from "../screens/shared/PrivacyPolicyScreen";
 import TermsScreen from "../screens/shared/TermsScreen";
 import HelpSupportScreen from "../screens/shared/HelpSupportScreen";
 import BookingHistoryScreen from "../screens/customer/BookingHistoryScreen";
-import AppLoader from "../components/AppLoader";
+import BottomTabBar from "../components/BottomTabBar";
+import { getUnreadCount } from "../lib/api";
 
 const AuthStack = createNativeStackNavigator<AuthStackParamList>();
 const RootStack = createNativeStackNavigator<RootStackParamList>();
 const CustomerTabs = createBottomTabNavigator<CustomerTabParamList>();
 const BusinessTabs = createBottomTabNavigator<BusinessTabParamList>();
 
-// 1. Authentication Navigator: Shown when user is not logged in
-function AuthNavigator() {
+// 1. Authentication Navigator: Login, Register, Onboarding, and Legal
+function AuthNavigator({ initialRoute }: { initialRoute: "Onboarding" | "Login" }) {
   return (
-    <AuthStack.Navigator screenOptions={{ headerShown: false }}>
-      <AuthStack.Screen name="Welcome" component={WelcomeScreen} />
+    <AuthStack.Navigator screenOptions={{ headerShown: false }} initialRouteName={initialRoute}>
+      <AuthStack.Screen name="Onboarding" component={OnboardingScreen} />
       <AuthStack.Screen name="Login" component={LoginScreen} />
       <AuthStack.Screen name="Register" component={RegisterScreen} />
       <AuthStack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
@@ -46,126 +49,115 @@ function AuthNavigator() {
   );
 }
 
-// 2. Customer Bottom Tabs: Main navigation experience for customer role
+// 2. Customer Bottom Tabs: Home, Notifications, Updates, MyQueue
 function CustomerTabsNavigator() {
-  const insets = useSafeAreaInsets();
-  const { colors, isDark } = useTheme();
-  const bottomPadding = Math.max(insets.bottom, 8);
-  const tabHeight = 56 + bottomPadding;
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const pollUnread = async () => {
+      try {
+        const res = await getUnreadCount();
+        if (mounted && typeof res?.unreadCount === "number") {
+          setUnreadCount(res.unreadCount);
+        }
+      } catch {
+        // non-blocking
+      }
+    };
+
+    pollUnread();
+    const interval = setInterval(pollUnread, 30000); // Poll every 30s per spec
+
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
+  }, []);
 
   return (
     <CustomerTabs.Navigator
-      screenOptions={({ route }) => ({
-        headerShown: false,
-        tabBarStyle: [
-          styles.tabBar,
-          {
-            height: tabHeight,
-            paddingBottom: bottomPadding,
-            backgroundColor: colors.card,
-            borderTopColor: colors.border,
-            shadowColor: "#000",
-            shadowOpacity: isDark ? 0.25 : 0.04,
-          },
-        ],
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.muted,
-        tabBarLabelStyle: styles.tabBarLabel,
-        tabBarItemStyle: styles.tabBarItem,
-        tabBarIcon: ({ color, focused, size }) => {
-          let iconName: keyof typeof Ionicons.glyphMap = "home";
-          if (route.name === "Home") {
-            iconName = focused ? "home" : "home-outline";
-          } else if (route.name === "ScanJoin") {
-            iconName = focused ? "qr-code" : "qr-code-outline";
-          } else if (route.name === "Profile") {
-            iconName = focused ? "person" : "person-outline";
-          }
-
-          return (
-            <View style={[
-              styles.tabIconWrap, 
-              focused && { backgroundColor: colors.primarySubtle }
-            ]}>
-              <Ionicons name={iconName} size={size - 1} color={color} />
-            </View>
-          );
-        },
-      })}
+      tabBar={(props) => <BottomTabBar {...props} unreadCount={unreadCount} />}
+      screenOptions={{ headerShown: false }}
     >
       <CustomerTabs.Screen
         name="Home"
         component={CustomerHomeScreen}
-        options={{ title: "Queues" }}
+        options={{ tabBarAccessibilityLabel: "Home" }}
       />
       <CustomerTabs.Screen
-        name="ScanJoin"
-        component={ScanJoinScreen}
-        options={{ title: "Scan & Join" }}
+        name="Notifications"
+        component={NotificationsScreen}
+        options={{ tabBarAccessibilityLabel: "Notifications" }}
+      />
+      <CustomerTabs.Screen
+        name="Updates"
+        component={UpdatesScreen}
+        options={{ tabBarAccessibilityLabel: "Updates" }}
+      />
+      <CustomerTabs.Screen
+        name="MyQueue"
+        component={MyQueueScreen}
+        options={{ tabBarAccessibilityLabel: "My Queue" }}
       />
       <CustomerTabs.Screen
         name="Profile"
         component={ProfileScreen}
-        options={{ title: "Profile" }}
+        options={{ tabBarAccessibilityLabel: "Profile" }}
       />
     </CustomerTabs.Navigator>
   );
 }
 
-// 3. Business Bottom Tabs: Dedicated workflow for shop owners
+// 3. Business Bottom Tabs: Dashboard, Notifications, and Profile (3 balanced tabs)
 function BusinessTabsNavigator() {
-  const insets = useSafeAreaInsets();
-  const { colors, isDark } = useTheme();
-  const bottomPadding = Math.max(insets.bottom, 8);
-  const tabHeight = 56 + bottomPadding;
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const pollUnread = async () => {
+      try {
+        const res = await getUnreadCount();
+        if (mounted && typeof res?.unreadCount === "number") {
+          setUnreadCount(res.unreadCount);
+        }
+      } catch {
+        // non-blocking
+      }
+    };
+
+    pollUnread();
+    const interval = setInterval(pollUnread, 30000);
+
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
+  }, []);
 
   return (
     <BusinessTabs.Navigator
-      screenOptions={({ route }) => ({
-        headerShown: false,
-        tabBarStyle: [
-          styles.tabBar,
-          {
-            height: tabHeight,
-            paddingBottom: bottomPadding,
-            backgroundColor: colors.card,
-            borderTopColor: colors.border,
-            shadowColor: "#000",
-            shadowOpacity: isDark ? 0.25 : 0.04,
-          },
-        ],
-        tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: colors.muted,
-        tabBarLabelStyle: styles.tabBarLabel,
-        tabBarItemStyle: styles.tabBarItem,
-        tabBarIcon: ({ color, focused, size }) => {
-          let iconName: keyof typeof Ionicons.glyphMap = "grid";
-          if (route.name === "Dashboard") {
-            iconName = focused ? "grid" : "grid-outline";
-          } else if (route.name === "Profile") {
-            iconName = focused ? "person" : "person-outline";
-          }
-
-          return (
-            <View style={[
-              styles.tabIconWrap, 
-              focused && { backgroundColor: colors.primarySubtle }
-            ]}>
-              <Ionicons name={iconName} size={size - 1} color={color} />
-            </View>
-          );
-        },
-      })}
+      tabBar={(props) => (
+        <BottomTabBar {...props} unreadCount={unreadCount} isBusiness />
+      )}
+      screenOptions={{ headerShown: false }}
     >
       <BusinessTabs.Screen
         name="Dashboard"
         component={BusinessDashboardScreen}
-        options={{ title: "Dashboard" }}
+        options={{ tabBarAccessibilityLabel: "Dashboard" }}
+      />
+      <BusinessTabs.Screen
+        name="Notifications"
+        component={NotificationsScreen}
+        options={{ tabBarAccessibilityLabel: "Notifications" }}
       />
       <BusinessTabs.Screen
         name="Profile"
         component={ProfileScreen}
-        options={{ title: "Settings" }}
+        options={{ tabBarAccessibilityLabel: "Profile" }}
       />
     </BusinessTabs.Navigator>
   );
@@ -174,21 +166,49 @@ function BusinessTabsNavigator() {
 // 4. Conditional Root Navigator: Role-based routing + auth gate
 function AppNavigatorInner() {
   const { loading, user } = useAuth();
+  const [splashFinished, setSplashFinished] = useState(false);
+  const [initialAuthRoute, setInitialAuthRoute] = useState<"Onboarding" | "Login">("Onboarding");
 
-  // Shows branded loader while AsyncStorage hydrates saved session
-  if (loading) {
-    return (
-      <AppLoader
-        message="Connecting to QueueLess..."
-        submessage="Verifying secure session"
-        fullScreen
-      />
-    );
+  useEffect(() => {
+    let isMounted = true;
+    const startTimer = Date.now();
+
+    const checkInit = async () => {
+      let seen = false;
+      try {
+        const val = await AsyncStorage.getItem(ONBOARDING_SEEN_KEY);
+        seen = val === "true";
+      } catch {
+        // fallback
+      }
+
+      const elapsed = Date.now() - startTimer;
+      const remaining = Math.max(0, 1200 - elapsed);
+      await new Promise((resolve) => setTimeout(resolve, remaining));
+
+      if (isMounted) {
+        setInitialAuthRoute(seen ? "Login" : "Onboarding");
+        setSplashFinished(true);
+      }
+    };
+
+    if (!loading) {
+      checkInit();
+    }
+
+    return () => {
+      isMounted = false;
+    };
+  }, [loading]);
+
+  // Shows Launch first screen (Splash) during session hydration and 1.2s display timer
+  if (loading || !splashFinished) {
+    return <SplashScreen />;
   }
 
-  // Unauthenticated user -> routes to Welcome/Login/Register
+  // Unauthenticated user -> routes to Onboarding (if new) or Login (if seen)
   if (!user) {
-    return <AuthNavigator />;
+    return <AuthNavigator initialRoute={initialAuthRoute} />;
   }
 
   // Authenticated user -> dynamic role segregation (Customer vs Business)
@@ -199,7 +219,8 @@ function AppNavigatorInner() {
       ) : (
         <RootStack.Screen name="CustomerTabs" component={CustomerTabsNavigator} />
       )}
-      {/* Shared modal/detail screen accessible across tabs */}
+      <RootStack.Screen name="ScanJoin" component={ScanJoinScreen} />
+      <RootStack.Screen name="Profile" component={ProfileScreen} />
       <RootStack.Screen name="QueueStatus" component={QueueStatusScreen} />
       <RootStack.Screen name="PrivacyPolicy" component={PrivacyPolicyScreen} />
       <RootStack.Screen name="Terms" component={TermsScreen} />
@@ -231,28 +252,3 @@ export default function AppNavigator() {
     </NavigationContainer>
   );
 }
-
-const styles = StyleSheet.create({
-  tabBar: {
-    borderTopWidth: 1,
-    paddingTop: 6,
-    elevation: 8,
-    shadowOffset: { width: 0, height: -3 },
-    shadowRadius: 6,
-  },
-  tabBarItem: {
-    paddingVertical: 2,
-  },
-  tabIconWrap: {
-    paddingHorizontal: 12,
-    paddingVertical: 3,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  tabBarLabel: {
-    fontSize: 11,
-    fontWeight: "700",
-    letterSpacing: 0.1,
-  },
-});

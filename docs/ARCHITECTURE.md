@@ -63,7 +63,48 @@ stateDiagram-v2
 ### 3.1 Socket Rooms
 - `business_{businessId}`: Authenticated room for the business merchant. Receives `queue_updated` when customers join or change position.
 - `queue_{queueEntryId}`: Private room for a specific ticket. Authorized strictly to the ticket owner or merchant. Receives `status_updated`.
+- `user_{userId}`: User-specific private room receiving real-time `notification:new` alerts.
 
 ### 3.2 Resilience & Reconciliation
-Socket.IO is used exclusively as a fast notification layer. MongoDB remains the authoritative source of truth.
-Clients must always execute a REST fetch on reconnect or visibility restoration to reconcile state.
+Socket.IO is used as a fast notification layer. MongoDB remains the authoritative source of truth.
+Clients execute REST fetches on screen focus or visibility restoration to reconcile state.
+
+---
+
+## 4. Notifications & Updates Feed Subsystem
+
+```mermaid
+graph LR
+    Event["Queue State Transition (Join, Advance, Verify, Complete)"] --> Service["queueService.ts"]
+    Service --> NotifService["notificationService.ts"]
+    NotifService --> DB[(MongoDB Collections: notifications, updates)]
+    NotifService --> Push["Expo Push Service (Part C)"]
+    NotifService --> Socket["Socket.IO user_{userId}"]
+```
+
+### 4.1 Coalescing & Deduplication
+- **Dedupe Keys:**
+  - `joined:{queueId}`
+  - `turn_near:{queueId}`
+  - `your_turn:{queueId}`
+  - `checked_in:{queueId}`
+  - `completed:{queueId}`
+  - `cancelled:{queueId}`
+- **Queue Movement Coalescing:** For tickets ahead that move, `queue_updated:{queueId}` is upserted in place with new `meta.position` and `meta.waitMin` instead of generating multiple notifications per ticket.
+
+### 4.2 Announcement Visibility Rule
+Customers only see announcements from businesses:
+1. Marked as favorites (`favoriteBusinesses`), OR
+2. Where the customer has booked a ticket within the previous 30 days.
+
+---
+
+## 5. Mobile Client Architecture (`/mobile`)
+
+- **View Geometry:** 390x844 responsive flexbox design system.
+- **Navigation:**
+  - `AuthNavigator`: Splash -> Onboarding (if first time) -> Login <-> Register.
+  - `CustomerTabsNavigator`: Home, Notifications (with unread badge), Updates, My Queue.
+  - `BusinessTabsNavigator`: Dashboard, Profile.
+  - `RootStack`: ScanJoin (Store Detail), Profile, QueueStatus, History, Help, Legal.
+- **Design Tokens:** Strictly centralized in `src/theme/colors.ts` and `src/theme/theme.ts`.

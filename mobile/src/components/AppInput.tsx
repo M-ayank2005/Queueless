@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState } from 'react';
 import {
   StyleProp,
   StyleSheet,
@@ -7,20 +7,20 @@ import {
   TouchableOpacity,
   View,
   ViewStyle,
-} from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import { useTheme } from "../context/ThemeContext";
-import { radii, spacing } from "../theme/theme";
+} from 'react-native';
+import { useTheme } from '../context/ThemeContext';
+import { radii } from '../theme/theme';
+import { EyeIcon, EyeOffIcon } from '../assets/icons/AppIcons';
 
-type Props = {
-  label: string;
+interface Props {
+  label?: string;
   value: string;
   onChangeText: (text: string) => void;
   placeholder?: string;
   secureTextEntry?: boolean;
-  keyboardType?: "default" | "email-address" | "number-pad" | "phone-pad" | "numeric";
-  autoCapitalize?: "none" | "sentences" | "words" | "characters";
-  icon?: keyof typeof Ionicons.glyphMap;
+  keyboardType?: 'default' | 'email-address' | 'number-pad' | 'phone-pad' | 'numeric';
+  autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
+  leftElement?: React.ReactNode;
   rightAction?: React.ReactNode;
   error?: string;
   helperText?: string;
@@ -28,22 +28,18 @@ type Props = {
   numberOfLines?: number;
   style?: StyleProp<ViewStyle>;
   editable?: boolean;
-};
+  maxLength?: number;
+}
 
-/**
- * AppInput Component
- * Polished text field with leading icon support, focus highlights,
- * password visibility toggling, and contextual error messages across themes.
- */
 export default function AppInput({
   label,
   value,
   onChangeText,
   placeholder,
   secureTextEntry,
-  keyboardType = "default",
-  autoCapitalize = "sentences",
-  icon,
+  keyboardType = 'default',
+  autoCapitalize = 'none',
+  leftElement,
   rightAction,
   error,
   helperText,
@@ -51,6 +47,7 @@ export default function AppInput({
   numberOfLines = 1,
   style,
   editable = true,
+  maxLength,
 }: Props) {
   const { colors } = useTheme();
   const [isFocused, setIsFocused] = useState(false);
@@ -61,42 +58,35 @@ export default function AppInput({
 
   return (
     <View style={[styles.wrapper, style]}>
-      <View style={styles.labelRow}>
-        <Text style={[styles.label, { color: colors.textSecondary }, isFocused && { color: colors.primary }]}>
-          {label}
-        </Text>
-        {error ? <Text style={[styles.errorLabel, { color: colors.danger }]}>{error}</Text> : null}
-      </View>
+      {label && (
+        <View style={styles.labelRow}>
+          <Text style={[styles.label, { color: colors.textPrimary }]}>{label}</Text>
+          {error ? <Text style={[styles.errorLabel, { color: colors.danger }]}>{error}</Text> : null}
+        </View>
+      )}
 
       <View
         style={[
           styles.inputContainer,
           {
-            backgroundColor: isFocused ? colors.card : colors.cardSoft,
-            borderColor: error ? colors.danger : isFocused ? colors.primary : colors.border,
+            backgroundColor: colors.card,
+            borderColor: error ? colors.danger : isFocused ? colors.primary : colors.inputBorder,
             borderWidth: isFocused ? 1.5 : 1,
           },
           !editable && styles.inputDisabled,
           multiline && styles.inputMultiline,
         ]}
       >
-        {icon && (
-          <Ionicons
-            name={icon}
-            size={18}
-            color={error ? colors.danger : isFocused ? colors.primary : colors.muted}
-            style={styles.leadingIcon}
-          />
-        )}
+        {leftElement}
 
         <TextInput
           value={value}
           onChangeText={onChangeText}
           placeholder={placeholder}
-          placeholderTextColor={colors.muted}
+          placeholderTextColor={colors.placeholder}
           style={[
             styles.input,
-            { color: colors.text },
+            { color: colors.textPrimary },
             multiline && styles.inputFieldMultiline,
           ]}
           onFocus={() => setIsFocused(true)}
@@ -107,6 +97,7 @@ export default function AppInput({
           multiline={multiline}
           numberOfLines={numberOfLines}
           editable={editable}
+          maxLength={maxLength}
         />
 
         {isPassword ? (
@@ -114,12 +105,13 @@ export default function AppInput({
             onPress={() => setIsPasswordVisible((prev) => !prev)}
             style={styles.actionBtn}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            accessibilityLabel={isPasswordVisible ? 'Hide password' : 'Show password'}
           >
-            <Ionicons
-              name={isPasswordVisible ? "eye-off-outline" : "eye-outline"}
-              size={18}
-              color={colors.muted}
-            />
+            {isPasswordVisible ? (
+              <EyeOffIcon size={20} color={colors.textSecondary} />
+            ) : (
+              <EyeIcon size={20} color={colors.textSecondary} />
+            )}
           </TouchableOpacity>
         ) : rightAction ? (
           <View style={styles.actionBtn}>{rightAction}</View>
@@ -135,59 +127,59 @@ export default function AppInput({
 
 const styles = StyleSheet.create({
   wrapper: {
-    gap: 6,
-    width: "100%",
+    width: '100%',
+    marginBottom: 20, // Group spacing towards ~28px
   },
   labelRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8, // 8px gap between label and field
   },
   label: {
-    fontSize: 13,
-    fontWeight: "600",
-    letterSpacing: 0.2,
-    flexShrink: 1,
-    marginRight: spacing.xs,
+    fontFamily: 'Inter_500Medium',
+    fontSize: 14,
+    fontWeight: '500',
+    letterSpacing: -0.1,
   },
   errorLabel: {
+    fontFamily: 'Inter_400Regular',
     fontSize: 12,
-    fontWeight: "500",
-    flexShrink: 0,
+    fontWeight: '400',
   },
   inputContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderRadius: radii.md,
-    minHeight: 50,
-    paddingHorizontal: spacing.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderRadius: radii.input, // radius 12
+    height: 42, // field height 42
+    paddingLeft: 12, // left padding 12
+    paddingRight: 12,
   },
   inputDisabled: {
     opacity: 0.6,
   },
   inputMultiline: {
-    minHeight: 90,
-    alignItems: "flex-start",
-    paddingVertical: spacing.md,
-  },
-  leadingIcon: {
-    marginRight: spacing.sm,
+    height: 90,
+    alignItems: 'flex-start',
+    paddingVertical: 10,
   },
   input: {
     flex: 1,
     minWidth: 0,
+    fontFamily: 'Inter_500Medium',
     fontSize: 15,
-    paddingVertical: 10,
+    paddingVertical: 0,
   },
   inputFieldMultiline: {
-    textAlignVertical: "top",
+    textAlignVertical: 'top',
   },
   actionBtn: {
-    marginLeft: spacing.sm,
+    marginLeft: 8,
     padding: 4,
   },
   helperText: {
+    fontFamily: 'Inter_400Regular',
     fontSize: 12,
-    marginTop: 2,
+    marginTop: 4,
   },
 });

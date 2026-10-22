@@ -1,31 +1,33 @@
 import React, { useMemo, useState } from "react";
-import { Alert, Platform, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import {
+  StyleSheet,
+  Text,
+  View,
+  TouchableOpacity,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StatusBar,
+} from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AppButton from "../../components/AppButton";
 import AppInput from "../../components/AppInput";
-import AppScreen from "../../components/AppScreen";
-import Card from "../../components/Card";
+import { AlertCard } from "../../components/AlertCard";
+import LogoQ from "../../components/LogoQ";
 import { useAuth } from "../../context/AuthContext";
 import { AuthStackParamList } from "../../navigation/types";
 import { useTheme } from "../../context/ThemeContext";
 import { ThemeColors } from "../../theme/colors";
-import { radii, spacing } from "../../theme/theme";
+import { typography, radii, spacing } from "../../theme/theme";
 
 type Props = NativeStackScreenProps<AuthStackParamList, "Login">;
 
-/**
- * LoginScreen
- * Handles user authentication with:
- * - Client-side validation
- * - Global session state updates via AuthContext
- * - Dynamic theme color support
- * - Cross-platform feedback
- */
 export default function LoginScreen({ navigation }: Props) {
   const { login } = useAuth();
-  const { colors } = useTheme();
-  const styles = useMemo(() => createStyles(colors), [colors]);
+  const insets = useSafeAreaInsets();
+  const { colors, isDark } = useTheme();
+  const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -35,10 +37,7 @@ export default function LoginScreen({ navigation }: Props) {
   const submit = async () => {
     setErrorMsg("");
     if (!email || !password) {
-      const msg = "Please enter both email and password.";
-      setErrorMsg(msg);
-      if (Platform.OS === "web") window.alert(msg);
-      else Alert.alert("Missing details", msg);
+      setErrorMsg("Please enter both email and password.");
       return;
     }
 
@@ -51,180 +50,177 @@ export default function LoginScreen({ navigation }: Props) {
         error?.message ||
         "Sign in failed. Please check your credentials.";
       setErrorMsg(msg);
-      if (Platform.OS === "web") window.alert(msg);
-      else Alert.alert("Sign in failed", msg);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <AppScreen contentContainerStyle={styles.screenContent} keyboardOffset={20}>
-      <View style={styles.container}>
-        {/* Top Header Section */}
-        <View style={styles.topSection}>
-          <TouchableOpacity
-            style={styles.backBtn}
-            onPress={() => navigation.navigate("Welcome")}
-            activeOpacity={0.7}
-          >
-            <View style={styles.backIconCircle}>
-              <Ionicons name="arrow-back" size={18} color={colors.text} />
+    <View style={styles.container}>
+      <StatusBar
+        barStyle="light-content"
+        backgroundColor={isDark ? colors.bg : colors.primary}
+      />
+      <KeyboardAvoidingView
+        style={styles.keyboardAvoid}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          bounces={false}
+        >
+          {/* Hero Section */}
+          <View style={[styles.hero, { paddingTop: Math.max(insets.top, 20) + 28 }]}>
+            <View style={styles.heroLogoRow}>
+              <LogoQ size={36} variant="brand" />
+              <Text style={styles.heroTitle}>
+                Queue<Text style={styles.heroTitleLess}>Less</Text>
+              </Text>
             </View>
-            <Text style={styles.backText}>Back</Text>
-          </TouchableOpacity>
-
-          <View style={styles.header}>
-            <Text style={styles.title}>Welcome Back</Text>
-            <Text style={styles.subtitle}>
-              Sign in to check your active queue status or manage store counters.
-            </Text>
+            <Text style={styles.heroTagline}>Track Your Queue in Real Time</Text>
           </View>
-        </View>
 
-        {/* Center Form Card */}
-        <Card variant="elevated" style={styles.formCard}>
-          {errorMsg ? (
-            <View style={styles.errorBox}>
-              <Ionicons name="alert-circle" size={18} color={colors.danger} />
-              <Text style={styles.errorText}>{errorMsg}</Text>
+          {/* Sheet overlapping hero */}
+          <View style={styles.sheet}>
+            {errorMsg ? (
+              <View style={styles.errorContainer}>
+                <AlertCard
+                  type="danger"
+                  title="Login Error"
+                  message={errorMsg}
+                />
+              </View>
+            ) : null}
+
+            {/* Email field */}
+            <AppInput
+              label="Email"
+              value={email}
+              onChangeText={(text) => {
+                setEmail(text);
+                if (errorMsg) setErrorMsg("");
+              }}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              placeholder="Please Enter Your Email"
+              style={styles.inputGroup}
+            />
+
+            {/* Password field */}
+            <AppInput
+              label="Password"
+              value={password}
+              onChangeText={(text) => {
+                setPassword(text);
+                if (errorMsg) setErrorMsg("");
+              }}
+              secureTextEntry
+              placeholder="Please Enter Your Password"
+              style={styles.inputGroup}
+            />
+
+            {/* Login button */}
+            <View style={styles.buttonWrap}>
+              <AppButton
+                title="Login"
+                onPress={submit}
+                loading={loading}
+                loadingText="Signing In..."
+              />
             </View>
-          ) : null}
 
-          <AppInput
-            label="Email Address"
-            value={email}
-            onChangeText={setEmail}
-            keyboardType="email-address"
-            autoCapitalize="none"
-            placeholder="e.g. name@example.com"
-            icon="mail-outline"
-          />
-
-          <AppInput
-            label="Password"
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-            placeholder="Enter your password"
-            icon="lock-closed-outline"
-          />
-
-          <AppButton
-            title="Sign In"
-            size="lg"
-            onPress={submit}
-            loading={loading}
-            loadingText="Signing In..."
-            icon="log-in-outline"
-            style={{ marginTop: spacing.xs }}
-          />
-        </Card>
-
-        {/* Bottom register route */}
-        <View style={styles.footerRow}>
-          <Text style={styles.footerText}>Don't have an account?</Text>
-          <TouchableOpacity
-            onPress={() => navigation.navigate("Register")}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.registerLink}>Create one here</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </AppScreen>
+            {/* Bottom link: "Don't have an account ?" + "Sign Up" */}
+            <View style={[styles.footerRow, { paddingBottom: Math.max(insets.bottom, 16) + 12 }]}>
+              <Text style={styles.footerText}>Don't have an account ? </Text>
+              <TouchableOpacity
+                onPress={() => navigation.navigate("Register")}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.signUpLink}>Sign Up</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </View>
   );
 }
 
-const createStyles = (colors: ThemeColors) =>
-  StyleSheet.create({
-    screenContent: {
-      flexGrow: 1,
-    },
+function createStyles(colors: ThemeColors, isDark: boolean) {
+  return StyleSheet.create({
     container: {
       flex: 1,
-      justifyContent: "space-between",
-      gap: spacing.lg,
+      backgroundColor: isDark ? colors.bg : colors.primary,
     },
-    topSection: {
-      gap: spacing.md,
-      paddingTop: spacing.xs,
-    },
-    backBtn: {
-      flexDirection: "row",
-      alignItems: "center",
-      gap: spacing.sm,
-      alignSelf: "flex-start",
-      paddingVertical: spacing.xs,
-    },
-    backIconCircle: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
-      backgroundColor: colors.cardSoft,
-      borderColor: colors.border,
-      borderWidth: 1,
-      alignItems: "center",
-      justifyContent: "center",
-    },
-    backText: {
-      color: colors.textSecondary,
-      fontSize: 14,
-      fontWeight: "600",
-    },
-    header: {
-      gap: spacing.xs,
-      marginTop: spacing.xs,
-    },
-    title: {
-      fontSize: 28,
-      fontWeight: "800",
-      color: colors.text,
-      letterSpacing: -0.5,
-    },
-    subtitle: {
-      fontSize: 14,
-      color: colors.muted,
-      lineHeight: 21,
-      marginTop: 2,
-    },
-    formCard: {
-      gap: spacing.lg,
-      padding: spacing.xl,
-      marginVertical: spacing.md,
-    },
-    errorBox: {
-      flexDirection: "row",
-      alignItems: "center",
-      backgroundColor: colors.dangerSubtle,
-      borderWidth: 1,
-      borderColor: colors.dangerBorder,
-      borderRadius: radii.md,
-      paddingHorizontal: spacing.md,
-      paddingVertical: spacing.sm,
-      gap: spacing.sm,
-    },
-    errorText: {
-      color: colors.danger,
-      fontSize: 13,
-      fontWeight: "600",
+    keyboardAvoid: {
       flex: 1,
+    },
+    scrollContent: {
+      flexGrow: 1,
+    },
+    hero: {
+      height: 214,
+      backgroundColor: isDark ? colors.bgSecondary : colors.primary,
+      paddingHorizontal: 16,
+    },
+    heroLogoRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+    },
+    heroTitle: {
+      fontSize: 28,
+      fontFamily: typography.families.interSemiBold,
+      fontWeight: "600",
+      color: "#FFFFFF",
+      letterSpacing: -0.3,
+    },
+    heroTitleLess: {
+      color: "#38BDF8",
+      fontWeight: "800",
+    },
+    heroTagline: {
+      marginTop: 8,
+      fontSize: 14,
+      fontFamily: typography.families.interRegular,
+      color: "#FFFFFF",
+      opacity: 0.9,
+    },
+    sheet: {
+      flex: 1,
+      backgroundColor: colors.bg,
+      borderTopLeftRadius: radii.loginSheet,
+      borderTopRightRadius: radii.loginSheet,
+      paddingHorizontal: 16,
+      paddingTop: 36,
+    },
+    errorContainer: {
+      marginBottom: 16,
+    },
+    inputGroup: {
+      marginBottom: 24,
+    },
+    buttonWrap: {
+      marginTop: 4,
+      marginBottom: 32,
     },
     footerRow: {
       flexDirection: "row",
-      flexWrap: "wrap",
-      alignItems: "center",
       justifyContent: "center",
-      gap: spacing.xs,
-      paddingVertical: spacing.md,
+      alignItems: "center",
+      marginTop: "auto",
     },
     footerText: {
+      fontSize: 14,
+      fontFamily: typography.families.interRegular,
       color: colors.muted,
-      fontSize: 14,
     },
-    registerLink: {
-      color: colors.primary,
+    signUpLink: {
       fontSize: 14,
-      fontWeight: "700",
+      fontFamily: typography.families.interSemiBold,
+      fontWeight: "600",
+      color: colors.primary,
     },
   });
+}

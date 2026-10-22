@@ -37,6 +37,12 @@ export interface ILegalConsent {
   userAgent?: string;
 }
 
+export interface IPushToken {
+  token: string;
+  platform: 'ios' | 'android';
+  updatedAt: Date;
+}
+
 export interface IUser extends Document {
   name: string;
   email: string;
@@ -46,6 +52,7 @@ export interface IUser extends Document {
   businessProfile?: IBusinessProfile;
   favoriteBusinesses?: mongoose.Types.ObjectId[];
   legalConsent?: ILegalConsent;
+  pushTokens?: IPushToken[];
 }
 
 const ServiceSchema = new Schema<IService>({
@@ -67,6 +74,12 @@ const BusinessProfileSchema = new Schema<IBusinessProfile>({
   }
 });
 
+const PushTokenSchema = new Schema<IPushToken>({
+  token: { type: String, required: true },
+  platform: { type: String, enum: ['ios', 'android'], required: true },
+  updatedAt: { type: Date, default: Date.now }
+}, { _id: false });
+
 const LegalConsentSchema = new Schema<ILegalConsent>({
   agreedToTerms: { type: Boolean, required: true, default: false },
   privacyPolicyAcknowledged: { type: Boolean, required: true, default: false },
@@ -86,7 +99,8 @@ const UserSchema = new Schema<IUser>({
   role: { type: String, enum: ["customer", "business"], required: true },
   businessProfile: { type: BusinessProfileSchema },
   favoriteBusinesses: [{ type: Schema.Types.ObjectId, ref: "User" }],
-  legalConsent: { type: LegalConsentSchema, required: false }
+  legalConsent: { type: LegalConsentSchema, required: false },
+  pushTokens: { type: [PushTokenSchema], default: [] }
 }, { timestamps: true });
 
 export default mongoose.model<IUser>("User", UserSchema);

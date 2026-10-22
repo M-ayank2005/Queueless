@@ -5,6 +5,17 @@ import { Platform, StyleSheet, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import * as SplashScreen from "expo-splash-screen";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import {
+  useFonts,
+  Inter_300Light,
+  Inter_400Regular,
+  Inter_500Medium,
+  Inter_600SemiBold,
+} from "@expo-google-fonts/inter";
+import {
+  Poppins_400Regular,
+  Poppins_500Medium,
+} from "@expo-google-fonts/poppins";
 import { AuthProvider } from "./src/context/AuthContext";
 import { ThemeProvider, useTheme, THEME_STORAGE_KEY, ThemeMode } from "./src/context/ThemeContext";
 import AppNavigator from "./src/navigation/AppNavigator";
@@ -66,6 +77,15 @@ export default function App() {
   const [initialTheme, setInitialTheme] = useState<ThemeMode>("light");
   const [appIsReady, setAppIsReady] = useState(false);
 
+  const [fontsLoaded] = useFonts({
+    Inter_300Light,
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+    Poppins_400Regular,
+    Poppins_500Medium,
+  });
+
   useEffect(() => {
     async function prepare() {
       try {
@@ -73,21 +93,25 @@ export default function App() {
         if (storedTheme === "dark" || storedTheme === "light") {
           setInitialTheme(storedTheme);
         } else {
-          // Default is light mode
           setInitialTheme("light");
         }
       } catch (e) {
         console.warn("Error reading stored theme at startup", e);
       } finally {
         setAppIsReady(true);
-        await SplashScreen.hideAsync().catch(() => {});
       }
     }
 
     prepare();
   }, []);
 
-  if (!appIsReady) {
+  useEffect(() => {
+    if (appIsReady && fontsLoaded) {
+      SplashScreen.hideAsync().catch(() => {});
+    }
+  }, [appIsReady, fontsLoaded]);
+
+  if (!appIsReady || !fontsLoaded) {
     return null;
   }
 

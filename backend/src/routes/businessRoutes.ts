@@ -7,8 +7,12 @@ import {
   updateQueueStatus, 
   updateSettings,
   getAnalytics,
-  verifyQueueTicket
+  verifyQueueTicket,
+  createBusinessUpdate,
+  getBusinessUpdates,
+  deleteBusinessUpdate
 } from "../controllers/businessController";
+import { businessUpdateRateLimiter } from "../middleware/rateLimiter";
 
 const router = express.Router();
 
@@ -22,5 +26,10 @@ router.get("/queue", getQueue);
 router.post("/queue/verify", verifyQueueTicket);
 router.put("/queue/:id/status", updateQueueStatus);
 router.get("/analytics", getAnalytics);
+
+// Business Updates / Announcements (Rate limited to 10/hour per business)
+router.post("/updates", businessUpdateRateLimiter, createBusinessUpdate);
+router.get("/updates", getBusinessUpdates);
+router.delete("/updates/:id", deleteBusinessUpdate);
 
 export default router;

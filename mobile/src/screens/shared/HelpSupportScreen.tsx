@@ -13,6 +13,7 @@ import {
 import { useNavigation } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import AppScreen from "../../components/AppScreen";
+import ScreenHeader from "../../components/ScreenHeader";
 import Card from "../../components/Card";
 import { useTheme } from "../../context/ThemeContext";
 import { useAuth } from "../../context/AuthContext";
@@ -385,33 +386,8 @@ export default function HelpSupportScreen() {
         activeTab === "ai" ? styles.screenContentAi : styles.screenContent
       }
     >
-      {/* Top Header - Back Button Only (No Gemini Badge) */}
-      <View style={styles.topRow}>
-        <TouchableOpacity
-          style={styles.backBtn}
-          onPress={() => navigation.goBack()}
-          activeOpacity={0.7}
-          accessibilityRole="button"
-          accessibilityLabel="Go Back"
-        >
-          <View style={styles.backIconCircle}>
-            <Ionicons name="arrow-back" size={18} color={colors.text} />
-          </View>
-          <Text style={styles.backText}>Back</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Screen Title */}
-      <View style={[styles.titleSection, activeTab === "ai" && styles.titleSectionAi]}>
-        <Text style={[styles.pageTitle, activeTab === "ai" && styles.pageTitleAi]}>
-          Help & Support
-        </Text>
-        {activeTab === "faq" && (
-          <Text style={styles.pageSubtitle}>
-            Frequently asked questions, live ticket guidance, and direct support.
-          </Text>
-        )}
-      </View>
+      {/* Top Header */}
+      <ScreenHeader title="Help & Support" showBack={navigation.canGoBack()} />
 
       {/* Segment Switcher */}
       <View style={styles.segmentContainer}>

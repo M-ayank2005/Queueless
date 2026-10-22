@@ -1,0 +1,114 @@
+{
+  "id": "10:1860",
+  "name": "Launch first screen",
+  "type": "FRAME",
+  "x": 0,
+  "y": 0,
+  "width": 390,
+  "height": 844,
+  "fills": [
+    {
+      "type": "SOLID",
+      "hex": "#284D83",
+      "alpha": 1
+    }
+  ],
+  "cornerRadius": 30,
+  "children": [
+    {
+      "id": "227:141",
+      "name": "Frame 1000006527",
+      "type": "FRAME",
+      "x": 52,
+      "y": 337,
+      "width": 286,
+      "height": 170,
+      "autoLayout": {
+        "layoutMode": "VERTICAL",
+        "itemSpacing": 17,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "counterAxisAlignItems": "CENTER"
+      },
+      "children": [
+        {
+          "id": "119:167",
+          "name": "Group 6165",
+          "type": "GROUP",
+          "x": 152.5,
+          "y": 337,
+          "width": 85,
+          "height": 85,
+          "children": [
+            {
+              "id": "119:168",
+              "name": "Vector",
+              "type": "VECTOR",
+              "x": 168.1,
+              "y": 352.6,
+              "width": 53.8,
+              "height": 53.8,
+              "fills": [],
+              "strokes": [
+                {
+                  "type": "SOLID",
+                  "hex": "#FFFFFF",
+                  "alpha": 1
+                }
+              ],
+              "strokeWeight": 1.393728256225586,
+              "strokeAlign": "CENTER"
+            },
+            {
+              "id": "119:169",
+              "name": "Vector",
+              "type": "VECTOR",
+              "x": 152.5,
+              "y": 337,
+              "width": 85,
+              "height": 85,
+              "fills": [],
+              "strokes": [
+                {
+                  "type": "SOLID",
+                  "hex": "#FFFFFF",
+                  "alpha": 1
+                }
+              ],
+              "strokeWeight": 1.393728256225586,
+              "strokeAlign": "CENTER"
+            }
+          ]
+        },
+        {
+          "id": "10:1861",
+          "name": "Find Your Match",
+          "type": "TEXT",
+          "x": 52,
+          "y": 439,
+          "width": 286,
+          "height": 68,
+          "fills": [
+            {
+              "type": "SOLID",
+              "hex": "#FFFFFF",
+              "alpha": 1
+            }
+          ],
+          "text": {
+            "characters": "QueueLess",
+            "fontFamily": "Inter",
+            "fontSize": 50,
+            "fontWeight": 400,
+            "lineHeightPx": 60.5,
+            "letterSpacing": 0,
+            "textAlignHorizontal": "CENTER",
+            "textAlignVertical": "TOP"
+          }
+        }
+      ]
+    }
+  ]
+}

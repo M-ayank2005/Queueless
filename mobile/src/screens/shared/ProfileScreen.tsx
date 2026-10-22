@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Platform,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -11,24 +12,25 @@ import {
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Ionicons } from "@expo/vector-icons";
-import AppButton from "../../components/AppButton";
+import { LinearGradient } from "expo-linear-gradient";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import ScreenHeader from "../../components/ScreenHeader";
 import AppLoader from "../../components/AppLoader";
-import AppScreen from "../../components/AppScreen";
-import Card from "../../components/Card";
-import EmptyState from "../../components/EmptyState";
-import SectionHeader from "../../components/SectionHeader";
-import StatusBadge from "../../components/StatusBadge";
 import { useAuth } from "../../context/AuthContext";
 import { useTheme } from "../../context/ThemeContext";
+import { ThemeColors } from "../../theme/colors";
 import { api } from "../../lib/api";
 import { RootStackParamList } from "../../navigation/types";
 import { QueueEntry } from "../../types";
-import { radii, spacing } from "../../theme/theme";
+import { typography, radii, shadows } from "../../theme/theme";
 
 export default function ProfileScreen() {
   const { user, logout } = useAuth();
   const { theme, setTheme, colors } = useTheme();
-  const rootNavigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  const navigation = useNavigation<any>();
+  const insets = useSafeAreaInsets();
+
   const [history, setHistory] = useState<QueueEntry[]>([]);
   const [loadingData, setLoadingData] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -36,6 +38,15 @@ export default function ProfileScreen() {
   const [updatingHours, setUpdatingHours] = useState(false);
 
   const isBusiness = user?.role === "business" || Boolean(user?.businessProfile);
+  const initialLetter = (user?.name || "U").charAt(0).toUpperCase();
+
+  const handleBack = () => {
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+    } else {
+      navigation.navigate(isBusiness ? "Dashboard" : "Home");
+    }
+  };
 
   const confirmLogout = () => {
     if (Platform.OS === "web") {
@@ -106,623 +117,457 @@ export default function ProfileScreen() {
 
   if (loadingData) {
     return (
-      <AppScreen scroll={false}>
+      <View style={[styles.container, { paddingTop: Math.max(insets.top, 16) }]}>
         <AppLoader
           message="Loading profile & account..."
           submessage="Retrieving account settings and history"
         />
-      </AppScreen>
+      </View>
     );
   }
 
   return (
-    <AppScreen
-      hasTabBar
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={onRefresh}
-          tintColor={colors.primary}
-          colors={[colors.primary]}
+    <View style={styles.container}>
+      <ScrollView
+        contentContainerStyle={[
+          styles.scrollContent,
+          {
+            paddingTop: Math.max(insets.top, 16) + 12,
+            paddingBottom: Math.max(insets.bottom + 64 + 60, 160),
+          },
+        ]}
+        keyboardShouldPersistTaps="handled"
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor="#284D83"
+          />
+        }
+        showsVerticalScrollIndicator={false}
+      >
+        <ScreenHeader
+          title="Profile"
+          showBack={true}
+          onBack={handleBack}
         />
-      }
-    >
-      {/* Header Profile Identity Card */}
-      <Card variant="elevated" style={styles.profileCard}>
-        <View style={styles.profileRow}>
-          <View style={[styles.avatar, { backgroundColor: colors.cardElevated, borderColor: colors.primaryBorder }]}>
-            <Ionicons
-              name={isBusiness ? "storefront-outline" : "person-outline"}
-              size={28}
-              color={colors.primary}
-            />
-          </View>
-          <View style={styles.headerInfo}>
-            <Text style={[styles.name, { color: colors.text }]}>{user?.name || "User Account"}</Text>
-            <View style={[styles.rolePill, { backgroundColor: colors.primarySubtle, borderColor: colors.primaryBorder }]}>
-              <Ionicons
-                name={isBusiness ? "storefront-outline" : "person-outline"}
-                size={13}
-                color={colors.primary}
-              />
-              <Text style={[styles.roleText, { color: colors.primary }]}>
+
+        {/* 1. Identity Card: 64px gradient avatar */}
+        <View style={styles.card}>
+          <View style={styles.profileRow}>
+            <LinearGradient
+              colors={["#284D83", "#3E6BB2"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.avatarGradient}
+            >
+              <Text style={styles.avatarInitial}>{initialLetter}</Text>
+            </LinearGradient>
+
+            <View style={styles.headerInfo}>
+              <Text style={styles.userName} numberOfLines={1}>
+                {user?.name || "User Account"}
+              </Text>
+              <Text style={styles.userRole}>
                 {isBusiness ? "Merchant Account" : "Customer Account"}
               </Text>
             </View>
           </View>
         </View>
-      </Card>
 
-      {/* Account Details Card */}
-      <Card variant="default" style={styles.infoCard}>
-        <SectionHeader title="Account Details" icon="person-circle-outline" />
+        {/* 2. Account Details Card: detail rows with 20px outline icons, 12px grey label over 15px value */}
+        <View style={styles.card}>
+          <Text style={styles.cardSectionTitle}>Account Details</Text>
 
-        <View style={styles.detailsList}>
           <View style={styles.detailRow}>
-            <View style={[styles.iconBox, { backgroundColor: colors.cardSoft, borderColor: colors.border }]}>
-              <Ionicons name="person-outline" size={17} color={colors.primary} />
-            </View>
+            <Ionicons name="person-outline" size={20} color={colors.primary} style={styles.detailIcon} />
             <View style={styles.detailTextCol}>
-              <Text style={[styles.detailLabel, { color: colors.muted }]}>Full Name</Text>
-              <Text style={[styles.detailValue, { color: colors.text }]}>{user?.name || "Not specified"}</Text>
+              <Text style={styles.detailLabel}>Full Name</Text>
+              <Text style={styles.detailValue}>{user?.name || "Not specified"}</Text>
             </View>
           </View>
 
-          <View style={[styles.rowDivider, { backgroundColor: colors.borderSubtle }]} />
+          <View style={styles.rowDivider} />
 
           <View style={styles.detailRow}>
-            <View style={[styles.iconBox, { backgroundColor: colors.cardSoft, borderColor: colors.border }]}>
-              <Ionicons name="mail-outline" size={17} color={colors.primary} />
-            </View>
+            <Ionicons name="mail-outline" size={20} color={colors.primary} style={styles.detailIcon} />
             <View style={styles.detailTextCol}>
-              <Text style={[styles.detailLabel, { color: colors.muted }]}>Email Address</Text>
-              <Text style={[styles.detailValue, { color: colors.text }]}>{user?.email || "Not specified"}</Text>
+              <Text style={styles.detailLabel}>Email Address</Text>
+              <Text style={styles.detailValue}>{user?.email || "Not specified"}</Text>
             </View>
           </View>
 
-          <View style={[styles.rowDivider, { backgroundColor: colors.borderSubtle }]} />
+          <View style={styles.rowDivider} />
 
           <View style={styles.detailRow}>
-            <View style={[styles.iconBox, { backgroundColor: colors.cardSoft, borderColor: colors.border }]}>
-              <Ionicons name="call-outline" size={17} color={colors.primary} />
-            </View>
+            <Ionicons name="call-outline" size={20} color={colors.primary} style={styles.detailIcon} />
             <View style={styles.detailTextCol}>
-              <Text style={[styles.detailLabel, { color: colors.muted }]}>Phone Number</Text>
-              <Text style={[styles.detailValue, { color: colors.text }]}>{user?.phone || "Not specified"}</Text>
+              <Text style={styles.detailLabel}>Phone Number</Text>
+              <Text style={styles.detailValue}>{user?.phone || "Not specified"}</Text>
             </View>
           </View>
         </View>
-      </Card>
 
-      {/* Role-Specific Content: Business Store Information */}
-      {isBusiness && (
-        <Card variant="default" style={styles.infoCard}>
-          <SectionHeader
-            title="Store Information"
-            icon="storefront-outline"
-            rightElement={<StatusBadge status="open" size="sm" />}
-          />
-
-          <View style={styles.detailsList}>
-            <View style={styles.detailRow}>
-              <View style={[styles.iconBox, { backgroundColor: colors.cardSoft, borderColor: colors.border }]}>
-                <Ionicons name="business-outline" size={17} color={colors.primary} />
+        {/* 3. Business Information (Merchant Only) */}
+        {isBusiness && (
+          <View style={styles.card}>
+            <View style={styles.rowBetween}>
+              <Text style={styles.cardSectionTitle}>Store Information</Text>
+              <View style={styles.openPill}>
+                <Text style={styles.openPillText}>Open</Text>
               </View>
+            </View>
+
+            <View style={styles.detailRow}>
+              <Ionicons name="storefront-outline" size={20} color={colors.primary} style={styles.detailIcon} />
               <View style={styles.detailTextCol}>
-                <Text style={[styles.detailLabel, { color: colors.muted }]}>Shop Name</Text>
-                <Text style={[styles.detailValue, { color: colors.text }]}>
+                <Text style={styles.detailLabel}>Shop Name</Text>
+                <Text style={styles.detailValue}>
                   {businessProfile?.shopName || "QueueLess Store"}
                 </Text>
               </View>
             </View>
 
-            <View style={[styles.rowDivider, { backgroundColor: colors.borderSubtle }]} />
+            <View style={styles.rowDivider} />
 
             <View style={styles.detailRow}>
-              <View style={[styles.iconBox, { backgroundColor: colors.cardSoft, borderColor: colors.border }]}>
-                <Ionicons name="location-outline" size={17} color={colors.primary} />
-              </View>
+              <Ionicons name="location-outline" size={20} color={colors.primary} style={styles.detailIcon} />
               <View style={styles.detailTextCol}>
-                <Text style={[styles.detailLabel, { color: colors.muted }]}>Store Address</Text>
-                <Text style={[styles.detailValue, { color: colors.text }]}>
+                <Text style={styles.detailLabel}>Store Address</Text>
+                <Text style={styles.detailValue}>
                   {businessProfile?.address || "Store Location"}
                 </Text>
               </View>
             </View>
 
-            <View style={[styles.rowDivider, { backgroundColor: colors.borderSubtle }]} />
+            <View style={styles.rowDivider} />
 
             <View style={styles.detailRow}>
-              <View style={[styles.iconBox, { backgroundColor: colors.cardSoft, borderColor: colors.border }]}>
-                <Ionicons name="time-outline" size={17} color={colors.warning} />
-              </View>
+              <Ionicons name="time-outline" size={20} color={colors.primary} style={styles.detailIcon} />
               <View style={styles.detailTextCol}>
-                <Text style={[styles.detailLabel, { color: colors.muted }]}>Operating Hours</Text>
-                <Text style={[styles.detailValue, { color: colors.text }]}>
+                <Text style={styles.detailLabel}>Operating Hours</Text>
+                <Text style={styles.detailValue}>
                   {businessProfile?.workingHours?.openTime || "00:00"} -{" "}
                   {businessProfile?.workingHours?.closeTime || "23:59"}
                 </Text>
               </View>
 
               <TouchableOpacity
-                style={[styles.actionPillBtn, { backgroundColor: colors.primarySubtle, borderColor: colors.primaryBorder }]}
+                style={styles.set247Btn}
                 onPress={setHoursTo247}
                 disabled={updatingHours}
                 activeOpacity={0.7}
               >
-                <Ionicons name="flash-outline" size={13} color={colors.primary} />
-                <Text style={[styles.actionPillText, { color: colors.primary }]}>
+                <Text style={styles.set247Text}>
                   {updatingHours ? "Saving..." : "Set 24/7"}
                 </Text>
               </TouchableOpacity>
             </View>
-
-            <View style={[styles.rowDivider, { backgroundColor: colors.borderSubtle }]} />
-
-            <View style={styles.detailRow}>
-              <View style={[styles.iconBox, { backgroundColor: colors.cardSoft, borderColor: colors.border }]}>
-                <Ionicons name="list-outline" size={17} color={colors.success} />
-              </View>
-              <View style={styles.detailTextCol}>
-                <Text style={[styles.detailLabel, { color: colors.muted }]}>Services Catalog</Text>
-                <Text style={[styles.detailValue, { color: colors.text }]}>
-                  {businessProfile?.services?.length || 0} active services
-                </Text>
-              </View>
-            </View>
           </View>
-        </Card>
-      )}
+        )}
 
-      {/* Appearance & Theme Settings Card - Positioned below Account Details */}
-      <Card variant="default" style={styles.infoCard}>
-        <SectionHeader
-          title="Appearance & Theme"
-          subtitle="Select application theme for this device"
-          icon="color-palette-outline"
-        />
+        {/* 4. Menu Actions */}
+        <View style={styles.card}>
+          {!isBusiness && (
+            <>
+              <TouchableOpacity
+                style={styles.menuRow}
+                onPress={() => navigation.navigate("BookingHistory")}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="receipt-outline" size={20} color={colors.primary} style={styles.menuIcon} />
+                <Text style={styles.menuTitle}>Booking History</Text>
+                <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+              </TouchableOpacity>
+              <View style={styles.rowDivider} />
+            </>
+          )}
 
-        <View style={styles.themeSelectorRow}>
-          {/* Light Mode Option */}
           <TouchableOpacity
-            style={[
-              styles.themeOptionBtn,
-              {
-                backgroundColor: theme === "light" ? colors.primarySubtle : colors.cardSoft,
-                borderColor: theme === "light" ? colors.primary : colors.border,
-                borderWidth: theme === "light" ? 2 : 1,
-              },
-            ]}
-            onPress={() => setTheme("light")}
-            activeOpacity={0.8}
-            accessibilityRole="radio"
-            accessibilityState={{ selected: theme === "light" }}
-            accessibilityLabel="Light Mode"
-          >
-            <View style={styles.themeOptionHeader}>
-              <View style={[styles.themeIconWrap, { backgroundColor: "#FEF3C7" }]}>
-                <Ionicons name="sunny" size={20} color="#D97706" />
-              </View>
-              {theme === "light" && (
-                <View style={[styles.themeCheckmark, { backgroundColor: colors.primary }]}>
-                  <Ionicons name="checkmark" size={14} color="#FFFFFF" />
-                </View>
-              )}
-            </View>
-            <Text style={[styles.themeOptionTitle, { color: colors.text }]}>Light Mode</Text>
-            <Text style={[styles.themeOptionSubtitle, { color: colors.muted }]}>
-              Crisp daylight clarity (Default)
-            </Text>
-          </TouchableOpacity>
-
-          {/* Dark Mode Option */}
-          <TouchableOpacity
-            style={[
-              styles.themeOptionBtn,
-              {
-                backgroundColor: theme === "dark" ? colors.primarySubtle : colors.cardSoft,
-                borderColor: theme === "dark" ? colors.primary : colors.border,
-                borderWidth: theme === "dark" ? 2 : 1,
-              },
-            ]}
-            onPress={() => setTheme("dark")}
-            activeOpacity={0.8}
-            accessibilityRole="radio"
-            accessibilityState={{ selected: theme === "dark" }}
-            accessibilityLabel="Dark Mode"
-          >
-            <View style={styles.themeOptionHeader}>
-              <View style={[styles.themeIconWrap, { backgroundColor: "#1E2D4A" }]}>
-                <Ionicons name="moon" size={20} color="#60A5FA" />
-              </View>
-              {theme === "dark" && (
-                <View style={[styles.themeCheckmark, { backgroundColor: colors.primary }]}>
-                  <Ionicons name="checkmark" size={14} color="#FFFFFF" />
-                </View>
-              )}
-            </View>
-            <Text style={[styles.themeOptionTitle, { color: colors.text }]}>Dark Mode</Text>
-            <Text style={[styles.themeOptionSubtitle, { color: colors.muted }]}>
-              Midnight contrast for low light
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.themeStatusRow}>
-          <Text style={[styles.themeStatusText, { color: colors.muted }]}>
-            Active: <Text style={{ color: colors.text, fontWeight: "700" }}>{theme === "dark" ? "Dark Mode" : "Light Mode"}</Text>
-          </Text>
-        </View>
-      </Card>
-
-      {/* Role-Specific Content: Customer Booking History Entry Card */}
-      {!isBusiness && (
-        <Card variant="default" style={styles.infoCard}>
-          <SectionHeader
-            title="Booking History"
-            subtitle="Past visits and completed counter tickets"
-            icon="receipt-outline"
-            count={history.length}
-          />
-          <TouchableOpacity
-            style={styles.menuItemRow}
-            onPress={() => rootNavigation.navigate("BookingHistory")}
+            style={styles.menuRow}
+            onPress={() => navigation.navigate("HelpSupport")}
             activeOpacity={0.7}
-            accessibilityRole="button"
-            accessibilityLabel="View full booking history"
           >
-            <View style={[styles.iconBox, { backgroundColor: colors.primarySubtle, borderColor: colors.primaryBorder }]}>
-              <Ionicons name="receipt-outline" size={17} color={colors.primary} />
-            </View>
-            <View style={styles.menuItemTextCol}>
-              <Text style={[styles.menuItemTitle, { color: colors.text }]}>View Booking History</Text>
-              <Text style={[styles.menuItemSubtitle, { color: colors.muted }]}>
-                {history.length === 0
-                  ? "No past visits yet — tap to open history"
-                  : `${history.length} past ${history.length === 1 ? "ticket" : "tickets"} & visit receipts`}
-              </Text>
-            </View>
-            {history.length > 0 && (
-              <View style={[styles.countBadge, { backgroundColor: colors.cardSoft, borderColor: colors.border }]}>
-                <Text style={[styles.countBadgeText, { color: colors.textSecondary }]}>{history.length}</Text>
-              </View>
-            )}
+            <Ionicons name="help-circle-outline" size={20} color={colors.primary} style={styles.menuIcon} />
+            <Text style={styles.menuTitle}>Help & Support</Text>
             <Ionicons name="chevron-forward" size={18} color={colors.muted} />
           </TouchableOpacity>
-        </Card>
-      )}
 
-      {/* Help & Support Card */}
-      <Card variant="default" style={styles.infoCard}>
-        <SectionHeader
-          title="Help & Support"
-          subtitle="Answers, AI Assistant, and Contact"
-          icon="help-buoy-outline"
-        />
-        <TouchableOpacity
-          style={styles.menuItemRow}
-          onPress={() => rootNavigation.navigate("HelpSupport")}
-          activeOpacity={0.7}
-          accessibilityRole="button"
-          accessibilityLabel="Open Help Center and AI Support"
-        >
-          <View style={[styles.iconBox, { backgroundColor: colors.primarySubtle, borderColor: colors.primaryBorder }]}>
-            <Ionicons name="chatbubbles-outline" size={17} color={colors.primary} />
-          </View>
-          <View style={styles.menuItemTextCol}>
-            <Text style={[styles.menuItemTitle, { color: colors.text }]}>Help Center & AI Assistant</Text>
-            <Text style={[styles.menuItemSubtitle, { color: colors.muted }]}>Browse FAQs or ask QueueLess AI</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={18} color={colors.muted} />
-        </TouchableOpacity>
-      </Card>
+          <View style={styles.rowDivider} />
 
-      {/* Legal & Compliance Card */}
-      <Card variant="default" style={styles.infoCard}>
-        <SectionHeader
-          title="Legal & Compliance"
-          subtitle="Privacy disclosure and terms of use"
-          icon="shield-checkmark-outline"
-        />
-        <TouchableOpacity
-          style={[styles.menuItemRow, { borderBottomWidth: 1, borderBottomColor: colors.borderSubtle }]}
-          onPress={() => rootNavigation.navigate("PrivacyPolicy")}
-          activeOpacity={0.7}
-          accessibilityRole="button"
-          accessibilityLabel="View Privacy Policy"
-        >
-          <View style={[styles.iconBox, { backgroundColor: colors.cardSoft, borderColor: colors.border }]}>
-            <Ionicons name="lock-closed-outline" size={17} color={colors.primary} />
-          </View>
-          <View style={styles.menuItemTextCol}>
-            <Text style={[styles.menuItemTitle, { color: colors.text }]}>Privacy Policy</Text>
-            <Text style={[styles.menuItemSubtitle, { color: colors.muted }]}>How your data & AI interactions are handled</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={18} color={colors.muted} />
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.menuRow}
+            onPress={() => navigation.navigate("PrivacyPolicy")}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="shield-checkmark-outline" size={20} color={colors.primary} style={styles.menuIcon} />
+            <Text style={styles.menuTitle}>Privacy Policy</Text>
+            <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.menuItemRow}
-          onPress={() => rootNavigation.navigate("Terms")}
-          activeOpacity={0.7}
-          accessibilityRole="button"
-          accessibilityLabel="View Terms of Service"
-        >
-          <View style={[styles.iconBox, { backgroundColor: colors.cardSoft, borderColor: colors.border }]}>
-            <Ionicons name="document-text-outline" size={17} color={colors.primary} />
-          </View>
-          <View style={styles.menuItemTextCol}>
-            <Text style={[styles.menuItemTitle, { color: colors.text }]}>Terms of Service</Text>
-            <Text style={[styles.menuItemSubtitle, { color: colors.muted }]}>Rules, obligations, and service guidelines</Text>
-          </View>
-          <Ionicons name="chevron-forward" size={18} color={colors.muted} />
-        </TouchableOpacity>
-      </Card>
+          <View style={styles.rowDivider} />
 
-      {/* Simple, Smaller Centered Sign Out Button */}
-      <View style={styles.signOutContainer}>
+          <TouchableOpacity
+            style={styles.menuRow}
+            onPress={() => navigation.navigate("Terms")}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="document-text-outline" size={20} color={colors.primary} style={styles.menuIcon} />
+            <Text style={styles.menuTitle}>Terms of Service</Text>
+            <Ionicons name="chevron-forward" size={18} color={colors.muted} />
+          </TouchableOpacity>
+        </View>
+
+        {/* 5. Appearance & Theme Toggle */}
+        <View style={styles.card}>
+          <Text style={styles.cardSectionTitle}>Appearance</Text>
+          <View style={styles.themeToggleRow}>
+            <TouchableOpacity
+              style={[
+                styles.themeBtn,
+                theme === "light" && styles.themeBtnActive,
+              ]}
+              onPress={() => setTheme("light")}
+              activeOpacity={0.8}
+            >
+              <Ionicons
+                name="sunny-outline"
+                size={18}
+                color={theme === "light" ? colors.primary : colors.muted}
+              />
+              <Text
+                style={[
+                  styles.themeBtnText,
+                  theme === "light" && styles.themeBtnTextActive,
+                ]}
+              >
+                Light
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.themeBtn,
+                theme === "dark" && styles.themeBtnActive,
+              ]}
+              onPress={() => setTheme("dark")}
+              activeOpacity={0.8}
+            >
+              <Ionicons
+                name="moon-outline"
+                size={18}
+                color={theme === "dark" ? colors.primary : colors.muted}
+              />
+              <Text
+                style={[
+                  styles.themeBtnText,
+                  theme === "dark" && styles.themeBtnTextActive,
+                ]}
+              >
+                Dark
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* 6. Sign Out Button: Outline button (white bg, 1px #D5D5E0, radius 10, height 46) */}
         <TouchableOpacity
-          style={[styles.signOutBtn, { borderColor: colors.dangerBorder, backgroundColor: colors.dangerSubtle }]}
+          style={styles.logoutBtn}
           onPress={confirmLogout}
           activeOpacity={0.7}
-          accessibilityRole="button"
-          accessibilityLabel="Sign Out of QueueLess"
         >
-          <Ionicons name="log-out-outline" size={15} color={colors.danger} />
-          <Text style={[styles.signOutText, { color: colors.danger }]}>Sign Out</Text>
+          <Ionicons name="log-out-outline" size={18} color="#FC0015" style={styles.logoutIcon} />
+          <Text style={styles.logoutText}>Sign Out</Text>
         </TouchableOpacity>
-      </View>
-    </AppScreen>
+      </ScrollView>
+    </View>
   );
 }
 
-const styles = StyleSheet.create({
-  profileCard: {
-    padding: spacing.lg,
-  },
-  profileRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-  },
-  avatar: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
-    borderWidth: 2,
-    alignItems: "center",
-    justifyContent: "center",
-    flexShrink: 0,
-  },
-  headerInfo: {
-    flex: 1,
-    minWidth: 0,
-    gap: 4,
-  },
-  name: {
-    fontSize: 19,
-    fontWeight: "800",
-    letterSpacing: -0.3,
-    flexWrap: "wrap",
-  },
-  rolePill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    borderWidth: 1,
-    paddingHorizontal: 9,
-    paddingVertical: 3,
-    borderRadius: radii.full,
-    alignSelf: "flex-start",
-    flexShrink: 0,
-  },
-  roleText: {
-    fontSize: 11,
-    fontWeight: "700",
-  },
-  infoCard: {
-    gap: spacing.md,
-    padding: spacing.lg,
-  },
-  themeSelectorRow: {
-    flexDirection: "row",
-    gap: spacing.sm,
-    width: "100%",
-  },
-  themeOptionBtn: {
-    flex: 1,
-    padding: spacing.md,
-    borderRadius: radii.md,
-    gap: spacing.xs,
-  },
-  themeOptionHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 4,
-  },
-  themeIconWrap: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  themeCheckmark: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  themeOptionTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  themeOptionSubtitle: {
-    fontSize: 11,
-    lineHeight: 15,
-  },
-  themeStatusRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingTop: spacing.xs,
-  },
-  themeStatusText: {
-    fontSize: 12,
-  },
-  detailsList: {
-    gap: spacing.md,
-  },
-  detailRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-  },
-  iconBox: {
-    width: 36,
-    height: 36,
-    borderRadius: radii.sm,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    flexShrink: 0,
-  },
-  detailTextCol: {
-    flex: 1,
-    minWidth: 0,
-    gap: 2,
-    marginRight: spacing.xs,
-  },
-  detailLabel: {
-    fontSize: 12,
-  },
-  detailValue: {
-    fontSize: 14,
-    fontWeight: "700",
-    flexWrap: "wrap",
-  },
-  actionPillBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    borderWidth: 1,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: radii.sm,
-    flexShrink: 0,
-  },
-  actionPillText: {
-    fontSize: 12,
-    fontWeight: "700",
-  },
-  rowDivider: {
-    height: 1,
-  },
-  sectionWrap: {
-    gap: spacing.md,
-  },
-  historyList: {
-    gap: spacing.md,
-  },
-  historyCard: {
-    gap: spacing.md,
-    padding: spacing.lg,
-  },
-  historyCardTop: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-  },
-  historyStoreCol: {
-    flex: 1,
-    minWidth: 0,
-    gap: 2,
-    marginRight: spacing.sm,
-  },
-  historyShopName: {
-    fontSize: 16,
-    fontWeight: "700",
-    flexWrap: "wrap",
-  },
-  historyTicket: {
-    fontSize: 12,
-  },
-  historyServicesRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.xs,
-  },
-  historyServiceChip: {
-    borderWidth: 1,
-    borderRadius: radii.sm,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  historyServiceChipText: {
-    fontSize: 11,
-    fontWeight: "600",
-  },
-  historyCardBottom: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingTop: 2,
-    borderTopWidth: 1,
-  },
-  historyDate: {
-    fontSize: 12,
-  },
-  historyPrice: {
-    fontSize: 16,
-    fontWeight: "800",
-  },
-  menuItemRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-    paddingVertical: spacing.md,
-  },
-  menuItemTextCol: {
-    flex: 1,
-    gap: 2,
-  },
-  menuItemTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-  },
-  menuItemSubtitle: {
-    fontSize: 12,
-  },
-  countBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: radii.full,
-    borderWidth: 1,
-  },
-  countBadgeText: {
-    fontSize: 11,
-    fontWeight: "700",
-  },
-  signOutContainer: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: spacing.md,
-    paddingBottom: spacing.xl,
-  },
-  signOutBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    paddingVertical: 9,
-    paddingHorizontal: 22,
-    borderRadius: radii.full,
-    borderWidth: 1,
-  },
-  signOutText: {
-    fontSize: 13,
-    fontWeight: "700",
-  },
-});
+const createStyles = (colors: ThemeColors) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.bg,
+    },
+    scrollContent: {
+      paddingHorizontal: 16,
+      gap: 16,
+    },
+    card: {
+      backgroundColor: colors.card,
+      borderRadius: radii.card,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 16,
+    },
+    profileRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 16,
+    },
+    avatarGradient: {
+      width: 64,
+      height: 64,
+      borderRadius: 32,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    avatarInitial: {
+      fontSize: 24,
+      fontFamily: typography.families.interSemiBold,
+      fontWeight: "600",
+      color: "#FFFFFF",
+    },
+    headerInfo: {
+      flex: 1,
+      justifyContent: "center",
+    },
+    userName: {
+      fontSize: 18,
+      fontFamily: typography.families.interSemiBold,
+      fontWeight: "600",
+      color: colors.textPrimary,
+    },
+    userRole: {
+      fontSize: 13,
+      fontFamily: typography.families.interRegular,
+      color: colors.muted,
+      marginTop: 2,
+    },
+    cardSectionTitle: {
+      fontSize: 16,
+      fontFamily: typography.families.interMedium,
+      fontWeight: "500",
+      color: colors.textPrimary,
+      marginBottom: 12,
+    },
+    detailRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingVertical: 10,
+    },
+    detailIcon: {
+      marginRight: 14,
+    },
+    detailTextCol: {
+      flex: 1,
+    },
+    detailLabel: {
+      fontSize: 12,
+      fontFamily: typography.families.interRegular,
+      color: colors.muted,
+      marginBottom: 2,
+    },
+    detailValue: {
+      fontSize: 15,
+      fontFamily: typography.families.interMedium,
+      fontWeight: "500",
+      color: colors.text,
+    },
+    rowDivider: {
+      height: 1,
+      backgroundColor: colors.border,
+    },
+    rowBetween: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      marginBottom: 8,
+    },
+    openPill: {
+      backgroundColor: colors.statusOpenBg,
+      paddingHorizontal: 12,
+      paddingVertical: 4,
+      borderRadius: 12,
+    },
+    openPillText: {
+      color: colors.statusOpenText,
+      fontSize: 12,
+      fontFamily: typography.families.interMedium,
+      fontWeight: "500",
+    },
+    set247Btn: {
+      backgroundColor: colors.primarySubtle,
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: radii.button,
+      borderWidth: 1,
+      borderColor: colors.outlineBorder,
+      alignItems: "center",
+      justifyContent: "center",
+      marginLeft: 8,
+    },
+    set247Text: {
+      color: colors.primary,
+      fontSize: 12,
+      fontFamily: typography.families.interMedium,
+      fontWeight: "500",
+    },
+    menuRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingVertical: 14,
+    },
+    menuIcon: {
+      marginRight: 14,
+    },
+    menuTitle: {
+      flex: 1,
+      fontSize: 15,
+      fontFamily: typography.families.interMedium,
+      fontWeight: "500",
+      color: colors.text,
+    },
+    themeToggleRow: {
+      flexDirection: "row",
+      gap: 12,
+    },
+    themeBtn: {
+      flex: 1,
+      height: 42,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.cardSoft,
+      gap: 8,
+    },
+    themeBtnActive: {
+      borderColor: colors.primary,
+      backgroundColor: colors.primarySubtle,
+    },
+    themeBtnText: {
+      fontSize: 14,
+      fontFamily: typography.families.interRegular,
+      color: colors.muted,
+    },
+    themeBtnTextActive: {
+      color: colors.primary,
+      fontFamily: typography.families.interMedium,
+      fontWeight: "500",
+    },
+    logoutBtn: {
+      height: 48,
+      borderRadius: radii.button,
+      backgroundColor: colors.card,
+      borderWidth: 1,
+      borderColor: colors.border,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      marginTop: 8,
+      marginBottom: 32,
+    },
+    logoutIcon: {
+      marginRight: 8,
+    },
+    logoutText: {
+      fontSize: 15,
+      fontFamily: typography.families.interMedium,
+      fontWeight: "500",
+      color: colors.danger,
+    },
+  });

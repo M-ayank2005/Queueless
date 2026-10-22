@@ -1,111 +1,93 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
-  Animated,
-  Platform,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
+  ScrollView,
+  StatusBar,
+  Alert,
+  Platform,
 } from "react-native";
-import { BottomTabScreenProps } from "@react-navigation/bottom-tabs";
-import { useNavigation } from "@react-navigation/native";
-import { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { CameraView, useCameraPermissions } from "expo-camera";
+import { NativeStackScreenProps } from "@react-navigation/native-stack";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
-import AppButton from "../../components/AppButton";
-import AppLoader from "../../components/AppLoader";
-import QueueFlowInline from "../../components/loading/QueueFlowInline";
-import AppScreen from "../../components/AppScreen";
-import Card from "../../components/Card";
-import StatusBadge from "../../components/StatusBadge";
+import { RootStackParamList } from "../../navigation/types";
 import { api } from "../../lib/api";
-import { CustomerTabParamList, RootStackParamList } from "../../navigation/types";
 import { ServiceItem } from "../../types";
+import AppButton from "../../components/AppButton";
+import AppInput from "../../components/AppInput";
+import { AlertCard } from "../../components/AlertCard";
+import StatusPill from "../../components/StatusPill";
+import { QRScannerModal } from "../../components/QRScannerModal";
+import { LogoQ } from "../../components/LogoQ";
+import {
+  ClockIcon,
+  PinIcon,
+  HeartIcon,
+  ChevronBackIcon,
+} from "../../assets/icons/AppIcons";
 import { useTheme } from "../../context/ThemeContext";
 import { ThemeColors } from "../../theme/colors";
-import { radii, shadows, spacing, typography } from "../../theme/theme";
+import { typography, radii, shadows } from "../../theme/theme";
+
+type Props = NativeStackScreenProps<RootStackParamList, "ScanJoin">;
 
 type StoreData = {
   _id: string;
   isFavorite?: boolean;
+  isOpen?: boolean;
+  closedReason?: string;
+  activeTicket?: any;
   businessProfile: {
     shopName: string;
     address: string;
+    uniqueQrCode?: string;
     services: ServiceItem[];
+    workingHours?: {
+      openTime: string;
+      closeTime: string;
+      closedDays: number[];
+      timezone?: string;
+    };
   };
 };
 
-type Props = BottomTabScreenProps<CustomerTabParamList, "ScanJoin">;
-
 export default function ScanJoinScreen({ navigation, route }: Props) {
-  const rootNavigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
+  const { colors, isDark } = useTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
 
-  const [permission, requestPermission] = useCameraPermissions();
   const [scannerOpen, setScannerOpen] = useState(false);
-  const [qrCode, setQrCode] = useState(route.params?.qrCode || "");
+  const [qrCodeInput, setQrCodeInput] = useState(route.params?.qrCode || "");
   const [store, setStore] = useState<StoreData | null>(null);
   const [serviceQuantities, setServiceQuantities] = useState<Record<string, number>>({});
   const [activeTicket, setActiveTicket] = useState<any | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [loadingStore, setLoadingStore] = useState(false);
-  const [joining, setJoining] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [isFavorite, setIsFavorite] = useState(false);
-  const [togglingFav, setTogglingFav] = useState(false);
-
-  // Animated laser bar for camera scanner
-  const laserAnim = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    if (scannerOpen) {
-      const loop = Animated.loop(
-        Animated.sequence([
-          Animated.timing(laserAnim, {
-            toValue: 1,
-            duration: 1600,
-            useNativeDriver: true,
-          }),
-          Animated.timing(laserAnim, {
-            toValue: 0,
-            duration: 1600,
-            useNativeDriver: true,
-          }),
-        ])
-      );
-      loop.start();
-      return () => loop.stop();
-    }
-  }, [scannerOpen]);
-
-  const showAlert = (title: string, msg: string) => {
-    if (Platform.OS === "web") {
-      window.alert(`${title}: ${msg}`);
-    } else {
-      Alert.alert(title, msg);
-    }
-  };
 
   const fetchStore = async (code: string) => {
-    if (!code) {
+    if (!code || !code.trim()) {
       setErrorMessage("Please enter a valid store QR code.");
       return;
     }
     setErrorMessage("");
     try {
       setLoadingStore(true);
-      const response = await api.get(`/queue/store/${code}`);
-      setStore(response.data);
-      setIsFavorite(Boolean(response.data?.isFavorite));
+      const res = await api.get(`/queue/store/${code.trim()}`);
+      const data: StoreData = res.data;
+      setStore(data);
+      setIsFavorite(Boolean(data.isFavorite));
 
-      if (response.data?.activeTicket) {
-        setActiveTicket(response.data.activeTicket);
+      if (data.activeTicket) {
+        setActiveTicket(data.activeTicket);
         const initQuantities: Record<string, number> = {};
-        response.data.activeTicket.selectedServices?.forEach((s: any) => {
+        data.activeTicket.selectedServices?.forEach((s: any) => {
           initQuantities[s.name] = s.quantity || 1;
         });
         setServiceQuantities(initQuantities);
@@ -114,61 +96,28 @@ export default function ScanJoinScreen({ navigation, route }: Props) {
         setServiceQuantities({});
         setIsEditing(false);
       }
-    } catch (error: any) {
-      const msg = error?.response?.data?.message || "Store not found. Please verify the QR code.";
+    } catch (err: any) {
+      const msg = err.response?.data?.message || "Store not found. Please check the code.";
       setErrorMessage(msg);
-      showAlert("Store not found", msg);
       setStore(null);
-      setIsFavorite(false);
-      setActiveTicket(null);
     } finally {
       setLoadingStore(false);
     }
   };
 
-  const handleToggleFavorite = async () => {
-    if (!store?._id || togglingFav) return;
-    setTogglingFav(true);
-    try {
-      const res = await api.post("/queue/favorites/toggle", { businessId: store._id });
-      const nextFav = Boolean(res.data?.isFavorite);
-      setIsFavorite(nextFav);
-      showAlert(
-        nextFav ? "Store Saved" : "Store Removed",
-        nextFav ? "Added to your saved stores for fast 1-tap rebooking." : "Removed from your saved stores."
-      );
-    } catch (err: any) {
-      showAlert("Error", err.response?.data?.message || "Failed to update saved store.");
-    } finally {
-      setTogglingFav(false);
-    }
-  };
-
-  React.useEffect(() => {
+  useEffect(() => {
     if (route.params?.qrCode) {
-      setQrCode(route.params.qrCode);
+      setQrCodeInput(route.params.qrCode);
       fetchStore(route.params.qrCode);
     }
   }, [route.params?.qrCode]);
 
-  const onScanPress = async () => {
-    if (!permission?.granted) {
-      const result = await requestPermission();
-      if (!result.granted) {
-        showAlert("Camera access needed", "Please grant camera permission to scan merchant counter codes.");
-        return;
-      }
-    }
-    setScannerOpen(true);
-  };
-
-  const handleBarcodeScanned = ({ data }: { data: string }) => {
-    setScannerOpen(false);
-    const cleaned = data.includes("/store/") ? data.split("/store/").pop() || "" : data;
-    setQrCode(cleaned);
-    if (cleaned) {
-      fetchStore(cleaned);
-    }
+  const handleToggleFavorite = async () => {
+    if (!store?._id) return;
+    try {
+      const res = await api.post("/queue/favorites/toggle", { businessId: store._id });
+      setIsFavorite(Boolean(res.data?.isFavorite));
+    } catch {}
   };
 
   const setQuantity = (serviceName: string, delta: number) => {
@@ -206,924 +155,711 @@ export default function ScanJoinScreen({ navigation, route }: Props) {
     );
   }, [selectedServices]);
 
-  const handleUpdateServices = async () => {
-    if (!activeTicket?._id) return;
-    if (selectedServices.length === 0) {
-      showAlert("No services selected", "Please select at least one service.");
+  const handleAction = async () => {
+    if (!store?._id) return;
+
+    // State 1: Active ticket exists & not editing -> navigate to QueueStatus
+    if (activeTicket && !isEditing) {
+      navigation.navigate("QueueStatus", { id: activeTicket._id });
       return;
     }
-    setJoining(true);
-    try {
-      await api.put(`/queue/${activeTicket._id}/services`, {
-        selectedServices,
-      });
-      showAlert("Services Updated", "Your service requests have been updated while preserving your spot in line.");
-      rootNavigation.navigate("QueueStatus", { id: activeTicket._id });
-    } catch (error: any) {
-      showAlert("Update Failed", error.response?.data?.message || "Could not update services.");
-    } finally {
-      setJoining(false);
-    }
-  };
 
-  const joinQueue = async () => {
-    if (!store?._id) return;
-    setErrorMessage("");
+    // State 2: Active ticket exists & editing -> Save Changes (Keep Spot)
+    if (activeTicket && isEditing) {
+      if (selectedServices.length === 0) {
+        alert("Please select at least one service.");
+        return;
+      }
+      try {
+        setSubmitting(true);
+        await api.put(`/queue/${activeTicket._id}/services`, { selectedServices });
+        setIsEditing(false);
+        navigation.navigate("QueueStatus", { id: activeTicket._id });
+      } catch (err: any) {
+        alert(err.response?.data?.message || "Failed to update services.");
+      } finally {
+        setSubmitting(false);
+      }
+      return;
+    }
+
+    // State 3: Not in queue -> Join Queue
+    if (selectedServices.length === 0) {
+      alert("Please select at least one service to join the queue.");
+      return;
+    }
+
     try {
-      setJoining(true);
-      const response = await api.post("/queue/join", {
+      setSubmitting(true);
+      const res = await api.post("/queue/join", {
         businessId: store._id,
         selectedServices,
       });
-      const id = response.data?._id;
-      showAlert("Spot Reserved!", "You have successfully joined the virtual queue.");
+      const id = res.data?._id;
       if (id) {
-        rootNavigation.navigate("QueueStatus", { id });
+        navigation.navigate("QueueStatus", { id });
       }
-    } catch (error: any) {
-      if (error?.response?.status === 409 && error?.response?.data?.activeTicket) {
-        const existing = error.response.data.activeTicket;
-        setActiveTicket(existing);
-        const initQuantities: Record<string, number> = {};
-        existing.selectedServices?.forEach((s: any) => {
-          initQuantities[s.name] = s.quantity || 1;
-        });
-        setServiceQuantities(initQuantities);
-        showAlert(
-          "Already in Queue",
-          `You already have ticket #${existing._id?.slice(-4).toUpperCase()} in this queue. You can view your live status or edit your services.`
-        );
+    } catch (err: any) {
+      if (err.response?.status === 409 && err.response?.data?.activeTicket) {
+        setActiveTicket(err.response.data.activeTicket);
       } else {
-        const msg = error?.response?.data?.message || "Please try again.";
-        setErrorMessage(msg);
-        showAlert("Could not join", msg);
+        alert(err.response?.data?.message || "Could not join queue.");
       }
     } finally {
-      setJoining(false);
+      setSubmitting(false);
     }
   };
 
-  return (
-    <AppScreen hasTabBar>
-      {/* Title Header */}
-      <View style={styles.header}>
-        <View style={styles.headerTitleRow}>
-          <View style={styles.headerIconWrap}>
-            <Ionicons name="qr-code" size={20} color={colors.primary} />
-          </View>
-          <View style={styles.headerTextCol}>
-            <Text style={styles.title}>Scan & Join</Text>
-            <Text style={styles.subtitle}>
-              Scan a merchant's counter code or enter code manually below.
-            </Text>
-          </View>
-        </View>
-      </View>
-
-      {/* Main Scanner Action Card */}
-      <Card variant="elevated" style={styles.scanCard}>
-        {errorMessage ? (
-          <View style={styles.errorBox}>
-            <Ionicons name="alert-circle" size={18} color={colors.danger} />
-            <Text style={styles.errorText}>{errorMessage}</Text>
-          </View>
-        ) : null}
-
-        <AppButton
-          title="Open Camera Scanner"
-          size="lg"
-          onPress={onScanPress}
-          icon="camera-outline"
+  // ----------------------------------------------------
+  // VIEW A: Store not loaded yet (Scan & Manual Code Entry)
+  // ----------------------------------------------------
+  if (!store) {
+    return (
+      <View style={styles.entryContainer}>
+        <StatusBar
+          barStyle={isDark ? "light-content" : "dark-content"}
+          backgroundColor={colors.bg}
         />
 
-        <View style={styles.dividerRow}>
-          <View style={styles.dividerLine} />
-          <Text style={styles.dividerText}>OR ENTER CODE MANUALLY</Text>
-          <View style={styles.dividerLine} />
-        </View>
-
-        <View style={styles.manualInputRow}>
-          <View style={styles.inputWrap}>
-            <Ionicons name="keypad-outline" size={18} color={colors.muted} style={{ marginLeft: 12 }} />
-            <TextInput
-              value={qrCode}
-              onChangeText={setQrCode}
-              placeholder="Paste or type store code"
-              placeholderTextColor={colors.muted}
-              autoCapitalize="none"
-              style={styles.input}
-            />
-          </View>
-
+        {/* Header */}
+        <View style={[styles.headerRow, { paddingTop: Math.max(insets.top, 16) + 12 }]}>
           <TouchableOpacity
-            style={styles.findBtn}
-            onPress={() => fetchStore(qrCode.trim())}
-            activeOpacity={0.8}
-            disabled={loadingStore}
+            onPress={() => navigation.goBack()}
+            style={styles.backButton}
           >
-            {loadingStore ? (
-              <QueueFlowInline color="#FFF" />
-            ) : (
-              <Ionicons name="arrow-forward" size={18} color="#FFF" />
-            )}
+            <ChevronBackIcon size={24} color={colors.textPrimary} />
           </TouchableOpacity>
+          <Text style={styles.headerTitle}>Scan & Join</Text>
         </View>
-      </Card>
 
-      {/* Live QR Camera Scanner View */}
-      {scannerOpen && (
-        <Card variant="glow" style={styles.cameraCard}>
-          <View style={styles.scannerHeader}>
-            <View style={styles.scannerTitleRow}>
-              <View style={styles.livePulse} />
-              <Text style={styles.sectionTitle}>Align QR Code within Frame</Text>
-            </View>
-            <TouchableOpacity onPress={() => setScannerOpen(false)} activeOpacity={0.7}>
-              <Text style={styles.closeText}>Cancel</Text>
-            </TouchableOpacity>
-          </View>
-
-          <View style={styles.cameraWrap}>
-            <CameraView
-              onBarcodeScanned={handleBarcodeScanned}
-              barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
-              style={styles.camera}
-            />
-            <View style={styles.overlay} pointerEvents="none">
-              <View style={styles.scanTarget}>
-                <View style={[styles.corner, styles.topLeft]} />
-                <View style={[styles.corner, styles.topRight]} />
-                <View style={[styles.corner, styles.bottomLeft]} />
-                <View style={[styles.corner, styles.bottomRight]} />
-
-                <Animated.View
-                  style={[
-                    styles.scanLaser,
-                    {
-                      transform: [
-                        {
-                          translateY: laserAnim.interpolate({
-                            inputRange: [0, 1],
-                            outputRange: [0, 180],
-                          }),
-                        },
-                      ],
-                    },
-                  ]}
-                />
-              </View>
-            </View>
-          </View>
-        </Card>
-      )}
-
-      {/* Loaded Store Details & Service Selection Form */}
-      {store && (
-        <Card variant="elevated" style={styles.storeDetailCard}>
-          <View style={styles.storeHeader}>
-            <View style={styles.storeIconCircle}>
-              <Ionicons name="storefront" size={24} color={colors.primary} />
-            </View>
-            <View style={styles.storeHeaderInfo}>
-              <Text style={styles.storeName}>{store.businessProfile?.shopName || "QueueLess Merchant"}</Text>
-              <Text style={styles.storeAddress}>{store.businessProfile?.address || "Store Location"}</Text>
-            </View>
-            <TouchableOpacity
-              onPress={handleToggleFavorite}
-              disabled={togglingFav}
-              style={{
-                padding: 7,
-                borderRadius: radii.md,
-                backgroundColor: isFavorite ? "rgba(239, 68, 68, 0.15)" : colors.cardSoft,
-                borderWidth: 1,
-                borderColor: isFavorite ? "rgba(239, 68, 68, 0.4)" : colors.border,
-                marginRight: 6,
-              }}
-              activeOpacity={0.7}
-              accessibilityLabel={isFavorite ? "Remove from saved stores" : "Save store"}
-            >
-              <Ionicons
-                name={isFavorite ? "heart" : "heart-outline"}
-                size={18}
-                color={isFavorite ? colors.danger : colors.muted}
-              />
-            </TouchableOpacity>
-            <StatusBadge status="open" label="READY" size="sm" />
-          </View>
-
-          <View style={styles.dividerLine} />
-
-          {/* Repeat Scan Active Ticket Banner */}
-          {activeTicket ? (
-            <View style={styles.activeTicketBanner}>
-              <View style={styles.activeTicketHeader}>
-                <View style={styles.activeTicketIconWrap}>
-                  <Ionicons name="time" size={20} color={colors.primary} />
-                </View>
-                <View style={styles.flex1}>
-                  <Text style={styles.activeTicketTitle}>
-                    You're in Line! (#{activeTicket._id?.slice(-4).toUpperCase()})
-                  </Text>
-                  <Text style={styles.activeTicketSub}>
-                    Status: {activeTicket.status?.toUpperCase()} • {activeTicket.peopleAhead ?? 0} people ahead
-                  </Text>
-                </View>
-              </View>
-
-              <View style={styles.activeTicketActions}>
-                <TouchableOpacity
-                  style={styles.activeTicketPrimaryBtn}
-                  onPress={() => rootNavigation.navigate("QueueStatus", { id: activeTicket._id })}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons name="eye-outline" size={15} color="#FFF" />
-                  <Text style={styles.activeTicketPrimaryBtnText}>View Ticket Status</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.activeTicketEditBtn, isEditing && styles.activeTicketEditBtnActive]}
-                  onPress={() => setIsEditing(!isEditing)}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons name="create-outline" size={15} color={isEditing ? colors.primary : colors.text} />
-                  <Text style={[styles.activeTicketEditText, isEditing && styles.activeTicketEditTextActive]}>
-                    {isEditing ? "Done Editing" : "Edit Services"}
-                  </Text>
-                </TouchableOpacity>
-              </View>
+        <View style={styles.entryBody}>
+          {errorMessage ? (
+            <View style={styles.errorBox}>
+              <AlertCard type="danger" title="Error" message={errorMessage} />
             </View>
           ) : null}
 
-          <View style={styles.servicesSection}>
-            <Text style={styles.servicesTitle}>
-              {activeTicket && !isEditing
-                ? "Your Requested Services:"
-                : "Select Services & Quantities:"}
-            </Text>
-
-            {store.businessProfile?.services?.length ? (
-              <View style={styles.servicesList}>
-                {store.businessProfile.services.map((service, index) => {
-                  const qty = serviceQuantities[service.name] || 0;
-                  const isChecked = qty > 0;
-                  const canEdit = !activeTicket || isEditing;
-
-                  return (
-                    <View
-                      key={`${service.name}_${index}`}
-                      style={[styles.serviceItem, isChecked && styles.serviceItemChecked]}
-                    >
-                      <TouchableOpacity
-                        style={styles.serviceTextCol}
-                        onPress={() => {
-                          if (canEdit) {
-                            setQuantity(service.name, qty > 0 ? -qty : 1);
-                          }
-                        }}
-                        activeOpacity={canEdit ? 0.7 : 1}
-                      >
-                        <Text style={styles.serviceName}>{service.name}</Text>
-                        <Text style={styles.serviceMeta}>
-                          ⏱ {service.durationMin} mins • ${service.cost} each
-                        </Text>
-                        {qty > 1 ? (
-                          <Text style={styles.serviceSubtotal}>
-                            Total: ${service.cost * qty} (~{service.durationMin * qty} mins)
-                          </Text>
-                        ) : null}
-                      </TouchableOpacity>
-
-                      {/* Stepper Controls */}
-                      {canEdit ? (
-                        <View style={styles.stepperWrap}>
-                          <TouchableOpacity
-                            style={[styles.stepperBtn, qty === 0 && styles.stepperBtnDisabled]}
-                            onPress={() => setQuantity(service.name, -1)}
-                            disabled={qty === 0}
-                            activeOpacity={0.7}
-                          >
-                            <Ionicons name="remove" size={16} color={qty === 0 ? colors.muted : colors.text} />
-                          </TouchableOpacity>
-
-                          <View style={[styles.countBadge, qty > 0 && styles.countBadgeActive]}>
-                            <Text style={[styles.countBadgeText, qty > 0 && styles.countBadgeTextActive]}>
-                              {qty}
-                            </Text>
-                          </View>
-
-                          <TouchableOpacity
-                            style={styles.stepperBtn}
-                            onPress={() => setQuantity(service.name, 1)}
-                            activeOpacity={0.7}
-                          >
-                            <Ionicons name="add" size={16} color={colors.primary} />
-                          </TouchableOpacity>
-                        </View>
-                      ) : (
-                        <View style={[styles.countBadge, qty > 0 && styles.countBadgeActive]}>
-                          <Text style={[styles.countBadgeText, qty > 0 && styles.countBadgeTextActive]}>
-                            ×{qty}
-                          </Text>
-                        </View>
-                      )}
-                    </View>
-                  );
-                })}
-              </View>
-            ) : (
-              <Text style={styles.noServicesText}>
-                This merchant provides general counter service with standard wait times.
-              </Text>
-            )}
-          </View>
-
-          {/* Totals Summary */}
-          {selectedServices.length > 0 && (
-            <View style={styles.totalsCard}>
-              <View style={styles.totalRow}>
-                <Text style={styles.totalLabel}>Estimated Total Duration:</Text>
-                <Text style={styles.totalValue}>~{totals.duration} mins</Text>
-              </View>
-              <View style={styles.totalRow}>
-                <Text style={styles.totalLabel}>Estimated Service Total:</Text>
-                <Text style={[styles.totalValue, { color: colors.successLight }]}>
-                  ${totals.cost}
-                </Text>
-              </View>
-            </View>
-          )}
-
-          {activeTicket ? (
-            isEditing ? (
-              <AppButton
-                title="Save Changes (Keep Spot)"
-                size="lg"
-                onPress={handleUpdateServices}
-                loading={joining}
-                loadingText="Updating Services..."
-                icon="checkmark-circle-outline"
-              />
-            ) : (
-              <AppButton
-                title="View My Live Ticket"
-                size="lg"
-                onPress={() => rootNavigation.navigate("QueueStatus", { id: activeTicket._id })}
-                icon="ticket-outline"
-              />
-            )
-          ) : (
+          {/* White Card: 1px #EAE8E8, radius 16, padding 16 */}
+          <View style={styles.entryCard}>
             <AppButton
-              title="Confirm & Join Queue"
-              size="lg"
-              onPress={joinQueue}
-              loading={joining}
-              loadingText="Securing Spot..."
-              icon="ticket-outline"
+              title="Open Camera Scanner"
+              onPress={() => setScannerOpen(true)}
+              icon="camera-outline"
             />
+
+            {/* Divider with text: "Or enter code manually" */}
+            <View style={styles.dividerRow}>
+              <View style={styles.dividerLine} />
+              <Text style={styles.dividerText}>Or enter code manually</Text>
+              <View style={styles.dividerLine} />
+            </View>
+
+            {/* Input + Gradient Arrow Button */}
+            <View style={styles.manualInputRow}>
+              <TextInput
+                style={styles.manualTextInput}
+                value={qrCodeInput}
+                onChangeText={setQrCodeInput}
+                placeholder="Enter store QR code (e.g. STORE-123)"
+                placeholderTextColor={colors.placeholder}
+                autoCapitalize="characters"
+              />
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={() => fetchStore(qrCodeInput)}
+                disabled={loadingStore}
+                style={styles.arrowButton}
+              >
+                <LinearGradient
+                  colors={["#284D83", "#3E6BB2"]}
+                  style={styles.arrowGradient}
+                >
+                  <Ionicons name="arrow-forward" size={22} color="#FFFFFF" />
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+
+        <QRScannerModal
+          visible={scannerOpen}
+          onClose={() => setScannerOpen(false)}
+          onScanned={(code: string) => {
+            setScannerOpen(false);
+            setQrCodeInput(code);
+            fetchStore(code);
+          }}
+          onManualEntry={() => setScannerOpen(false)}
+        />
+      </View>
+    );
+  }
+
+  // ----------------------------------------------------
+  // VIEW B: Store loaded (Detail-1 layout)
+  // ----------------------------------------------------
+  const shopName = store.businessProfile.shopName || "Store";
+  const address = store.businessProfile.address || "Address unavailable";
+  const workingHours = store.businessProfile.workingHours;
+  const hoursStr = workingHours
+    ? `${workingHours.openTime} - ${workingHours.closeTime}`
+    : "Hours available on request";
+
+  const isOpen = store.isOpen !== false;
+
+  let buttonTitle = "Join Queue";
+  if (activeTicket) {
+    buttonTitle = isEditing ? "Save Changes (Keep Spot)" : "View Ticket Status";
+  }
+
+  return (
+    <View style={styles.detailContainer}>
+      <StatusBar barStyle="light-content" backgroundColor="#284D83" />
+
+      <ScrollView
+        contentContainerStyle={[
+          styles.detailScroll,
+          { paddingBottom: 130 }, // clears sticky bottom action bar
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Hero Card: radius 30, diagonal navy gradient, faint Q watermark */}
+        <View style={[styles.heroCard, shadows.heroCard]}>
+          <LinearGradient
+            colors={["#284D83", "#3E6BB2"]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.heroGradient}
+          >
+            {/* Faint Q Watermark (8% opacity) bottom-right */}
+            <View style={styles.qWatermark}>
+              <LogoQ size={170} variant="monochrome" color="#FFFFFF" opacity={0.12} />
+            </View>
+
+            {/* Dark bottom overlay */}
+            <LinearGradient
+              colors={["transparent", "rgba(0,0,0,0.30)"]}
+              style={styles.darkBottomOverlay}
+            />
+
+            {/* Top controls: back button (clears store) & favorite heart */}
+            <View style={styles.heroTopRow}>
+              <TouchableOpacity
+                onPress={() => setStore(null)}
+                style={styles.heroCircleButton}
+              >
+                <Ionicons name="chevron-back" size={20} color="#FFFFFF" />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={handleToggleFavorite}
+                style={styles.heroCircleButton}
+              >
+                <HeartIcon
+                  size={19}
+                  color={isFavorite ? "#FC0015" : "#FFFFFF"}
+                  filled={isFavorite}
+                />
+              </TouchableOpacity>
+            </View>
+
+            {/* Bottom info on Hero card */}
+            <View style={styles.heroBottomContent}>
+              <Text style={styles.heroShopName} numberOfLines={2}>
+                {shopName}
+              </Text>
+
+              <View style={styles.heroTilesRow}>
+                {/* Tile 1: clock / status */}
+                <View style={styles.heroTileWrap}>
+                  <View style={styles.heroSquareTile}>
+                    <ClockIcon size={18} color="#FFFFFF" />
+                  </View>
+                  <Text style={styles.heroTileText} numberOfLines={1}>
+                    {activeTicket
+                      ? `${activeTicket.peopleAhead ?? 0} people ahead`
+                      : isOpen
+                      ? "Open now"
+                      : "Closed"}
+                  </Text>
+                </View>
+
+                {/* Tile 2: pin / address */}
+                <View style={styles.heroTileWrap}>
+                  <View style={styles.heroSquareTile}>
+                    <PinIcon size={18} color="#FFFFFF" />
+                  </View>
+                  <Text style={styles.heroTileText} numberOfLines={1}>
+                    {address}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          </LinearGradient>
+        </View>
+
+        {/* Section: Store Details (18/400 black) */}
+        <View style={styles.sectionWrap}>
+          <Text style={styles.sectionHeaderTitle}>Store Details</Text>
+
+          <View style={styles.detailsCard}>
+            <View style={styles.detailRow}>
+              <PinIcon size={18} color="#525252" />
+              <Text style={styles.detailText}>{address}</Text>
+            </View>
+
+            <View style={styles.detailRow}>
+              <ClockIcon size={18} color="#525252" />
+              <Text style={styles.detailText}>{hoursStr}</Text>
+              <StatusPill
+                type={isOpen ? "open" : "closed"}
+                label={isOpen ? "Open" : "Closed"}
+              />
+            </View>
+          </View>
+        </View>
+
+        {/* Active Ticket Banner (if user already in line) */}
+        {activeTicket && (
+          <View style={styles.activeBannerWrap}>
+            <AlertCard
+              type="info"
+              title="You're in line"
+              message={`Ticket #${activeTicket._id?.slice(-4).toUpperCase()} is currently active.`}
+            />
+            <View style={styles.bannerActionsRow}>
+              <TouchableOpacity
+                onPress={() => setIsEditing(!isEditing)}
+                style={styles.editServicesBtn}
+              >
+                <Text style={styles.editServicesText}>
+                  {isEditing ? "Cancel Edit" : "Edit Services"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {/* Section: Services */}
+        <View style={styles.sectionWrap}>
+          <Text style={styles.sectionHeaderTitle}>Services</Text>
+
+          <View style={styles.servicesList}>
+            {store.businessProfile.services?.map((svc) => {
+              const qty = serviceQuantities[svc.name] || 0;
+              const isSelected = qty > 0;
+
+              return (
+                <View
+                  key={svc.name}
+                  style={[
+                    styles.serviceRow,
+                    isSelected && styles.serviceRowSelected,
+                  ]}
+                >
+                  <View style={styles.serviceInfo}>
+                    <Text style={styles.serviceName}>{svc.name}</Text>
+                    <Text style={styles.serviceMeta}>
+                      {svc.durationMin} min • ₹{svc.cost}
+                    </Text>
+                  </View>
+
+                  {/* Stepper with two 28px circles */}
+                  <View style={styles.stepperWrap}>
+                    <TouchableOpacity
+                      onPress={() => setQuantity(svc.name, -1)}
+                      disabled={qty === 0}
+                      style={[
+                        styles.stepperCircle,
+                        qty === 0 && styles.stepperCircleDisabled,
+                      ]}
+                    >
+                      <Ionicons
+                        name="remove"
+                        size={16}
+                        color={qty === 0 ? colors.borderLight : colors.primary}
+                      />
+                    </TouchableOpacity>
+
+                    <Text style={styles.stepperCount}>{qty}</Text>
+
+                    <TouchableOpacity
+                      onPress={() => setQuantity(svc.name, 1)}
+                      style={styles.stepperCircle}
+                    >
+                      <Ionicons name="add" size={16} color={colors.primary} />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+
+          {/* Totals Box: bg #F4F4F4, radius 12 */}
+          {selectedServices.length > 0 && (
+            <View style={styles.totalsBox}>
+              <Text style={styles.totalsText}>
+                Total Estimated Duration:{" "}
+                <Text style={styles.totalsBold}>{totals.duration} mins</Text>
+              </Text>
+              <Text style={styles.totalsText}>
+                Total Estimated Cost:{" "}
+                <Text style={styles.totalsBold}>₹{totals.cost}</Text>
+              </Text>
+            </View>
           )}
-        </Card>
-      )}
+        </View>
+      </ScrollView>
 
-      {/* Educational 3-Step Guide (eliminates the dead empty space from Screenshot 5) */}
-      {!store && !scannerOpen && (
-        <Card variant="subtle" style={styles.guideCard}>
-          <Text style={styles.guideTitle}>How Virtual Queueing Works</Text>
-
-          <View style={styles.guideStep}>
-            <View style={styles.stepNumberBadge}>
-              <Text style={styles.stepNumberText}>1</Text>
-            </View>
-            <View style={styles.stepTextCol}>
-              <Text style={styles.stepTitle}>Scan on Arrival or Remotely</Text>
-              <Text style={styles.stepDesc}>
-                Aim camera at merchant's counter QR poster or enter their store code manually.
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.guideStep}>
-            <View style={styles.stepNumberBadge}>
-              <Text style={styles.stepNumberText}>2</Text>
-            </View>
-            <View style={styles.stepTextCol}>
-              <Text style={styles.stepTitle}>Choose Services & Get Ticket</Text>
-              <Text style={styles.stepDesc}>
-                Select required services to see accurate price and duration estimates.
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.guideStep}>
-            <View style={styles.stepNumberBadge}>
-              <Text style={styles.stepNumberText}>3</Text>
-            </View>
-            <View style={styles.stepTextCol}>
-              <Text style={styles.stepTitle}>Track Real-Time Queue Position</Text>
-              <Text style={styles.stepDesc}>
-                Relax nearby while tracking people ahead and walk in when it's your turn.
-              </Text>
-            </View>
-          </View>
-        </Card>
-      )}
-    </AppScreen>
+      {/* Sticky Bottom Action Bar: top radius 30, upward shadow */}
+      <View
+        style={[
+          styles.bottomActionBar,
+          shadows.tabBar,
+          { paddingBottom: Math.max(insets.bottom, 12) + 12 },
+        ]}
+      >
+        <TouchableOpacity
+          activeOpacity={0.88}
+          onPress={handleAction}
+          disabled={submitting}
+          style={[styles.actionButtonTouch, shadows.primaryButton]}
+        >
+          <LinearGradient
+            colors={["#284D83", "#3E6BB2"]}
+            start={{ x: 0.5, y: 0 }}
+            end={{ x: 0.5, y: 1 }}
+            style={styles.actionButtonGradient}
+          >
+            <Text style={styles.actionButtonText}>
+              {submitting ? "Processing..." : buttonTitle}
+            </Text>
+          </LinearGradient>
+        </TouchableOpacity>
+      </View>
+    </View>
   );
 }
 
-const createStyles = (colors: ThemeColors) =>
-  StyleSheet.create({
-  flex1: {
-    flex: 1,
-  },
-  header: {
-    paddingBottom: spacing.xs,
-  },
-  headerTitleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-  },
-  headerIconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: radii.md,
-    backgroundColor: colors.primarySubtle,
-    alignItems: "center",
-    justifyContent: "center",
-    flexShrink: 0,
-  },
-  headerTextCol: {
-    flex: 1,
-    minWidth: 0,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: "800",
-    color: colors.text,
-    letterSpacing: -0.4,
-  },
-  subtitle: {
-    fontSize: 13,
-    color: colors.muted,
-    lineHeight: 18,
-    marginTop: 2,
-    flexWrap: "wrap",
-  },
-  scanCard: {
-    gap: spacing.lg,
-    padding: spacing.xl,
-  },
-  errorBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: colors.dangerSubtle,
-    borderWidth: 1,
-    borderColor: colors.dangerBorder,
-    borderRadius: radii.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    gap: spacing.sm,
-  },
-  errorText: {
-    color: colors.danger,
-    fontSize: 13,
-    fontWeight: "600",
-    flex: 1,
-  },
-  dividerRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: colors.border,
-  },
-  dividerText: {
-    color: colors.mutedDark,
-    fontSize: 11,
-    fontWeight: "800",
-    letterSpacing: 0.8,
-  },
-  manualInputRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-  },
-  inputWrap: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: colors.cardSoft,
-    borderColor: colors.border,
-    borderWidth: 1,
-    borderRadius: radii.md,
-    minHeight: 48,
-  },
-  input: {
-    flex: 1,
-    color: colors.text,
-    paddingHorizontal: spacing.md,
-    fontSize: 14,
-  },
-  findBtn: {
-    width: 48,
-    height: 48,
-    borderRadius: radii.md,
-    backgroundColor: colors.primary,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  cameraCard: {
-    padding: spacing.lg,
-    gap: spacing.md,
-  },
-  scannerHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  scannerTitleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-  },
-  livePulse: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: colors.success,
-  },
-  sectionTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: colors.text,
-  },
-  closeText: {
-    color: colors.danger,
-    fontSize: 13,
-    fontWeight: "700",
-  },
-  cameraWrap: {
-    height: 250,
-    borderRadius: radii.md,
-    overflow: "hidden",
-    position: "relative",
-  },
-  camera: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    width: "100%",
-    height: "100%",
-  },
-  overlay: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "rgba(2, 6, 23, 0.4)",
-  },
-  scanTarget: {
-    width: 190,
-    height: 190,
-    position: "relative",
-  },
-  corner: {
-    position: "absolute",
-    width: 24,
-    height: 24,
-    borderColor: colors.primary,
-  },
-  topLeft: {
-    top: 0,
-    left: 0,
-    borderTopWidth: 3,
-    borderLeftWidth: 3,
-  },
-  topRight: {
-    top: 0,
-    right: 0,
-    borderTopWidth: 3,
-    borderRightWidth: 3,
-  },
-  bottomLeft: {
-    bottom: 0,
-    left: 0,
-    borderBottomWidth: 3,
-    borderLeftWidth: 3,
-  },
-  bottomRight: {
-    bottom: 0,
-    right: 0,
-    borderBottomWidth: 3,
-    borderRightWidth: 3,
-  },
-  scanLaser: {
-    width: "100%",
-    height: 2,
-    backgroundColor: colors.primary,
-    ...shadows.glow,
-  },
-  storeDetailCard: {
-    gap: spacing.lg,
-    padding: spacing.xl,
-  },
-  storeHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.md,
-  },
-  storeIconCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: colors.primarySubtle,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  storeHeaderInfo: {
-    flex: 1,
-    minWidth: 0,
-    gap: 2,
-    marginRight: spacing.xs,
-  },
-  storeName: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: colors.text,
-    flexWrap: "wrap",
-  },
-  storeAddress: {
-    fontSize: 13,
-    color: colors.muted,
-  },
-  servicesSection: {
-    gap: spacing.sm,
-  },
-  servicesTitle: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: colors.textSecondary,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-  },
-  servicesList: {
-    gap: spacing.sm,
-  },
-  serviceItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: colors.cardSoft,
-    borderColor: colors.border,
-    borderWidth: 1,
-    borderRadius: radii.md,
-    padding: spacing.md,
-    gap: spacing.md,
-  },
-  serviceItemChecked: {
-    borderColor: colors.primary,
-    backgroundColor: colors.cardElevated,
-  },
-  checkbox: {
-    width: 22,
-    height: 22,
-    borderRadius: 6,
-    borderWidth: 1.5,
-    borderColor: colors.muted,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  checkboxActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  serviceTextCol: {
-    flex: 1,
-    minWidth: 0,
-    gap: 2,
-  },
-  serviceName: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: colors.text,
-    flexWrap: "wrap",
-  },
-  serviceMeta: {
-    fontSize: 12,
-    color: colors.muted,
-  },
-  serviceCost: {
-    fontSize: 14,
-    fontWeight: "800",
-    color: colors.successLight,
-    flexShrink: 0,
-  },
-  noServicesText: {
-    color: colors.muted,
-    fontSize: 13,
-    fontStyle: "italic",
-    paddingVertical: spacing.sm,
-  },
-  totalsCard: {
-    backgroundColor: colors.bgSecondary,
-    borderRadius: radii.md,
-    padding: spacing.md,
-    gap: spacing.xs,
-  },
-  totalRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  totalLabel: {
-    fontSize: 13,
-    color: colors.muted,
-  },
-  totalValue: {
-    fontSize: 14,
-    fontWeight: "800",
-    color: colors.text,
-  },
-  guideCard: {
-    padding: spacing.xl,
-    gap: spacing.lg,
-  },
-  guideTitle: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: colors.text,
-    letterSpacing: -0.1,
-  },
-  guideStep: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: spacing.md,
-  },
-  stepNumberBadge: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: colors.primarySubtle,
-    borderColor: colors.primaryBorder,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  stepNumberText: {
-    fontSize: 13,
-    fontWeight: "800",
-    color: colors.primary,
-  },
-  stepTextCol: {
-    flex: 1,
-    minWidth: 0,
-    gap: 2,
-  },
-  stepTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: colors.text,
-    flexWrap: "wrap",
-  },
-  stepDesc: {
-    fontSize: 12,
-    color: colors.muted,
-    lineHeight: 17,
-    flexWrap: "wrap",
-  },
-
-  /* Repeat Scan Active Ticket Banner */
-  activeTicketBanner: {
-    backgroundColor: colors.cardElevated,
-    borderColor: colors.primaryBorder,
-    borderWidth: 1.5,
-    borderRadius: radii.lg,
-    padding: spacing.md,
-    gap: spacing.sm,
-    marginBottom: spacing.xs,
-  },
-  activeTicketHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-  },
-  activeTicketIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: colors.primarySubtle,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  activeTicketTitle: {
-    fontSize: 14,
-    fontWeight: "800",
-    color: colors.text,
-  },
-  activeTicketSub: {
-    fontSize: 11,
-    color: colors.muted,
-    marginTop: 1,
-  },
-  activeTicketActions: {
-    flexDirection: "row",
-    gap: spacing.xs,
-    paddingTop: spacing.xs,
-    borderTopColor: colors.border,
-    borderTopWidth: 1,
-  },
-  activeTicketPrimaryBtn: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 5,
-    backgroundColor: colors.primary,
-    paddingVertical: 8,
-    borderRadius: radii.md,
-  },
-  activeTicketPrimaryBtnText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#FFFFFF",
-  },
-  activeTicketEditBtn: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 5,
-    backgroundColor: colors.cardSoft,
-    borderColor: colors.border,
-    borderWidth: 1,
-    paddingVertical: 8,
-    borderRadius: radii.md,
-  },
-  activeTicketEditBtnActive: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primarySubtle,
-  },
-  activeTicketEditText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: colors.text,
-  },
-  activeTicketEditTextActive: {
-    color: colors.primary,
-  },
-
-  /* Stepper Controls */
-  stepperWrap: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    backgroundColor: colors.cardSoft,
-    paddingHorizontal: 6,
-    paddingVertical: 4,
-    borderRadius: radii.full,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  stepperBtn: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: colors.cardElevated,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-  },
-  stepperBtnDisabled: {
-    opacity: 0.4,
-  },
-  countBadge: {
-    minWidth: 24,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  countBadgeActive: {
-    transform: [{ scale: 1.05 }],
-  },
-  countBadgeText: {
-    fontSize: 13,
-    fontWeight: "800",
-    color: colors.muted,
-  },
-  countBadgeTextActive: {
-    color: colors.primary,
-  },
-  serviceSubtotal: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: colors.primary,
-    marginTop: 2,
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    entryContainer: {
+      flex: 1,
+      backgroundColor: colors.bg,
+    },
+    headerRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: 16,
+      paddingBottom: 16,
+      backgroundColor: colors.bg,
+    },
+    backButton: {
+      padding: 6,
+      marginRight: 8,
+    },
+    headerTitle: {
+      fontSize: 20,
+      fontFamily: typography.families.interMedium,
+      fontWeight: "500",
+      color: colors.textPrimary,
+    },
+    entryBody: {
+      flex: 1,
+      paddingHorizontal: 16,
+      paddingTop: 16,
+    },
+    errorBox: {
+      marginBottom: 16,
+    },
+    entryCard: {
+      backgroundColor: colors.card,
+      borderRadius: radii.card,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 16,
+    },
+    dividerRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      marginVertical: 20,
+      gap: 12,
+    },
+    dividerLine: {
+      flex: 1,
+      height: 1,
+      backgroundColor: colors.border,
+    },
+    dividerText: {
+      fontSize: 13,
+      fontFamily: typography.families.interRegular,
+      color: colors.muted,
+    },
+    manualInputRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+    },
+    manualTextInput: {
+      flex: 1,
+      height: 48,
+      borderRadius: radii.input,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingHorizontal: 14,
+      fontSize: 15,
+      fontFamily: typography.families.interMedium,
+      color: colors.textPrimary,
+      backgroundColor: colors.cardSoft,
+    },
+    arrowButton: {
+      width: 48,
+      height: 48,
+      borderRadius: radii.iconButton,
+    },
+    arrowGradient: {
+      width: 48,
+      height: 48,
+      borderRadius: radii.iconButton,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    // Store Detail styles
+    detailContainer: {
+      flex: 1,
+      backgroundColor: colors.bg,
+    },
+    detailScroll: {
+      paddingHorizontal: 16,
+      paddingTop: 16,
+    },
+    heroCard: {
+      height: 315,
+      borderRadius: radii.heroCard,
+      overflow: "hidden",
+      marginBottom: 24,
+    },
+    heroGradient: {
+      flex: 1,
+      padding: 20,
+      justifyContent: "space-between",
+      position: "relative",
+    },
+    qWatermark: {
+      position: "absolute",
+      right: -20,
+      bottom: -20,
+      opacity: 0.08,
+    },
+    darkBottomOverlay: {
+      position: "absolute",
+      left: 0,
+      right: 0,
+      bottom: 0,
+      height: 120,
+    },
+    heroTopRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      zIndex: 10,
+    },
+    heroCircleButton: {
+      width: 35,
+      height: 35,
+      borderRadius: 17.5,
+      backgroundColor: "rgba(0,0,0,0.5)",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    heroBottomContent: {
+      zIndex: 10,
+    },
+    heroShopName: {
+      fontSize: 24,
+      fontFamily: typography.families.interMedium,
+      fontWeight: "500",
+      color: "#FFFFFF",
+      marginBottom: 14,
+    },
+    heroTilesRow: {
+      flexDirection: "row",
+      gap: 16,
+    },
+    heroTileWrap: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      flex: 1,
+    },
+    heroSquareTile: {
+      width: 38,
+      height: 38,
+      borderRadius: 10,
+      backgroundColor: "rgba(255,255,255,0.20)",
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    heroTileText: {
+      flex: 1,
+      fontSize: 14,
+      fontFamily: typography.families.interMedium,
+      color: "#FFFFFF",
+    },
+    sectionWrap: {
+      marginBottom: 24,
+    },
+    sectionHeaderTitle: {
+      fontSize: 18,
+      fontFamily: typography.families.interRegular,
+      fontWeight: "400",
+      color: colors.textPrimary,
+      marginBottom: 12,
+    },
+    detailsCard: {
+      backgroundColor: colors.card,
+      borderRadius: radii.card,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 16,
+      gap: 12,
+    },
+    detailRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 10,
+    },
+    detailText: {
+      flex: 1,
+      fontSize: 14,
+      fontFamily: typography.families.interRegular,
+      color: colors.textSecondary,
+    },
+    activeBannerWrap: {
+      marginBottom: 24,
+    },
+    bannerActionsRow: {
+      flexDirection: "row",
+      justifyContent: "flex-end",
+      marginTop: 8,
+    },
+    editServicesBtn: {
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.cardSoft,
+    },
+    editServicesText: {
+      fontSize: 13,
+      fontFamily: typography.families.interMedium,
+      color: colors.primary,
+    },
+    servicesList: {
+      gap: 10,
+    },
+    serviceRow: {
+      backgroundColor: colors.card,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 14,
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+    },
+    serviceRowSelected: {
+      borderColor: colors.primary,
+      backgroundColor: colors.primarySubtle,
+    },
+    serviceInfo: {
+      flex: 1,
+    },
+    serviceName: {
+      fontSize: 15,
+      fontFamily: typography.families.interMedium,
+      fontWeight: "500",
+      color: colors.textPrimary,
+    },
+    serviceMeta: {
+      fontSize: 12,
+      fontFamily: typography.families.interRegular,
+      color: colors.muted,
+      marginTop: 4,
+    },
+    stepperWrap: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+    },
+    stepperCircle: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.primary,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: colors.card,
+    },
+    stepperCircleDisabled: {
+      borderColor: colors.border,
+    },
+    stepperCount: {
+      fontSize: 15,
+      fontFamily: typography.families.interSemiBold,
+      color: colors.textPrimary,
+      minWidth: 16,
+      textAlign: "center",
+    },
+    totalsBox: {
+      backgroundColor: colors.cardSoft,
+      borderRadius: 12,
+      padding: 14,
+      marginTop: 12,
+      gap: 6,
+    },
+    totalsText: {
+      fontSize: 13,
+      fontFamily: typography.families.interRegular,
+      color: colors.textSecondary,
+    },
+    totalsBold: {
+      fontFamily: typography.families.interSemiBold,
+      fontWeight: "600",
+      color: colors.textPrimary,
+    },
+    bottomActionBar: {
+      position: "absolute",
+      bottom: 0,
+      left: 0,
+      right: 0,
+      backgroundColor: colors.cardElevated,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+      borderTopLeftRadius: 30,
+      borderTopRightRadius: 30,
+      paddingTop: 20,
+      paddingHorizontal: 16,
+    },
+    actionButtonTouch: {
+      width: "100%",
+      height: 52,
+      borderRadius: 14,
+    },
+    actionButtonGradient: {
+      width: "100%",
+      height: "100%",
+      borderRadius: 14,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    actionButtonText: {
+      color: "#FFFFFF",
+      fontSize: 17,
+      fontFamily: typography.families.interSemiBold,
+      fontWeight: "600",
+    },
+  });
+}

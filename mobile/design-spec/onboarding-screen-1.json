@@ -1,0 +1,335 @@
+{
+  "id": "127:112",
+  "name": "Onboarding Screen-1",
+  "type": "FRAME",
+  "x": 0,
+  "y": 0,
+  "width": 390,
+  "height": 844,
+  "fills": [
+    {
+      "type": "GRADIENT_LINEAR",
+      "gradientHandlePositions": [
+        {
+          "x": 0.5,
+          "y": -3.0616171314629196e-17
+        },
+        {
+          "x": 0.5,
+          "y": 0.9999999999999999
+        },
+        {
+          "x": 0,
+          "y": 0
+        }
+      ],
+      "stops": [
+        {
+          "position": 0,
+          "hex": "#F5F8FC",
+          "alpha": 1
+        },
+        {
+          "position": 1,
+          "hex": "#EAF1FB",
+          "alpha": 1
+        }
+      ]
+    }
+  ],
+  "cornerRadius": 30,
+  "children": [
+    {
+      "id": "127:114",
+      "name": "Find Your Match",
+      "type": "TEXT",
+      "x": 17,
+      "y": 116,
+      "width": 356,
+      "height": 34,
+      "fills": [
+        {
+          "type": "SOLID",
+          "hex": "#284D83",
+          "alpha": 1
+        }
+      ],
+      "text": {
+        "characters": "QueueLess",
+        "fontFamily": "Inter",
+        "fontSize": 40,
+        "fontWeight": 400,
+        "lineHeightPx": 48.4,
+        "letterSpacing": 0,
+        "textAlignHorizontal": "CENTER",
+        "textAlignVertical": "TOP"
+      }
+    },
+    {
+      "id": "146:103",
+      "name": "Frame 1000006525",
+      "type": "FRAME",
+      "x": 39,
+      "y": 730,
+      "width": 311,
+      "height": 64,
+      "fills": [
+        {
+          "type": "GRADIENT_LINEAR",
+          "gradientHandlePositions": [
+            {
+              "x": 0.5,
+              "y": 0
+            },
+            {
+              "x": 0.5,
+              "y": 1
+            },
+            {
+              "x": 0.47882569452342305,
+              "y": 0
+            }
+          ],
+          "stops": [
+            {
+              "position": 0,
+              "hex": "#284D83",
+              "alpha": 1
+            },
+            {
+              "position": 1,
+              "hex": "#3F6DB5",
+              "alpha": 1
+            }
+          ]
+        }
+      ],
+      "cornerRadius": 8,
+      "effects": [
+        {
+          "type": "DROP_SHADOW",
+          "offset": {
+            "x": 0,
+            "y": 4
+          },
+          "radius": 14,
+          "spread": 0,
+          "color": {
+            "hex": "#284D83",
+            "alpha": 0.24
+          }
+        }
+      ],
+      "autoLayout": {
+        "layoutMode": "HORIZONTAL",
+        "itemSpacing": 10,
+        "paddingTop": 21,
+        "paddingRight": 102,
+        "paddingBottom": 21,
+        "paddingLeft": 101,
+        "primaryAxisAlignItems": "CENTER",
+        "counterAxisAlignItems": "CENTER"
+      },
+      "children": [
+        {
+          "id": "146:102",
+          "name": "Get Started",
+          "type": "TEXT",
+          "x": 144,
+          "y": 751,
+          "width": 100,
+          "height": 22,
+          "fills": [
+            {
+              "type": "SOLID",
+              "hex": "#FFFFFF",
+              "alpha": 1
+            }
+          ],
+          "text": {
+            "characters": "Get Started",
+            "fontFamily": "Inter",
+            "fontSize": 18,
+            "fontWeight": 400,
+            "lineHeightPx": 21.8,
+            "letterSpacing": 0,
+            "textAlignHorizontal": "CENTER",
+            "textAlignVertical": "TOP"
+          }
+        }
+      ]
+    },
+    {
+      "id": "151:138",
+      "name": "Vector 4",
+      "type": "VECTOR",
+      "x": 442,
+      "y": 104,
+      "width": 854.5,
+      "height": 422,
+      "strokes": [
+        {
+          "type": "SOLID",
+          "hex": "#000000",
+          "alpha": 1
+        }
+      ],
+      "strokeWeight": 1,
+      "strokeAlign": "CENTER"
+    },
+    {
+      "id": "159:140",
+      "name": "Ellipse 89",
+      "type": "VECTOR",
+      "x": 26.5,
+      "y": 203,
+      "width": 360.6,
+      "height": 295,
+      "fills": [
+        {
+          "type": "SOLID",
+          "hex": "#4A70A9",
+          "alpha": 1
+        }
+      ]
+    },
+    {
+      "id": "127:115",
+      "name": "Connect with like-minded people and discover your ideal shared living space",
+      "type": "TEXT",
+      "x": 26,
+      "y": 525,
+      "width": 338,
+      "height": 36,
+      "fills": [
+        {
+          "type": "SOLID",
+          "hex": "#1A1A1A",
+          "alpha": 1
+        }
+      ],
+      "text": {
+        "characters": "Waiting in long queues?",
+        "fontFamily": "Poppins",
+        "fontSize": 24,
+        "fontWeight": 400,
+        "lineHeightPx": 36,
+        "letterSpacing": 0,
+        "textAlignHorizontal": "CENTER",
+        "textAlignVertical": "TOP"
+      }
+    },
+    {
+      "id": "127:116",
+      "name": "Verified profiles and secure communication",
+      "type": "TEXT",
+      "x": 13,
+      "y": 577,
+      "width": 363,
+      "height": 37,
+      "fills": [
+        {
+          "type": "SOLID",
+          "hex": "#9CA3AF",
+          "alpha": 1
+        }
+      ],
+      "text": {
+        "characters": "Standing in line wastes time and feels frustrating.",
+        "fontFamily": "Inter",
+        "fontSize": 16,
+        "fontWeight": 400,
+        "lineHeightPx": 19.4,
+        "letterSpacing": 0,
+        "textAlignHorizontal": "CENTER",
+        "textAlignVertical": "TOP"
+      }
+    },
+    {
+      "id": "127:101",
+      "name": "1-removebg-preview 1",
+      "type": "RECTANGLE",
+      "x": 14,
+      "y": 250,
+      "width": 362,
+      "height": 241,
+      "fills": [
+        {
+          "type": "IMAGE"
+        }
+      ]
+    },
+    {
+      "id": "159:194",
+      "name": "Frame 1000006526",
+      "type": "FRAME",
+      "x": 172.5,
+      "y": 648,
+      "width": 44,
+      "height": 8,
+      "autoLayout": {
+        "layoutMode": "HORIZONTAL",
+        "itemSpacing": 6,
+        "paddingTop": 0,
+        "paddingRight": 0,
+        "paddingBottom": 0,
+        "paddingLeft": 0,
+        "primaryAxisAlignItems": "CENTER",
+        "counterAxisAlignItems": "CENTER"
+      },
+      "children": [
+        {
+          "id": "159:191",
+          "name": "Rectangle 6465",
+          "type": "RECTANGLE",
+          "x": 172.5,
+          "y": 649,
+          "width": 16,
+          "height": 6,
+          "fills": [
+            {
+              "type": "SOLID",
+              "hex": "#284D83",
+              "alpha": 1
+            }
+          ],
+          "cornerRadius": 28
+        },
+        {
+          "id": "159:192",
+          "name": "Rectangle 6466",
+          "type": "RECTANGLE",
+          "x": 194.5,
+          "y": 648,
+          "width": 8,
+          "height": 8,
+          "fills": [
+            {
+              "type": "SOLID",
+              "hex": "#D1D5DB",
+              "alpha": 1
+            }
+          ],
+          "cornerRadius": 28
+        },
+        {
+          "id": "159:193",
+          "name": "Rectangle 6467",
+          "type": "RECTANGLE",
+          "x": 208.5,
+          "y": 648,
+          "width": 8,
+          "height": 8,
+          "fills": [
+            {
+              "type": "SOLID",
+              "hex": "#D1D5DB",
+              "alpha": 1
+            }
+          ],
+          "cornerRadius": 28
+        }
+      ]
+    }
+  ]
+}

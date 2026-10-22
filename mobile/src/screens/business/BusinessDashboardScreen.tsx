@@ -25,7 +25,16 @@ import Card from "../../components/Card";
 import EmptyState from "../../components/EmptyState";
 import SectionHeader from "../../components/SectionHeader";
 import StatusBadge from "../../components/StatusBadge";
-import { api } from "../../lib/api";
+import { Chip } from "../../components/Chip";
+import { AlertCard } from "../../components/AlertCard";
+import { OfferBadgeIcon } from "../../assets/icons/AppIcons";
+import {
+  api,
+  getBusinessUpdates,
+  createBusinessUpdate,
+  deleteBusinessUpdate
+} from "../../lib/api";
+import { timeAgo } from "../../lib/time";
 import { BusinessTabParamList } from "../../navigation/types";
 import { BusinessAnalytics, QueueEntry, ServiceItem } from "../../types";
 import { useTheme } from "../../context/ThemeContext";
@@ -60,6 +69,8 @@ export default function BusinessDashboardScreen(_: Props) {
   const [cost, setCost] = useState("");
   const [copied, setCopied] = useState(false);
   const [addingService, setAddingService] = useState(false);
+  const [qrExpanded, setQrExpanded] = useState(false);
+  const [addServiceExpanded, setAddServiceExpanded] = useState(false);
 
   // Ticket Details & Verification Modal State
   const [selectedTicket, setSelectedTicket] = useState<QueueEntry | null>(null);
@@ -110,11 +121,100 @@ export default function BusinessDashboardScreen(_: Props) {
     setVerifyModalVisible(true);
   };
 
-  // Phase 6: Operational Analytics State & Navigation
-  const [activeTab, setActiveTab] = useState<"queue" | "analytics" | "catalog">("queue");
+  // Navigation Tab State (Queue / Analytics / Catalog / Updates)
+  const [activeTab, setActiveTab] = useState<"queue" | "analytics" | "catalog" | "updates">("queue");
   const [analyticsRange, setAnalyticsRange] = useState<string>("7d");
   const [analyticsData, setAnalyticsData] = useState<BusinessAnalytics | null>(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
+
+  // Business Updates State
+  const [businessUpdates, setBusinessUpdates] = useState<any[]>([]);
+  const [newUpdateModalOpen, setNewUpdateModalOpen] = useState(false);
+  const [newUpdateType, setNewUpdateType] = useState<"alert" | "offer" | "info">("alert");
+  const [newUpdateTitle, setNewUpdateTitle] = useState("");
+  const [newUpdateMessage, setNewUpdateMessage] = useState("");
+  const [newUpdateDays, setNewUpdateDays] = useState(7);
+  const [publishingUpdate, setPublishingUpdate] = useState(false);
+  const [updatePublishError, setUpdatePublishError] = useState("");
+  const [updatePublishSuccess, setUpdatePublishSuccess] = useState(false);
+
+  const fetchOwnUpdates = async () => {
+    try {
+      const data = await getBusinessUpdates();
+      setBusinessUpdates(data || []);
+    } catch {}
+  };
+
+  const handlePublishUpdate = async () => {
+    setUpdatePublishError("");
+    if (!newUpdateTitle.trim()) {
+      setUpdatePublishError("Title is required (max 60 characters).");
+      return;
+    }
+    if (newUpdateTitle.trim().length > 60) {
+      setUpdatePublishError("Title must not exceed 60 characters.");
+      return;
+    }
+    if (!newUpdateMessage.trim()) {
+      setUpdatePublishError("Message is required (max 200 characters).");
+      return;
+    }
+    if (newUpdateMessage.trim().length > 200) {
+      setUpdatePublishError("Message must not exceed 200 characters.");
+      return;
+    }
+
+    try {
+      setPublishingUpdate(true);
+      await createBusinessUpdate({
+        type: newUpdateType,
+        title: newUpdateTitle.trim(),
+        message: newUpdateMessage.trim(),
+        validForDays: newUpdateType === "offer" ? newUpdateDays : undefined,
+      });
+
+      setNewUpdateModalOpen(false);
+      setNewUpdateTitle("");
+      setNewUpdateMessage("");
+      setNewUpdateDays(7);
+      setUpdatePublishSuccess(true);
+      fetchOwnUpdates();
+
+      setTimeout(() => {
+        setUpdatePublishSuccess(false);
+      }, 3500);
+    } catch (err: any) {
+      setUpdatePublishError(err.response?.data?.message || "Failed to publish update.");
+    } finally {
+      setPublishingUpdate(false);
+    }
+  };
+
+  const handleDeleteUpdate = (id: string) => {
+    const confirmDelete = async () => {
+      try {
+        await deleteBusinessUpdate(id);
+        setBusinessUpdates((prev) => prev.filter((u) => u._id !== id));
+      } catch (err: any) {
+        Alert.alert("Error", err.response?.data?.message || "Failed to delete update.");
+      }
+    };
+
+    if (Platform.OS === "web") {
+      if (window.confirm("Are you sure you want to delete this announcement?")) {
+        confirmDelete();
+      }
+    } else {
+      Alert.alert(
+        "Delete Announcement",
+        "Are you sure you want to delete this announcement? It will be removed from customer feeds.",
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Delete", style: "destructive", onPress: confirmDelete },
+        ]
+      );
+    }
+  };
 
   const copyToClipboard = async () => {
     if (!profile?.uniqueQrCode) return;
@@ -162,6 +262,8 @@ export default function BusinessDashboardScreen(_: Props) {
     try {
       if (activeTab === "analytics") {
         await fetchAnalytics(analyticsRange, true);
+      } else if (activeTab === "updates") {
+        await fetchOwnUpdates();
       } else {
         const [profileRes, queueRes] = await Promise.all([
           api.get("/business/me"),
@@ -182,6 +284,8 @@ export default function BusinessDashboardScreen(_: Props) {
   useEffect(() => {
     if (activeTab === "analytics") {
       fetchAnalytics(analyticsRange);
+    } else if (activeTab === "updates") {
+      fetchOwnUpdates();
     }
   }, [activeTab, analyticsRange]);
 
@@ -465,72 +569,40 @@ export default function BusinessDashboardScreen(_: Props) {
         </View>
       </View>
 
-      {/* Navigation Segmented Tab Bar */}
-      <View style={styles.tabBar}>
-        <TouchableOpacity
-          style={[styles.tabItem, activeTab === "queue" && styles.tabItemActive]}
-          onPress={() => setActiveTab("queue")}
-          activeOpacity={0.8}
+      {/* Navigation Segmented Tab Bar - Styled with Chips */}
+      <View style={styles.chipTabBarWrap}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.chipTabScroll}
         >
-          <Ionicons
-            name={activeTab === "queue" ? "people" : "people-outline"}
-            size={16}
-            color={activeTab === "queue" ? colors.primary : colors.muted}
+          <Chip
+            label={`Queue (${activeQueue.length})`}
+            active={activeTab === "queue"}
+            onPress={() => setActiveTab("queue")}
           />
-          <Text style={[styles.tabText, activeTab === "queue" && styles.tabTextActive]}>
-            Live Queue
-          </Text>
-          {activeQueue.length > 0 && (
-            <View style={[styles.tabBadge, activeTab === "queue" && styles.tabBadgeActive]}>
-              <Text style={[styles.tabBadgeText, activeTab === "queue" && styles.tabBadgeTextActive]}>
-                {activeQueue.length}
-              </Text>
-            </View>
-          )}
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.tabItem, activeTab === "analytics" && styles.tabItemActive]}
-          onPress={() => setActiveTab("analytics")}
-          activeOpacity={0.8}
-        >
-          <Ionicons
-            name={activeTab === "analytics" ? "bar-chart" : "bar-chart-outline"}
-            size={16}
-            color={activeTab === "analytics" ? colors.primary : colors.muted}
+          <Chip
+            label="Analytics"
+            active={activeTab === "analytics"}
+            onPress={() => setActiveTab("analytics")}
           />
-          <Text style={[styles.tabText, activeTab === "analytics" && styles.tabTextActive]}>
-            Analytics
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.tabItem, activeTab === "catalog" && styles.tabItemActive]}
-          onPress={() => setActiveTab("catalog")}
-          activeOpacity={0.8}
-        >
-          <Ionicons
-            name={activeTab === "catalog" ? "pricetag" : "pricetag-outline"}
-            size={16}
-            color={activeTab === "catalog" ? colors.primary : colors.muted}
+          <Chip
+            label={`Catalog (${profile?.services?.length || 0})`}
+            active={activeTab === "catalog"}
+            onPress={() => setActiveTab("catalog")}
           />
-          <Text style={[styles.tabText, activeTab === "catalog" && styles.tabTextActive]}>
-            Catalog
-          </Text>
-          {profile?.services?.length ? (
-            <View style={[styles.tabBadge, activeTab === "catalog" && styles.tabBadgeActive]}>
-              <Text style={[styles.tabBadgeText, activeTab === "catalog" && styles.tabBadgeTextActive]}>
-                {profile.services.length}
-              </Text>
-            </View>
-          ) : null}
-        </TouchableOpacity>
+          <Chip
+            label={`Updates (${businessUpdates.length})`}
+            active={activeTab === "updates"}
+            onPress={() => setActiveTab("updates")}
+          />
+        </ScrollView>
       </View>
 
       {/* TAB 1: LIVE QUEUE */}
       {activeTab === "queue" && (
-        <>
-          {/* Store QR Code Check-in Card */}
+        <View style={styles.tabContentContainer}>
+          {/* Store QR Code Check-in Card (Shown by default as requested) */}
           <Card variant="elevated" style={styles.qrCard}>
             <View style={styles.cardHeaderRow}>
               <View style={styles.cardTitleWrap}>
@@ -545,7 +617,7 @@ export default function BusinessDashboardScreen(_: Props) {
                 <View style={styles.qrWhiteBox}>
                   <Image
                     source={{
-                      uri: `https://api.qrserver.com/v1/create-qr-code/?size=260x260&margin=8&data=${encodeURIComponent(
+                      uri: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=8&data=${encodeURIComponent(
                         profile.uniqueQrCode
                       )}`,
                     }}
@@ -565,10 +637,12 @@ export default function BusinessDashboardScreen(_: Props) {
                     style={[styles.copyBtn, copied && styles.copyBtnActive]}
                     onPress={copyToClipboard}
                     activeOpacity={0.8}
+                    accessibilityRole="button"
+                    accessibilityLabel="Copy store QR identifier"
                   >
                     <Ionicons
                       name={copied ? "checkmark-circle" : "copy-outline"}
-                      size={15}
+                      size={14}
                       color={copied ? colors.success : colors.primary}
                     />
                     <Text style={[styles.copyBtnText, copied && styles.copiedText]}>
@@ -831,12 +905,12 @@ export default function BusinessDashboardScreen(_: Props) {
               </View>
             )}
           </View>
-        </>
+        </View>
       )}
 
       {/* TAB 2: ANALYTICS & INSIGHTS */}
       {activeTab === "analytics" && (
-        <View style={styles.sectionWrap}>
+        <View style={styles.tabContentContainer}>
           <SectionHeader
             title="Operational Insights"
             subtitle="Queue throughput, speed ratio & revenue"
@@ -1092,7 +1166,7 @@ export default function BusinessDashboardScreen(_: Props) {
 
       {/* TAB 3: SERVICES CATALOG */}
       {activeTab === "catalog" && (
-        <View style={styles.sectionWrap}>
+        <View style={styles.tabContentContainer}>
           <SectionHeader
             title="Store Services"
             subtitle="Configure services and prices available for queue booking"
@@ -1124,52 +1198,346 @@ export default function BusinessDashboardScreen(_: Props) {
             ))}
           </View>
 
-          {/* Add New Service Form Card */}
-          <Card variant="elevated" style={styles.addServiceCard}>
-            <Text style={styles.addServiceTitle}>Add New Service</Text>
-
-            <AppInput
-              label="Service Name"
-              value={serviceName}
-              onChangeText={setServiceName}
-              placeholder="e.g. Haircut & Wash, Screen Replacement"
-              icon="create-outline"
-            />
-
-            <View style={styles.inputTwoCol}>
-              <View style={styles.flex1}>
-                <AppInput
-                  label="Duration (mins)"
-                  value={durationMin}
-                  onChangeText={setDurationMin}
-                  keyboardType="numeric"
-                  placeholder="e.g. 25"
-                  icon="time-outline"
-                />
+          {/* Add New Service Form / Trigger */}
+          {!addServiceExpanded ? (
+            <TouchableOpacity
+              style={styles.addServiceTriggerBtn}
+              onPress={() => setAddServiceExpanded(true)}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel="Add new service to catalog"
+            >
+              <Ionicons name="add-circle-outline" size={18} color={colors.primary} />
+              <Text style={styles.addServiceTriggerText}>+ Add New Service to Catalog</Text>
+            </TouchableOpacity>
+          ) : (
+            <Card variant="elevated" style={styles.addServiceCard}>
+              <View style={styles.cardHeaderRow}>
+                <Text style={styles.addServiceTitle}>Add New Service</Text>
+                <TouchableOpacity
+                  onPress={() => setAddServiceExpanded(false)}
+                  style={{ padding: 4 }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Close add service form"
+                >
+                  <Ionicons name="close" size={20} color={colors.muted} />
+                </TouchableOpacity>
               </View>
-              <View style={styles.flex1}>
-                <AppInput
-                  label="Cost ($)"
-                  value={cost}
-                  onChangeText={setCost}
-                  keyboardType="numeric"
-                  placeholder="e.g. 20"
-                  icon="cash-outline"
-                />
-              </View>
-            </View>
 
-            <AppButton
-              title="Add Service to Catalog"
-              onPress={addService}
-              loading={addingService}
-              loadingText="Adding Service..."
-              icon="add-circle-outline"
-              style={{ marginTop: spacing.xs }}
-            />
-          </Card>
+              <AppInput
+                label="Service Name"
+                value={serviceName}
+                onChangeText={setServiceName}
+                placeholder="e.g. Haircut & Wash, Screen Replacement"
+              />
+
+              <View style={styles.inputTwoCol}>
+                <View style={styles.flex1}>
+                  <AppInput
+                    label="Duration (mins)"
+                    value={durationMin}
+                    onChangeText={setDurationMin}
+                    keyboardType="numeric"
+                    placeholder="e.g. 25"
+                  />
+                </View>
+                <View style={styles.flex1}>
+                  <AppInput
+                    label="Cost ($)"
+                    value={cost}
+                    onChangeText={setCost}
+                    keyboardType="numeric"
+                    placeholder="e.g. 20"
+                  />
+                </View>
+              </View>
+
+              <AppButton
+                title="Add Service to Catalog"
+                onPress={addService}
+                loading={addingService}
+                loadingText="Adding Service..."
+                icon="add-circle-outline"
+                style={{ marginTop: spacing.xs }}
+              />
+            </Card>
+          )}
         </View>
       )}
+
+      {/* TAB 4: UPDATES & ANNOUNCEMENTS */}
+      {activeTab === "updates" && (
+        <View style={styles.tabContentContainer}>
+          {updatePublishSuccess && (
+            <View style={{ marginBottom: 16 }}>
+              <AlertCard
+                type="success"
+                title="Update Published"
+                message="Your announcement has been sent to customer feeds."
+              />
+            </View>
+          )}
+
+          <SectionHeader
+            title="Store Updates & Offers"
+            subtitle="Broadcast alerts, special discounts, and notices to customers"
+            icon="megaphone-outline"
+            count={businessUpdates.length}
+            rightElement={
+              <AppButton
+                title="+ New Update"
+                onPress={() => {
+                  setUpdatePublishError("");
+                  setNewUpdateModalOpen(true);
+                }}
+                size="sm"
+              />
+            }
+          />
+
+          {businessUpdates.length === 0 ? (
+            <EmptyState
+              icon="megaphone-outline"
+              title="No Updates Published"
+              description="Keep customers engaged by posting notices, holiday schedules, and limited-time discounts."
+              actionLabel="Create First Update"
+              onAction={() => {
+                setUpdatePublishError("");
+                setNewUpdateModalOpen(true);
+              }}
+            />
+          ) : (
+            <View style={{ gap: 16 }}>
+              {businessUpdates.map((item) => {
+                let cardBg = "#EDF9FF";
+                let cardBorder = "#D2EBFA";
+                let iconColor = "#2F6FED";
+
+                if (item.type === "alert") {
+                  cardBg = "#FDECEC";
+                  cardBorder = "#F5C2C2";
+                  iconColor = "#D64545";
+                } else if (item.type === "offer") {
+                  cardBg = "#EFFEF5";
+                  cardBorder = "#D3EED8";
+                  iconColor = "#2E7D32";
+                }
+
+                let validTillText = "";
+                if (item.type === "offer" && item.validTill) {
+                  const d = new Date(item.validTill);
+                  validTillText = `Valid till ${d.toLocaleDateString("en-US", {
+                    day: "numeric",
+                    month: "short",
+                  })}`;
+                }
+
+                return (
+                  <View
+                    key={item._id}
+                    style={[
+                      styles.businessUpdateCard,
+                      { backgroundColor: cardBg, borderColor: cardBorder },
+                    ]}
+                  >
+                    <View style={styles.businessUpdateIconWrap}>
+                      {item.type === "alert" ? (
+                        <Ionicons name="warning-outline" size={24} color={iconColor} />
+                      ) : item.type === "offer" ? (
+                        <OfferBadgeIcon size={24} color={iconColor} />
+                      ) : (
+                        <Ionicons name="information-circle-outline" size={24} color={iconColor} />
+                      )}
+                    </View>
+
+                    <View style={styles.flex1}>
+                      <View style={styles.businessUpdateTitleRow}>
+                        <Text style={styles.businessUpdateTitle} numberOfLines={1}>
+                          {item.title}
+                        </Text>
+                        <Text style={styles.businessUpdateTime}>{timeAgo(item.createdAt)}</Text>
+                      </View>
+
+                      <Text style={styles.businessUpdateMessage}>{item.message}</Text>
+
+                      {validTillText ? (
+                        <Text style={styles.businessUpdateValidTill}>{validTillText}</Text>
+                      ) : null}
+
+                      <View style={styles.businessUpdateActionsRow}>
+                        <TouchableOpacity
+                          onPress={() => handleDeleteUpdate(item._id)}
+                          style={styles.deleteUpdateBtn}
+                        >
+                          <Text style={styles.deleteUpdateBtnText}>Delete</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          )}
+        </View>
+      )}
+
+      {/* New Update Bottom Sheet Modal */}
+      <Modal
+        visible={newUpdateModalOpen}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setNewUpdateModalOpen(false)}
+      >
+        <View style={styles.newUpdateOverlay}>
+          <View style={styles.newUpdateSheet}>
+            <View style={styles.newUpdateSheetHeader}>
+              <Text style={styles.newUpdateSheetTitle}>Publish New Update</Text>
+              <TouchableOpacity onPress={() => setNewUpdateModalOpen(false)}>
+                <Ionicons name="close" size={24} color="#000000" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} style={{ maxHeight: 520 }}>
+              {updatePublishError ? (
+                <View style={{ marginBottom: 16 }}>
+                  <AlertCard type="danger" title="Error" message={updatePublishError} />
+                </View>
+              ) : null}
+
+              {/* Live Preview Card */}
+              <Text style={styles.previewLabel}>LIVE PREVIEW</Text>
+              <View
+                style={[
+                  styles.previewCard,
+                  {
+                    backgroundColor:
+                      newUpdateType === "alert"
+                        ? "#FDECEC"
+                        : newUpdateType === "offer"
+                        ? "#EFFEF5"
+                        : "#EDF9FF",
+                    borderColor:
+                      newUpdateType === "alert"
+                        ? "#F5C2C2"
+                        : newUpdateType === "offer"
+                        ? "#D3EED8"
+                        : "#D2EBFA",
+                  },
+                ]}
+              >
+                <View style={styles.previewIconWrap}>
+                  {newUpdateType === "alert" ? (
+                    <Ionicons name="warning-outline" size={24} color="#D64545" />
+                  ) : newUpdateType === "offer" ? (
+                    <OfferBadgeIcon size={24} color="#2E7D32" />
+                  ) : (
+                    <Ionicons name="information-circle-outline" size={24} color="#2F6FED" />
+                  )}
+                </View>
+                <View style={styles.flex1}>
+                  <View style={styles.previewTitleRow}>
+                    <Text style={styles.previewTitle}>
+                      {newUpdateTitle || "Announcement Title"}
+                    </Text>
+                    <Text style={styles.previewTime}>just now</Text>
+                  </View>
+                  <Text style={styles.previewShopName}>
+                    {profile?.shopName || "Your Store"}
+                  </Text>
+                  <Text style={styles.previewMessage}>
+                    {newUpdateMessage || "Customers will see this message in their Updates feed."}
+                  </Text>
+                  {newUpdateType === "offer" && (
+                    <Text style={styles.previewValidTill}>
+                      Valid for {newUpdateDays} days
+                    </Text>
+                  )}
+                </View>
+              </View>
+
+              {/* Type Chips */}
+              <Text style={styles.inputSectionLabel}>Update Type</Text>
+              <View style={styles.typeChipsRow}>
+                {(["alert", "offer", "info"] as const).map((t) => (
+                  <Chip
+                    key={t}
+                    label={t.charAt(0).toUpperCase() + t.slice(1)}
+                    active={newUpdateType === t}
+                    onPress={() => setNewUpdateType(t)}
+                  />
+                ))}
+              </View>
+
+              {/* Title input with counter */}
+              <View style={styles.inputWrapWithCounter}>
+                <View style={styles.labelWithCounterRow}>
+                  <Text style={styles.inputSectionLabel}>Title</Text>
+                  <Text style={styles.counterText}>{newUpdateTitle.length}/60</Text>
+                </View>
+                <TextInput
+                  style={styles.singleLineInput}
+                  value={newUpdateTitle}
+                  onChangeText={(text) => {
+                    if (text.length <= 60) setNewUpdateTitle(text);
+                  }}
+                  placeholder="e.g. Holiday Notice, Special Discount"
+                  placeholderTextColor="#9E9E9E"
+                />
+              </View>
+
+              {/* Message input with counter */}
+              <View style={styles.inputWrapWithCounter}>
+                <View style={styles.labelWithCounterRow}>
+                  <Text style={styles.inputSectionLabel}>Message</Text>
+                  <Text style={styles.counterText}>{newUpdateMessage.length}/200</Text>
+                </View>
+                <TextInput
+                  style={styles.multiLineInput}
+                  value={newUpdateMessage}
+                  onChangeText={(text) => {
+                    if (text.length <= 200) setNewUpdateMessage(text);
+                  }}
+                  placeholder="Provide details about your notice, working hours adjustment, or offer."
+                  placeholderTextColor="#9E9E9E"
+                  multiline
+                  numberOfLines={4}
+                />
+              </View>
+
+              {/* Offer duration stepper */}
+              {newUpdateType === "offer" && (
+                <View style={styles.stepperSection}>
+                  <Text style={styles.inputSectionLabel}>Valid For (Days)</Text>
+                  <View style={styles.stepperContainer}>
+                    <TouchableOpacity
+                      onPress={() => setNewUpdateDays((d) => Math.max(1, d - 1))}
+                      style={styles.stepperBtn}
+                    >
+                      <Ionicons name="remove" size={18} color="#284D83" />
+                    </TouchableOpacity>
+                    <Text style={styles.stepperValueText}>{newUpdateDays} days</Text>
+                    <TouchableOpacity
+                      onPress={() => setNewUpdateDays((d) => Math.min(30, d + 1))}
+                      style={styles.stepperBtn}
+                    >
+                      <Ionicons name="add" size={18} color="#284D83" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+            </ScrollView>
+
+            <View style={styles.publishBtnWrap}>
+              <AppButton
+                title="Publish Update"
+                onPress={handlePublishUpdate}
+                loading={publishingUpdate}
+                loadingText="Publishing..."
+              />
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* Customer Ticket Details Modal */}
       <Modal
@@ -1649,9 +2017,12 @@ const createStyles = (colors: ThemeColors) =>
     color: colors.muted,
     marginTop: 2,
   },
+  tabContentContainer: {
+    gap: spacing.xxl, // Explicit 24px gap between QR card, Live Queue, and Processed Customers!
+  },
   qrCard: {
-    gap: spacing.lg,
-    padding: spacing.xl,
+    gap: spacing.md,
+    padding: spacing.lg,
   },
   cardHeaderRow: {
     flexDirection: "row",
@@ -1679,8 +2050,8 @@ const createStyles = (colors: ThemeColors) =>
     ...shadows.card,
   },
   qrImage: {
-    width: 220,
-    height: 220,
+    width: 200,
+    height: 200,
   },
   codeSnippetBox: {
     flexDirection: "row",
@@ -1748,8 +2119,8 @@ const createStyles = (colors: ThemeColors) =>
     gap: spacing.md,
   },
   queueItemCard: {
-    gap: spacing.md,
-    padding: spacing.lg,
+    gap: spacing.sm,
+    padding: spacing.md,
   },
   queueItemHeader: {
     flexDirection: "row",
@@ -1889,6 +2260,24 @@ const createStyles = (colors: ThemeColors) =>
     alignItems: "center",
     justifyContent: "center",
     flexShrink: 0,
+  },
+  addServiceTriggerBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 14,
+    backgroundColor: colors.cardElevated,
+    borderColor: colors.primaryBorder,
+    borderWidth: 1.5,
+    borderStyle: "dashed",
+    borderRadius: radii.lg,
+    marginTop: spacing.xs,
+  },
+  addServiceTriggerText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: colors.primary,
   },
   addServiceCard: {
     gap: spacing.md,
@@ -2963,6 +3352,244 @@ const createStyles = (colors: ThemeColors) =>
   },
   manualEntryWrapper: {
     marginBottom: spacing.sm,
+  },
+  stepperSection: {
+    marginTop: 14,
+  },
+  inputSectionLabel: {
+    fontSize: 14,
+    fontFamily: "Inter_500Medium",
+    fontWeight: "500",
+    color: colors.text,
+    marginBottom: 8,
+  },
+  stepperContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.cardSoft,
+    borderRadius: radii.input,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 12,
+    height: 48,
+    gap: 16,
+  },
+  stepperBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.primarySubtle,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  stepperValueText: {
+    flex: 1,
+    textAlign: "center",
+    fontSize: 15,
+    fontFamily: "Inter_500Medium",
+    fontWeight: "500",
+    color: colors.text,
+  },
+  publishBtnWrap: {
+    marginTop: 16,
+  },
+  previewLabel: {
+    fontSize: 12,
+    fontFamily: "Inter_500Medium",
+    fontWeight: "500",
+    color: colors.muted,
+    textTransform: "uppercase",
+    marginBottom: 8,
+    letterSpacing: 0.5,
+  },
+  previewCard: {
+    width: "100%",
+    borderRadius: radii.alert,
+    borderWidth: 1,
+    padding: 14,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginBottom: 16,
+  },
+  previewIconWrap: {
+    marginRight: 12,
+    paddingTop: 2,
+  },
+  previewTitleRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    justifyContent: "space-between",
+    marginBottom: 4,
+  },
+  previewTitle: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 16,
+    fontWeight: "500",
+    color: colors.text,
+    flex: 1,
+  },
+  previewTime: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 12,
+    color: colors.muted,
+    marginLeft: 8,
+  },
+  previewShopName: {
+    fontFamily: "Inter_600SemiBold",
+    fontSize: 13,
+    fontWeight: "600",
+    color: colors.text,
+    marginBottom: 2,
+  },
+  previewMessage: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 12,
+    color: colors.textSecondary,
+    lineHeight: 18,
+  },
+  previewValidTill: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 12,
+    fontWeight: "500",
+    color: colors.text,
+    marginTop: 6,
+  },
+  typeChipsRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 16,
+  },
+  inputWrapWithCounter: {
+    marginBottom: 14,
+  },
+  labelWithCounterRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  counterText: {
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+    color: colors.muted,
+  },
+  singleLineInput: {
+    height: 44,
+    borderRadius: radii.input,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.cardSoft,
+    paddingHorizontal: 12,
+    fontSize: 15,
+    fontFamily: "Inter_500Medium",
+    color: colors.text,
+  },
+  multiLineInput: {
+    minHeight: 80,
+    borderRadius: radii.input,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: colors.cardSoft,
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    paddingBottom: 10,
+    fontSize: 14,
+    fontFamily: "Inter_400Regular",
+    color: colors.text,
+    textAlignVertical: "top",
+  },
+  chipTabBarWrap: {
+    marginHorizontal: -spacing.lg,
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.lg,
+  },
+  chipTabScroll: {
+    paddingVertical: spacing.xs,
+    gap: spacing.sm,
+  },
+  businessUpdateCard: {
+    width: "100%",
+    borderRadius: radii.alert,
+    borderWidth: 1,
+    padding: 14,
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginBottom: 12,
+  },
+  businessUpdateIconWrap: {
+    marginRight: 12,
+    paddingTop: 2,
+  },
+  businessUpdateTitleRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    justifyContent: "space-between",
+    marginBottom: 4,
+  },
+  businessUpdateTitle: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 16,
+    fontWeight: "500",
+    color: colors.text,
+    flex: 1,
+  },
+  businessUpdateTime: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 12,
+    color: colors.muted,
+    marginLeft: 8,
+  },
+  businessUpdateMessage: {
+    fontFamily: "Inter_400Regular",
+    fontSize: 13,
+    color: colors.textSecondary,
+    lineHeight: 18,
+  },
+  businessUpdateValidTill: {
+    fontFamily: "Inter_500Medium",
+    fontSize: 12,
+    fontWeight: "500",
+    color: colors.text,
+    marginTop: 6,
+  },
+  businessUpdateActionsRow: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    marginTop: 8,
+  },
+  deleteUpdateBtn: {
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  deleteUpdateBtnText: {
+    fontSize: 13,
+    fontFamily: "Inter_500Medium",
+    fontWeight: "500",
+    color: colors.danger,
+  },
+  newUpdateOverlay: {
+    flex: 1,
+    backgroundColor: colors.overlay,
+    justifyContent: "flex-end",
+  },
+  newUpdateSheet: {
+    backgroundColor: colors.cardElevated,
+    borderTopLeftRadius: radii.bottomSheet,
+    borderTopRightRadius: radii.bottomSheet,
+    padding: 20,
+    maxHeight: "85%",
+  },
+  newUpdateSheetHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 16,
+  },
+  newUpdateSheetTitle: {
+    fontSize: 18,
+    fontFamily: "Inter_600SemiBold",
+    fontWeight: "600",
+    color: colors.text,
   },
 });
 

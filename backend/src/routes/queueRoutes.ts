@@ -14,7 +14,11 @@ import {
   revokeTicketShareToken,
   getSharedTicket,
   editTicketServices,
-  revokeTicketVerificationToken
+  revokeTicketVerificationToken,
+  getNotifications,
+  getUnreadNotificationCount,
+  markNotificationsRead,
+  getCustomerUpdates
 } from "../controllers/queueController";
 import { queueMutationRateLimiter, sharedTicketRateLimiter } from "../middleware/rateLimiter";
 
@@ -25,6 +29,14 @@ router.get("/store/:qrCode", getStoreByQr);
 
 // Public: Guest-accessible sanitized shared ticket tracking (Zero PII leaked, rate-limited)
 router.get("/shared/:shareToken", sharedTicketRateLimiter, getSharedTicket);
+
+// Protected: Notifications feed & unread count
+router.get("/notifications", protect, getNotifications);
+router.get("/notifications/unread-count", protect, getUnreadNotificationCount);
+router.post("/notifications/read", protect, queueMutationRateLimiter, markNotificationsRead);
+
+// Protected: Updates / Announcements feed
+router.get("/updates", protect, getCustomerUpdates);
 
 // Protected: Queue routes accessible to all authenticated users
 router.get("/my-queues", protect, getMyQueues);

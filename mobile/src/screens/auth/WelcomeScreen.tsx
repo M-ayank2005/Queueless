@@ -16,7 +16,7 @@ import { useTheme } from "../../context/ThemeContext";
 import { ThemeColors } from "../../theme/colors";
 import { radii, shadows, spacing } from "../../theme/theme";
 
-type Props = NativeStackScreenProps<AuthStackParamList, "Welcome">;
+type Props = NativeStackScreenProps<any>;
 
 export default function WelcomeScreen({ navigation }: Props) {
   const { colors } = useTheme();

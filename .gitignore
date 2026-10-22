@@ -47,3 +47,7 @@ yarn-error.log*
 *.sln
 *.sw?
 .agents/
+
+# Tool Caches
+mobile/tools/figma/.cache/
+

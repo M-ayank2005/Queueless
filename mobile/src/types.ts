@@ -150,3 +150,44 @@ export interface SharedTicketData {
   prediction?: PredictionMetadata;
   shareToken: string;
 }
+
+export type NotificationType =
+  | "joined"
+  | "queue_updated"
+  | "turn_near"
+  | "your_turn"
+  | "checked_in"
+  | "completed"
+  | "cancelled";
+
+export interface AppNotification {
+  _id: string;
+  userId: string;
+  type: NotificationType;
+  title: string;
+  message: string;
+  queueId?: string;
+  businessId?: any;
+  meta?: {
+    position?: number;
+    waitMin?: number;
+    shopName?: string;
+  };
+  readAt?: string | null;
+  dedupeKey: string;
+  createdAt: string;
+}
+
+export type UpdateType = "alert" | "offer" | "info";
+
+export interface AppUpdate {
+  _id: string;
+  type: UpdateType;
+  title: string;
+  message: string;
+  validTill?: string;
+  createdAt: string;
+  shopName: string;
+  businessId: string;
+}
+

@@ -3,6 +3,11 @@ import mongoose, { Types } from "mongoose";
 import QueueEntry, { IQueueEntry } from "../models/QueueEntry";
 import User, { IService, IUser } from "../models/User";
 import { Server } from "socket.io";
+import {
+  createNotification,
+  coalesceQueueUpdatedNotification,
+} from "./notificationService";
+import { logger } from "../utils/logger";
 
 export interface PredictionMetadata {
   speedRatio: number; // e.g. 1.0 (catalog) or 0.85 (faster) or 1.15 (running slower)
@@ -386,6 +391,24 @@ export const joinQueueService = async (
     });
   }
 
+  // Create joined notification for customer
+  const shopName = businessUser.businessProfile?.shopName || "the store";
+  createNotification({
+    userId: customerId,
+    type: "joined",
+    title: "Joined queue",
+    message: `You are successfully added to the queue at ${shopName}.`,
+    queueId: newEntry._id,
+    businessId,
+    meta: {
+      shopName,
+      position: initialEstimate.peopleAhead + 1,
+      waitMin: initialEstimate.currentEstimatedWait,
+    },
+    dedupeKey: `joined:${newEntry._id}`,
+    io,
+  }).catch(() => {});
+
   // Trigger notification if customer joined directly within threshold
   await evaluateQueueNotificationsService(businessId, io);
 
@@ -585,6 +608,23 @@ export const evaluateQueueNotificationsService = async (
 
       dispatched.push(payload);
 
+      // Create turn_near feed & push notification
+      createNotification({
+        userId: entry.customerId,
+        type: "turn_near",
+        title: "Your turn is near",
+        message: `Please arrive at ${shopName} and check in at reception.`,
+        queueId: entry._id,
+        businessId: entry.businessId,
+        meta: {
+          shopName,
+          position: estimate.peopleAhead + 1,
+          waitMin: estimate.currentEstimatedWait,
+        },
+        dedupeKey: `turn_near:${entry._id}`,
+        io,
+      }).catch(() => {});
+
       if (io) {
         io.to(`queue_${entry._id}`).emit("customer_notification", payload);
         io.to(`user_${entry.customerId}`).emit("customer_notification", payload);
@@ -719,6 +759,79 @@ export const transitionTicketStatusService = async (
 
   // Advance queue & evaluate turn-approaching triggers for remaining waiting tickets
   await evaluateQueueNotificationsService(updatedEntry.businessId, io);
+
+  // Feed notifications for state transitions
+  try {
+    let transitionShopName = "QueueLess Store";
+    try {
+      const busUser = await User.findById(updatedEntry.businessId);
+      if (busUser?.businessProfile?.shopName) {
+        transitionShopName = busUser.businessProfile.shopName;
+      }
+    } catch {}
+
+    if (nextStatus === "in_progress") {
+      createNotification({
+        userId: updatedEntry.customerId,
+        type: "your_turn",
+        title: "It's your turn",
+        message: `The counter at ${transitionShopName} is ready for you.`,
+        queueId: updatedEntry._id,
+        businessId: updatedEntry.businessId,
+        meta: { shopName: transitionShopName, position: 0, waitMin: 0 },
+        dedupeKey: `your_turn:${updatedEntry._id}`,
+        io,
+      }).catch(() => {});
+    } else if (nextStatus === "completed") {
+      createNotification({
+        userId: updatedEntry.customerId,
+        type: "completed",
+        title: "Service completed",
+        message: `Your visit at ${transitionShopName} is complete.`,
+        queueId: updatedEntry._id,
+        businessId: updatedEntry.businessId,
+        meta: { shopName: transitionShopName },
+        dedupeKey: `completed:${updatedEntry._id}`,
+        io,
+      }).catch(() => {});
+    } else if (nextStatus === "cancelled") {
+      createNotification({
+        userId: updatedEntry.customerId,
+        type: "cancelled",
+        title: "Queue cancelled",
+        message: `Your spot at ${transitionShopName} was cancelled.`,
+        queueId: updatedEntry._id,
+        businessId: updatedEntry.businessId,
+        meta: { shopName: transitionShopName },
+        dedupeKey: `cancelled:${updatedEntry._id}`,
+        io,
+      }).catch(() => {});
+    }
+
+    // Coalesce queue_updated notifications for remaining waiting tickets
+    const remainingWaiting = await QueueEntry.find({
+      businessId: updatedEntry.businessId,
+      status: "waiting",
+    }).sort({ joinedAt: 1 });
+
+    for (const waitingTicket of remainingWaiting) {
+      const est = await calculateTicketWaitEstimate(
+        updatedEntry.businessId.toString(),
+        waitingTicket.joinedAt || waitingTicket.date,
+        waitingTicket.status,
+        waitingTicket.serviceStartedAt
+      );
+      coalesceQueueUpdatedNotification({
+        userId: waitingTicket.customerId,
+        queueId: waitingTicket._id,
+        businessId: updatedEntry.businessId,
+        position: est.peopleAhead + 1,
+        waitMin: est.currentEstimatedWait,
+        shopName: transitionShopName,
+        io,
+      }).catch(() => {});
+    }
+  } catch {}
 
   return updatedEntry;
 };
@@ -1486,6 +1599,29 @@ export const verifyTicketService = async (
   ticket.verifiedAt = now;
   ticket.verifiedBy = new Types.ObjectId(businessId);
   await ticket.save();
+
+  // Create checked_in notification for customer
+  try {
+    const businessUser = await User.findById(businessId).select("businessProfile.shopName");
+    const shopName = businessUser?.businessProfile?.shopName || "Store";
+    const customerId = (ticket.customerId as any)?._id
+      ? (ticket.customerId as any)._id.toString()
+      : ticket.customerId.toString();
+
+    createNotification({
+      userId: customerId,
+      type: "checked_in",
+      title: "Checked in",
+      message: `Your arrival at ${shopName} was verified.`,
+      queueId: ticket._id.toString(),
+      businessId: businessId.toString(),
+      meta: { shopName },
+      dedupeKey: `checked_in:${ticket._id}`,
+      io
+    }).catch(() => {});
+  } catch (err: any) {
+    logger.warn(`Failed to trigger checked_in notification: ${err.message}`);
+  }
 
   const estimate = await calculateTicketWaitEstimate(
     businessId,

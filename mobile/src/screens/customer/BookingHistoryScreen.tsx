@@ -7,25 +7,29 @@ import {
   TextInput,
   RefreshControl,
   ScrollView,
+  StatusBar,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Ionicons } from "@expo/vector-icons";
-import AppScreen from "../../components/AppScreen";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import ScreenHeader from "../../components/ScreenHeader";
 import AppLoader from "../../components/AppLoader";
-import Card from "../../components/Card";
 import EmptyState from "../../components/EmptyState";
-import SectionHeader from "../../components/SectionHeader";
-import StatusBadge from "../../components/StatusBadge";
-import { useTheme } from "../../context/ThemeContext";
+import ListRow from "../../components/ListRow";
 import { api } from "../../lib/api";
 import { RootStackParamList } from "../../navigation/types";
 import { QueueEntry } from "../../types";
-import { radii, spacing } from "../../theme/theme";
+import { useTheme } from "../../context/ThemeContext";
+import { ThemeColors } from "../../theme/colors";
+import { typography, radii } from "../../theme/theme";
 
 export default function BookingHistoryScreen() {
-  const { colors } = useTheme();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const insets = useSafeAreaInsets();
+  const { colors, isDark } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const [history, setHistory] = useState<QueueEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -60,11 +64,11 @@ export default function BookingHistoryScreen() {
     return history.filter((entry) => {
       const shopName = (
         entry.businessId?.businessProfile?.shopName ||
-        entry.businessId?.shopName ||
+        entry.businessId?.name ||
         ""
       ).toLowerCase();
-      const ticketId = entry._id.toLowerCase();
-      const ticketSuffix = entry._id.slice(-4).toLowerCase();
+      const ticketId = (entry._id || "").toLowerCase();
+      const ticketSuffix = (entry._id || "").slice(-4).toLowerCase();
       const services = (entry.selectedServices || [])
         .map((s) => s.name.toLowerCase())
         .join(" ");
@@ -78,412 +82,134 @@ export default function BookingHistoryScreen() {
     });
   }, [history, searchQuery]);
 
-  const completedCount = useMemo(() => {
-    return history.filter((h) => h.status === "completed").length;
-  }, [history]);
-
   if (loading) {
     return (
-      <AppScreen scroll={false}>
+      <View style={[styles.container, { paddingTop: Math.max(insets.top, 16) }]}>
         <AppLoader
           message="Loading booking history..."
           submessage="Retrieving your past visits and tickets"
         />
-      </AppScreen>
+      </View>
     );
   }
 
   return (
-    <AppScreen
-      scroll
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={onRefresh}
-          tintColor={colors.primary}
-          colors={[colors.primary]}
-        />
-      }
-    >
-      {/* Top Header Row with Back Button */}
-      <View style={styles.topRow}>
-        <TouchableOpacity
-          style={styles.backBtn}
-          onPress={() => navigation.goBack()}
-          activeOpacity={0.7}
-          accessibilityRole="button"
-          accessibilityLabel="Go back to profile"
-        >
-          <View
-            style={[
-              styles.backIconCircle,
-              { backgroundColor: colors.card, borderColor: colors.border },
-            ]}
-          >
-            <Ionicons name="arrow-back" size={18} color={colors.text} />
-          </View>
-          <Text style={[styles.backText, { color: colors.text }]}>Back</Text>
-        </TouchableOpacity>
-      </View>
+    <View style={styles.container}>
+      <StatusBar
+        barStyle={isDark ? "light-content" : "dark-content"}
+        backgroundColor={colors.bg}
+      />
+      <ScrollView
+        contentContainerStyle={[
+          styles.scrollContent,
+          {
+            paddingTop: Math.max(insets.top, 16) + 12,
+            paddingBottom: Math.max(insets.bottom, 16) + 32,
+          },
+        ]}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.primary}
+          />
+        }
+        showsVerticalScrollIndicator={false}
+      >
+        <ScreenHeader title="Booking History" showBack={navigation.canGoBack()} />
 
-      {/* Screen Title & Summary */}
-      <View style={styles.titleSection}>
-        <Text style={[styles.pageTitle, { color: colors.text }]}>
-          Booking History
-        </Text>
-        <Text style={[styles.pageSubtitle, { color: colors.muted }]}>
-          Your past visits, counter tickets, and service receipts.
-        </Text>
-      </View>
-
-      {/* Metric Highlights (if history exists) */}
-      {history.length > 0 && (
-        <View style={styles.statsRow}>
-          <Card
-            variant="default"
-            style={[styles.statCard, { backgroundColor: colors.card }]}
-          >
-            <Text style={[styles.statNumber, { color: colors.primary }]}>
-              {history.length}
-            </Text>
-            <Text style={[styles.statLabel, { color: colors.muted }]}>
-              Total Visits
-            </Text>
-          </Card>
-
-          <Card
-            variant="default"
-            style={[styles.statCard, { backgroundColor: colors.card }]}
-          >
-            <Text style={[styles.statNumber, { color: colors.success }]}>
-              {completedCount}
-            </Text>
-            <Text style={[styles.statLabel, { color: colors.muted }]}>
-              Completed
-            </Text>
-          </Card>
-        </View>
-      )}
-
-      {/* Search Input (if history is non-trivial) */}
-      {history.length > 3 && (
-        <View
-          style={[
-            styles.searchBarWrap,
-            { backgroundColor: colors.card, borderColor: colors.border },
-          ]}
-        >
-          <Ionicons name="search-outline" size={17} color={colors.muted} />
+        {/* Search Bar */}
+        <View style={styles.searchBar}>
+          <Ionicons name="search-outline" size={20} color={colors.muted} style={styles.searchIcon} />
           <TextInput
-            style={[styles.searchInput, { color: colors.text }]}
+            style={styles.searchInput}
             placeholder="Search by store or service..."
-            placeholderTextColor={colors.muted}
+            placeholderTextColor={colors.placeholder}
             value={searchQuery}
             onChangeText={setSearchQuery}
             clearButtonMode="while-editing"
           />
           {searchQuery.length > 0 && (
-            <TouchableOpacity onPress={() => setSearchQuery("")}>
-              <Ionicons name="close-circle" size={16} color={colors.muted} />
+            <TouchableOpacity onPress={() => setSearchQuery("")} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+              <Ionicons name="close-circle" size={18} color={colors.muted} />
             </TouchableOpacity>
           )}
         </View>
-      )}
 
-      {/* Booking History List */}
-      <View style={styles.sectionWrap}>
-        <SectionHeader
-          title="Past Visits"
-          subtitle={
-            filteredHistory.length !== history.length
-              ? `Showing ${filteredHistory.length} of ${history.length} visits`
-              : "Archived ticket records"
-          }
-          icon="receipt-outline"
-          count={filteredHistory.length}
-        />
-
-        {filteredHistory.length === 0 ? (
-          <EmptyState
-            icon="calendar-outline"
-            title={
-              searchQuery ? "No Matching Visits" : "No Past Visits Yet"
-            }
-            description={
-              searchQuery
-                ? `No booking records match "${searchQuery}". Try a different keyword.`
-                : "When you join store queues and complete your turns, your receipts and tickets will appear here."
-            }
-          />
-        ) : (
-          <View style={styles.historyList}>
-            {filteredHistory.map((entry) => {
+        {/* List of Visits */}
+        <View style={styles.listContainer}>
+          {filteredHistory.length === 0 ? (
+            <EmptyState
+              icon="calendar-outline"
+              title={searchQuery ? "No Matching Visits" : "No Past Visits Yet"}
+              description={
+                searchQuery
+                  ? "Try searching for a different store name or service."
+                  : "Your completed and cancelled tickets will appear here."
+              }
+            />
+          ) : (
+            filteredHistory.map((ticket) => {
               const shopName =
-                entry.businessId?.businessProfile?.shopName ||
-                entry.businessId?.shopName ||
-                "QueueLess Store";
-
-              const dateVal = entry.date || entry.joinedAt || entry.createdAt;
-              const dateStr = dateVal
-                ? new Date(dateVal).toLocaleDateString(undefined, {
-                    month: "short",
+                ticket.businessId?.businessProfile?.shopName ||
+                ticket.businessId?.name ||
+                "Past Visit";
+              const dateStr = ticket.date
+                ? new Date(ticket.date).toLocaleDateString("en-US", {
                     day: "numeric",
-                    year: "numeric",
+                    month: "short",
                   })
-                : "Recent Visit";
-
-              const totalCost = (entry.selectedServices || []).reduce(
-                (acc, s) => acc + (Number(s.cost) || 0) * (Number(s.quantity) || 1),
-                0
-              );
+                : "";
+              const ticketNum = ticket._id ? ticket._id.slice(-4).toUpperCase() : "";
 
               return (
-                <Card
-                  key={entry._id}
-                  variant="default"
-                  onPress={() =>
-                    navigation.navigate("QueueStatus", { id: entry._id })
-                  }
-                  style={styles.historyCard}
-                >
-                  <View style={styles.historyCardTop}>
-                    <View style={styles.historyStoreCol}>
-                      <Text
-                        style={[styles.historyShopName, { color: colors.text }]}
-                        numberOfLines={1}
-                      >
-                        {shopName}
-                      </Text>
-                      <Text
-                        style={[styles.historyTicket, { color: colors.muted }]}
-                      >
-                        Ticket #{entry._id.slice(-4).toUpperCase()}
-                      </Text>
-                    </View>
-                    <StatusBadge status={entry.status} size="sm" />
-                  </View>
-
-                  {/* Services Chips */}
-                  {entry.selectedServices?.length ? (
-                    <View style={styles.historyServicesRow}>
-                      {entry.selectedServices.map((s, idx) => {
-                        const qty = s.quantity || 1;
-                        return (
-                          <View
-                            key={`${s.name}_${idx}`}
-                            style={[
-                              styles.historyServiceChip,
-                              {
-                                backgroundColor: colors.cardSoft,
-                                borderColor: colors.border,
-                              },
-                            ]}
-                          >
-                            <Text
-                              style={[
-                                styles.historyServiceChipText,
-                                { color: colors.textSecondary },
-                              ]}
-                            >
-                              {s.name} {qty > 1 ? `(×${qty})` : ""}
-                            </Text>
-                          </View>
-                        );
-                      })}
-                    </View>
-                  ) : null}
-
-                  <View
-                    style={[
-                      styles.historyCardBottom,
-                      { borderTopColor: colors.borderSubtle },
-                    ]}
-                  >
-                    <View style={styles.historyMetaLeft}>
-                      <Ionicons
-                        name="calendar-outline"
-                        size={13}
-                        color={colors.muted}
-                      />
-                      <Text
-                        style={[styles.historyDate, { color: colors.muted }]}
-                      >
-                        {dateStr}
-                      </Text>
-                    </View>
-
-                    <View style={styles.historyMetaRight}>
-                      {totalCost > 0 && (
-                        <Text
-                          style={[
-                            styles.historyPrice,
-                            { color: colors.primary },
-                          ]}
-                        >
-                          ₹{totalCost}
-                        </Text>
-                      )}
-                      <Ionicons
-                        name="chevron-forward"
-                        size={15}
-                        color={colors.muted}
-                      />
-                    </View>
-                  </View>
-                </Card>
+                <ListRow
+                  key={ticket._id}
+                  title={shopName}
+                  subtitleGrey={`${dateStr} • #${ticketNum}`}
+                  statusPill={{ status: ticket.status }}
+                  onPress={() => navigation.navigate("QueueStatus", { id: ticket._id })}
+                />
               );
-            })}
-          </View>
-        )}
-      </View>
-    </AppScreen>
+            })
+          )}
+        </View>
+      </ScrollView>
+    </View>
   );
 }
 
-const styles = StyleSheet.create({
-  topRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: spacing.sm,
-    paddingTop: spacing.xs,
-  },
-  backBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.xs,
-    paddingVertical: spacing.xs,
-    paddingRight: spacing.sm,
-  },
-  backIconCircle: {
-    width: 34,
-    height: 34,
-    borderRadius: radii.full,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  backText: {
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  titleSection: {
-    marginBottom: spacing.md,
-  },
-  pageTitle: {
-    fontSize: 24,
-    fontWeight: "800",
-    letterSpacing: -0.5,
-  },
-  pageSubtitle: {
-    fontSize: 13,
-    marginTop: 3,
-    lineHeight: 18,
-  },
-  statsRow: {
-    flexDirection: "row",
-    gap: spacing.sm,
-    marginBottom: spacing.md,
-  },
-  statCard: {
-    flex: 1,
-    padding: spacing.sm,
-    borderRadius: radii.lg,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  statNumber: {
-    fontSize: 22,
-    fontWeight: "800",
-  },
-  statLabel: {
-    fontSize: 11,
-    fontWeight: "600",
-    marginTop: 2,
-  },
-  searchBarWrap: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.xs,
-    borderWidth: 1,
-    borderRadius: radii.lg,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs + 2,
-    marginBottom: spacing.md,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 13,
-    padding: 0,
-  },
-  sectionWrap: {
-    marginBottom: spacing.xl,
-  },
-  historyList: {
-    gap: spacing.sm,
-  },
-  historyCard: {
-    padding: spacing.md,
-    borderRadius: radii.xl,
-  },
-  historyCardTop: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    gap: spacing.sm,
-    marginBottom: spacing.xs,
-  },
-  historyStoreCol: {
-    flex: 1,
-  },
-  historyShopName: {
-    fontSize: 15,
-    fontWeight: "700",
-  },
-  historyTicket: {
-    fontSize: 12,
-    fontWeight: "500",
-    marginTop: 2,
-  },
-  historyServicesRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 6,
-    marginVertical: spacing.xs,
-  },
-  historyServiceChip: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: radii.full,
-    borderWidth: 1,
-  },
-  historyServiceChipText: {
-    fontSize: 11,
-    fontWeight: "500",
-  },
-  historyCardBottom: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    borderTopWidth: 1,
-    paddingTop: spacing.xs + 2,
-    marginTop: spacing.xs,
-  },
-  historyMetaLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-  },
-  historyDate: {
-    fontSize: 11,
-    fontWeight: "500",
-  },
-  historyMetaRight: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  historyPrice: {
-    fontSize: 13,
-    fontWeight: "700",
-  },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.bg,
+    },
+    scrollContent: {
+      paddingHorizontal: 16,
+      gap: 16,
+    },
+    searchBar: {
+      height: 48,
+      borderRadius: radii.search,
+      backgroundColor: colors.cardSoft,
+      borderWidth: 1,
+      borderColor: colors.border,
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: 14,
+    },
+    searchIcon: {
+      marginRight: 10,
+    },
+    searchInput: {
+      flex: 1,
+      fontSize: 14,
+      fontFamily: typography.families.interRegular,
+      color: colors.textPrimary,
+    },
+    listContainer: {
+      width: "100%",
+    },
+  });
+}

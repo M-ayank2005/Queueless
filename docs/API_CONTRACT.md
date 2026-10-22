@@ -133,3 +133,151 @@
 ### `GET /api/queue/history`
 - **Access:** Protected (`role: customer`)
 - **Response `200 OK`:** Completed or cancelled tickets.
+
+---
+
+## 4. Notifications Endpoints (`/api/queue/notifications` or `/api/customer/notifications`)
+
+### `GET /api/queue/notifications`
+- **Access:** Protected (`role: customer`)
+- **Query Params:** `limit` (default 20), `cursor`, `paginated`
+- **Response `200 OK`:**
+  ```json
+  {
+    "items": [
+      {
+        "_id": "...",
+        "userId": "...",
+        "type": "joined | queue_updated | turn_near | your_turn | checked_in | completed | cancelled",
+        "title": "Your turn is near",
+        "message": "Please arrive at Smile Dental Care and check in at reception.",
+        "queueId": "...",
+        "businessId": "...",
+        "meta": { "position": 1, "waitMin": 5, "shopName": "Smile Dental Care" },
+        "readAt": null,
+        "createdAt": "2026-10-22T10:00:00.000Z"
+      }
+    ],
+    "nextCursor": "...",
+    "hasMore": false,
+    "unreadCount": 1
+  }
+  ```
+
+### `GET /api/queue/notifications/unread-count`
+- **Access:** Protected (`role: customer`)
+- **Response `200 OK`:**
+  ```json
+  {
+    "unreadCount": 3
+  }
+  ```
+
+### `POST /api/queue/notifications/read`
+- **Access:** Protected (`role: customer`)
+- **Rate Limit:** queueMutationRateLimiter
+- **Request Body:**
+  ```json
+  {
+    "ids": ["..."]
+  }
+  ```
+  *(Omit `ids` to mark all notifications for the user as read)*
+- **Response `200 OK`:**
+  ```json
+  {
+    "updated": 3
+  }
+  ```
+
+---
+
+## 5. Updates (Announcements) Endpoints
+
+### `GET /api/queue/updates`
+- **Access:** Protected (`role: customer`)
+- **Query Params:** `type` (`alert | offer | info`), `limit` (default 20), `cursor`
+- **Visibility Rule:** Customer only sees updates from stores in `favoriteBusinesses` OR stores where they had a ticket within the last 30 days.
+- **Response `200 OK`:**
+  ```json
+  {
+    "items": [
+      {
+        "_id": "...",
+        "type": "alert | offer | info",
+        "title": "Special Offer",
+        "message": "Flat 20% off on hair spa this week.",
+        "validTill": "2026-03-20T23:59:59.999Z",
+        "shopName": "Glow Beauty Salon",
+        "businessId": "...",
+        "createdAt": "2026-10-22T08:00:00.000Z"
+      }
+    ],
+    "nextCursor": null,
+    "hasMore": false
+  }
+  ```
+
+### `POST /api/business/updates`
+- **Access:** Protected (`role: business`)
+- **Rate Limit:** 10 updates per hour per merchant
+- **Request Body:**
+  ```json
+  {
+    "type": "alert | offer | info",
+    "title": "Holiday Notice (max 60 chars)",
+    "message": "Closed on Sunday due to public holiday (max 200 chars)",
+    "validForDays": 7
+  }
+  ```
+- **Response `201 Created`:** Created Update document.
+
+### `GET /api/business/updates`
+- **Access:** Protected (`role: business`)
+- **Response `200 OK`:** List of merchant's own announcements, newest first.
+
+### `DELETE /api/business/updates/:id`
+- **Access:** Protected (`role: business`, strictly scoped to owning merchant)
+- **Response `200 OK`:**
+  ```json
+  {
+    "success": true,
+    "message": "Update announcement deleted successfully."
+  }
+  ```
+
+---
+
+## 6. Push Notification Token Endpoints (`/api/auth`)
+
+### `POST /api/auth/push-token`
+- **Access:** Protected
+- **Request Body:**
+  ```json
+  {
+    "token": "ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]",
+    "platform": "ios | android | web"
+  }
+  ```
+- **Response `200 OK`:**
+  ```json
+  {
+    "success": true,
+    "tokens": [{ "token": "...", "platform": "ios" }]
+  }
+  ```
+
+### `DELETE /api/auth/push-token`
+- **Access:** Protected (Called on user sign out)
+- **Request Body:**
+  ```json
+  {
+    "token": "ExponentPushToken[xxxxxxxxxxxxxxxxxxxxxx]"
+  }
+  ```
+- **Response `200 OK`:**
+  ```json
+  {
+    "success": true
+  }
+  ```

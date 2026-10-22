@@ -69,3 +69,64 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
+// Notifications API
+export async function getNotifications(limit: number = 20, cursor?: string) {
+  const params: Record<string, any> = { limit };
+  if (cursor) params.cursor = cursor;
+  const res = await api.get("/queue/notifications", { params });
+  return res.data;
+}
+
+export async function getUnreadNotificationCount() {
+  const res = await api.get("/queue/notifications/unread-count");
+  return res.data;
+}
+export const getUnreadCount = getUnreadNotificationCount;
+
+export async function markNotificationsRead(ids?: string[]) {
+  const res = await api.post("/queue/notifications/read", { ids });
+  return res.data;
+}
+export const markRead = markNotificationsRead;
+
+// Updates API
+export async function getUpdates(type?: string, limit: number = 20, cursor?: string) {
+  const params: Record<string, any> = { limit };
+  if (type && type !== "all") params.type = type;
+  if (cursor) params.cursor = cursor;
+  const res = await api.get("/queue/updates", { params });
+  return res.data;
+}
+
+export async function createBusinessUpdate(data: {
+  type: string;
+  title: string;
+  message: string;
+  validForDays?: number;
+}) {
+  const res = await api.post("/business/updates", data);
+  return res.data;
+}
+
+export async function getBusinessUpdates() {
+  const res = await api.get("/business/updates");
+  return res.data;
+}
+
+export async function deleteBusinessUpdate(id: string) {
+  const res = await api.delete(`/business/updates/${id}`);
+  return res.data;
+}
+
+// Push Tokens API
+export async function registerPushToken(token: string, platform?: string) {
+  const res = await api.post("/auth/push-token", { token, platform });
+  return res.data;
+}
+
+export async function removePushToken(token?: string) {
+  const res = await api.delete("/auth/push-token", { data: { token } });
+  return res.data;
+}
+

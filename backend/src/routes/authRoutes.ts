@@ -5,7 +5,9 @@ import {
   getProfile, 
   updateProfile, 
   deleteProfile,
-  updateConsent
+  updateConsent,
+  registerPushToken,
+  removePushToken
 } from "../controllers/authController";
 import { protect } from "../middleware/authMiddleware";
 import { authRateLimiter } from "../middleware/rateLimiter";
@@ -21,5 +23,9 @@ router.get("/profile", protect, getProfile);
 router.put("/profile", protect, updateProfile);
 router.delete("/profile", protect, deleteProfile);
 router.post("/consent", protect, updateConsent);
+
+// Protected push token registration / removal
+router.post("/push-token", protect, registerPushToken);
+router.delete("/push-token", protect, removePushToken);
 
 export default router;

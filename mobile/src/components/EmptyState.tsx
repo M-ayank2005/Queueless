@@ -1,53 +1,63 @@
-import React from "react";
-import { StyleSheet, Text, View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
-import AppButton from "./AppButton";
-import { useTheme } from "../context/ThemeContext";
-import { radii, spacing } from "../theme/theme";
+import React from 'react';
+import { StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import AppButton from './AppButton';
+import { useTheme } from '../context/ThemeContext';
 
-type Props = {
+interface Props {
   icon?: keyof typeof Ionicons.glyphMap;
+  customIcon?: React.ReactNode;
   iconColor?: string;
   title: string;
   description: string;
   actionTitle?: string;
+  actionLabel?: string;
   onActionPress?: () => void;
+  onAction?: () => void;
   actionIcon?: keyof typeof Ionicons.glyphMap;
-};
+}
 
-/**
- * EmptyState Component
- * Modern placeholder when a list, live queue, or search returns empty results.
- */
 export default function EmptyState({
-  icon = "cube-outline",
+  icon = 'cube-outline',
+  customIcon,
   iconColor,
   title,
   description,
   actionTitle,
+  actionLabel,
   onActionPress,
+  onAction,
   actionIcon,
 }: Props) {
   const { colors } = useTheme();
-  const effectiveIconColor = iconColor || colors.primary;
+  const effectiveIconColor = iconColor || colors.muted;
+  const effectiveActionLabel = actionTitle || actionLabel;
+  const effectiveActionPress = onActionPress || onAction;
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.card, borderColor: colors.border }]}>
-      <View style={[styles.iconCircle, { backgroundColor: colors.cardSoft, borderColor: colors.borderLight }]}>
-        <Ionicons name={icon} size={32} color={effectiveIconColor} />
+    <View style={styles.container}>
+      {/* 72px #F7F7F7 circle */}
+      <View style={[styles.iconCircle, { backgroundColor: colors.bgSecondary }]}>
+        {customIcon ? (
+          customIcon
+        ) : (
+          <Ionicons name={icon} size={32} color={effectiveIconColor} />
+        )}
       </View>
+
       <View style={styles.textWrap}>
-        <Text style={[styles.title, { color: colors.text }]}>{title}</Text>
+        <Text style={[styles.title, { color: colors.textPrimary }]}>{title}</Text>
         <Text style={[styles.description, { color: colors.muted }]}>{description}</Text>
       </View>
-      {actionTitle && onActionPress && (
+
+      {effectiveActionLabel && effectiveActionPress && (
         <View style={styles.buttonWrap}>
           <AppButton
-            title={actionTitle}
-            onPress={onActionPress}
+            title={effectiveActionLabel}
+            onPress={effectiveActionPress}
             icon={actionIcon}
-            size="sm"
-            variant="secondary"
+            size="md"
+            variant="primary"
           />
         </View>
       )}
@@ -57,40 +67,41 @@ export default function EmptyState({
 
 const styles = StyleSheet.create({
   container: {
-    borderWidth: 1,
-    borderRadius: radii.lg,
-    paddingVertical: spacing.xxl,
-    paddingHorizontal: spacing.xl,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: spacing.md,
-    width: "100%",
+    paddingVertical: 36,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
   },
   iconCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
+    width: 72, // 72px circle
+    height: 72,
+    borderRadius: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
   },
   textWrap: {
-    alignItems: "center",
-    gap: spacing.xs,
-    maxWidth: 290,
+    alignItems: 'center',
+    maxWidth: 284,
   },
   title: {
-    fontSize: 16,
-    fontWeight: "700",
-    textAlign: "center",
+    fontFamily: 'Inter_500Medium',
+    fontSize: 16, // 16/500
+    fontWeight: '500',
+    textAlign: 'center',
+    marginBottom: 6,
   },
   description: {
-    fontSize: 13,
-    textAlign: "center",
+    fontFamily: 'Inter_400Regular',
+    fontSize: 13, // 13 muted
+    textAlign: 'center',
     lineHeight: 18,
   },
   buttonWrap: {
-    marginTop: spacing.xs,
-    width: 170,
+    marginTop: 20,
+    minWidth: 180,
+    maxWidth: 260,
+    alignSelf: 'center',
   },
 });

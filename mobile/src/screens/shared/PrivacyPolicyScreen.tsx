@@ -4,6 +4,7 @@ import { useNavigation } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import AppScreen from "../../components/AppScreen";
 import Card from "../../components/Card";
+import ScreenHeader from "../../components/ScreenHeader";
 import { useTheme } from "../../context/ThemeContext";
 import { ThemeColors } from "../../theme/colors";
 import { radii, spacing } from "../../theme/theme";
@@ -19,30 +20,15 @@ export default function PrivacyPolicyScreen() {
 
   return (
     <AppScreen contentContainerStyle={styles.screenContent}>
-      {/* Header with back button */}
-      <View style={styles.headerRow}>
-        <TouchableOpacity
-          style={styles.backBtn}
-          onPress={() => navigation.goBack()}
-          activeOpacity={0.7}
-        >
-          <View style={styles.backIconCircle}>
-            <Ionicons name="arrow-back" size={18} color={colors.text} />
+      <ScreenHeader
+        title="Privacy Policy"
+        showBack={navigation.canGoBack()}
+        rightAction={
+          <View style={styles.versionPill}>
+            <Text style={styles.versionPillText}>v1.0.0</Text>
           </View>
-          <Text style={styles.backText}>Back</Text>
-        </TouchableOpacity>
-
-        <View style={styles.versionPill}>
-          <Text style={styles.versionPillText}>Version v1.0.0</Text>
-        </View>
-      </View>
-
-      <View style={styles.titleSection}>
-        <Text style={styles.pageTitle}>Privacy Policy</Text>
-        <Text style={styles.pageSubtitle}>
-          Effective: October 18, 2026 • QueueLess Platform
-        </Text>
-      </View>
+        }
+      />
 
       {/* Owner Review Notice */}
       <View style={styles.noticeBox}>

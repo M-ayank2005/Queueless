@@ -11,26 +11,34 @@ import {
   TouchableOpacity,
   Vibration,
   View,
+  StatusBar,
 } from "react-native";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
-import AppButton from "../../components/AppButton";
-import AppLoader from "../../components/AppLoader";
-import AppScreen from "../../components/AppScreen";
-import Card from "../../components/Card";
-import StatusBadge from "../../components/StatusBadge";
-import { api } from "../../lib/api";
 import { RootStackParamList } from "../../navigation/types";
+import { api } from "../../lib/api";
 import { QueueEntry } from "../../types";
+import { AlertCard } from "../../components/AlertCard";
+import AppButton from "../../components/AppButton";
+import {
+  BellIcon,
+  ClockIcon,
+  ChevronBackIcon,
+  CheckCircleIcon,
+} from "../../assets/icons/AppIcons";
 import { useTheme } from "../../context/ThemeContext";
 import { ThemeColors } from "../../theme/colors";
-import { radii, shadows, spacing, typography } from "../../theme/theme";
+import { typography, radii, shadows } from "../../theme/theme";
 
 type Props = NativeStackScreenProps<RootStackParamList, "QueueStatus">;
 
 export default function QueueStatusScreen({ route, navigation }: Props) {
+  const insets = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
-  const styles = useMemo(() => createStyles(colors, isDark), [colors, isDark]);
+  const styles = useMemo(() => createStyles(colors), [colors]);
+
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [cancelling, setCancelling] = useState(false);
@@ -39,7 +47,7 @@ export default function QueueStatusScreen({ route, navigation }: Props) {
   const [entry, setEntry] = useState<QueueEntry | null>(null);
   const [isAlertDismissed, setIsAlertDismissed] = useState(false);
 
-  // Edit Services Modal State
+  // Edit Services Bottom Sheet State
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editQuantities, setEditQuantities] = useState<Record<string, number>>({});
   const [isSavingEdit, setIsSavingEdit] = useState(false);
@@ -84,8 +92,7 @@ export default function QueueStatusScreen({ route, navigation }: Props) {
       }));
 
     if (selected.length === 0) {
-      if (Platform.OS === "web") window.alert("Please select at least one service.");
-      else Alert.alert("Selection Required", "Please select at least one service.");
+      alert("Please select at least one service.");
       return;
     }
 
@@ -96,13 +103,8 @@ export default function QueueStatusScreen({ route, navigation }: Props) {
       });
       setEntry(res.data);
       setIsEditModalOpen(false);
-      const msg = "Services updated successfully! Your position in line is preserved.";
-      if (Platform.OS === "web") window.alert(msg);
-      else Alert.alert("Services Updated", msg);
     } catch (err: any) {
-      const msg = err.response?.data?.message || "Failed to update requested services.";
-      if (Platform.OS === "web") window.alert(msg);
-      else Alert.alert("Update Failed", msg);
+      alert(err.response?.data?.message || "Failed to update services.");
     } finally {
       setIsSavingEdit(false);
     }
@@ -116,9 +118,12 @@ export default function QueueStatusScreen({ route, navigation }: Props) {
       const token = res.data.shareToken;
       setShareToken(token);
 
-      const shopName = entry.businessId?.businessProfile?.shopName || "QueueLess Store";
+      const shopName =
+        entry.businessId?.businessProfile?.shopName ||
+        entry.businessId?.name ||
+        "QueueLess Store";
       const shareUrl = `https://queueless.com/shared/${token}`;
-      const message = `Track my live queue spot (#${entry._id.slice(-4).toUpperCase()}) at ${shopName} in real-time:\n${shareUrl}`;
+      const message = `Track my live queue spot at ${shopName} in real-time:\n${shareUrl}`;
 
       if (Platform.OS === "web") {
         if (typeof navigator !== "undefined" && navigator.clipboard) {
@@ -133,9 +138,7 @@ export default function QueueStatusScreen({ route, navigation }: Props) {
         });
       }
     } catch (err: any) {
-      const msg = err.response?.data?.message || "Could not generate share link.";
-      if (Platform.OS === "web") window.alert(msg);
-      else Alert.alert("Share Error", msg);
+      alert(err.response?.data?.message || "Could not generate share link.");
     } finally {
       setSharing(false);
     }
@@ -143,33 +146,12 @@ export default function QueueStatusScreen({ route, navigation }: Props) {
 
   const handleRevokeShare = async () => {
     if (!entry) return;
-    const confirmRevoke = async () => {
-      try {
-        await api.delete(`/queue/${entry._id}/share`);
-        setShareToken(null);
-        const msg = "Public share link has been revoked.";
-        if (Platform.OS === "web") window.alert(msg);
-        else Alert.alert("Link Revoked", msg);
-      } catch (err: any) {
-        const msg = err.response?.data?.message || "Could not revoke share link.";
-        if (Platform.OS === "web") window.alert(msg);
-        else Alert.alert("Error", msg);
-      }
-    };
-
-    if (Platform.OS === "web") {
-      if (window.confirm("Are you sure you want to revoke the public share link?")) {
-        confirmRevoke();
-      }
-    } else {
-      Alert.alert(
-        "Revoke Share Link",
-        "Are you sure you want to revoke the public share link? Anyone with the link will no longer be able to track your queue.",
-        [
-          { text: "Keep Link", style: "cancel" },
-          { text: "Revoke", style: "destructive", onPress: confirmRevoke },
-        ]
-      );
+    try {
+      await api.delete(`/queue/${entry._id}/share`);
+      setShareToken(null);
+      alert("Public share link has been revoked.");
+    } catch (err: any) {
+      alert(err.response?.data?.message || "Could not revoke share link.");
     }
   };
 
@@ -187,13 +169,7 @@ export default function QueueStatusScreen({ route, navigation }: Props) {
         }
       }
     } catch {
-      if (isManual) {
-        if (Platform.OS === "web") {
-          window.alert("Unable to load latest status. Please try again shortly.");
-        } else {
-          Alert.alert("Unable to load status", "Please try again shortly.");
-        }
-      }
+      // non-blocking
     } finally {
       setLoading(false);
       if (isManual) setRefreshing(false);
@@ -207,20 +183,10 @@ export default function QueueStatusScreen({ route, navigation }: Props) {
       api
         .post("/queue/cancel", { queueId: entry._id })
         .then(() => {
-          if (Platform.OS === "web") {
-            window.alert("Your ticket has been cancelled.");
-          } else {
-            Alert.alert("Ticket Cancelled", "Your spot in line has been cancelled.");
-          }
           load(true);
         })
         .catch((err) => {
-          const msg = err.response?.data?.message || "Failed to cancel ticket.";
-          if (Platform.OS === "web") {
-            window.alert(msg);
-          } else {
-            Alert.alert("Error", msg);
-          }
+          alert(err.response?.data?.message || "Failed to cancel ticket.");
         })
         .finally(() => setCancelling(false));
     };
@@ -235,7 +201,7 @@ export default function QueueStatusScreen({ route, navigation }: Props) {
         "Are you sure you want to leave this queue? Your spot will be forfeited.",
         [
           { text: "Keep Spot", style: "cancel" },
-          { text: "Leave Queue", style: "destructive", onPress: confirmCancel }
+          { text: "Leave Queue", style: "destructive", onPress: confirmCancel },
         ]
       );
     }
@@ -249,1278 +215,849 @@ export default function QueueStatusScreen({ route, navigation }: Props) {
 
   if (loading) {
     return (
-      <AppScreen scroll={false}>
-        <AppLoader
-          message="Tracking live queue status..."
-          submessage="Checking your position and estimated wait time"
-        />
-      </AppScreen>
+      <View style={styles.loadingContainer}>
+        <Text style={styles.loadingText}>Loading ticket status...</Text>
+      </View>
     );
   }
 
   if (!entry) {
     return (
-      <AppScreen>
-        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()} activeOpacity={0.7}>
-          <View style={styles.backIconCircle}>
-            <Ionicons name="arrow-back" size={18} color={colors.text} />
-          </View>
-          <Text style={styles.backText}>Back</Text>
+      <View style={styles.entryNotFoundContainer}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+          <ChevronBackIcon size={24} color={colors.textPrimary} />
         </TouchableOpacity>
-
-        <Card variant="elevated" style={styles.errorCard}>
-          <View style={styles.errorIconCircle}>
-            <Ionicons name="alert-circle-outline" size={36} color={colors.danger} />
-          </View>
-          <Text style={styles.errorTitle}>Queue Ticket Not Found</Text>
-          <Text style={styles.errorMuted}>This ticket may have expired or was removed by the merchant.</Text>
-          <AppButton title="Return to Dashboard" variant="secondary" onPress={() => navigation.goBack()} />
-        </Card>
-      </AppScreen>
+        <AlertCard
+          type="danger"
+          title="Ticket Not Found"
+          message="This ticket could not be found or has expired."
+        />
+      </View>
     );
   }
 
-  const wait = entry.currentEstimatedWait ?? 0;
-  const ahead = entry.peopleAhead ?? 0;
+  const shopName =
+    entry.businessId?.businessProfile?.shopName ||
+    entry.businessId?.name ||
+    "Store";
+
+  const peopleAhead = entry.peopleAhead ?? 0;
+  const waitMin = entry.currentEstimatedWait ?? 0;
   const isCompleted = entry.status === "completed";
   const isCancelled = entry.status === "cancelled";
   const isInProgress = entry.status === "in_progress";
+  const isVerified = Boolean(entry.verifiedAt);
+  const ticketIdSuffix = entry._id ? entry._id.slice(-6).toUpperCase() : "";
 
-  const shopName =
-    entry.businessId?.businessProfile?.shopName ||
-    entry.businessId?.shopName ||
-    "QueueLess Store";
-
-  const shopAddress =
-    entry.businessId?.businessProfile?.address ||
-    entry.businessId?.address ||
-    "Store Location";
+  // Progress bar fraction: 1 / (peopleAhead + 1) -> 100% when serving
+  const progressFraction = isInProgress
+    ? 1
+    : Math.min(1, Math.max(0.1, 1 / (peopleAhead + 1)));
 
   const totalCost = (entry.selectedServices || []).reduce(
     (acc, s) => acc + (Number(s.cost) || 0) * (s.quantity || 1),
     0
   );
 
-  const ticketCode = `#${entry._id.slice(-6).toUpperCase()}`;
-
-  // Timeline step calculation
-  const currentStep = isCancelled ? 0 : isCompleted ? 3 : isInProgress ? 2 : 1;
-
   return (
-    <AppScreen>
-      {/* Top Header Row with Back and Live Sync Indicator */}
-      <View style={styles.topRow}>
-        <TouchableOpacity
-          style={styles.backBtn}
-          onPress={() => navigation.goBack()}
-          activeOpacity={0.7}
-        >
-          <View style={styles.backIconCircle}>
-            <Ionicons name="arrow-back" size={18} color={colors.text} />
-          </View>
-          <Text style={styles.backText}>Back</Text>
-        </TouchableOpacity>
+    <View style={styles.container}>
+      <StatusBar
+        barStyle={isDark ? "light-content" : "dark-content"}
+        backgroundColor={colors.bg}
+      />
 
-        <View style={styles.liveSyncBadge}>
-          <View style={styles.syncDot} />
-          <Text style={styles.syncText}>LIVE SYNC (15s)</Text>
-        </View>
+      {/* Header: chevron-back + shop name 20px */}
+      <View style={[styles.headerRow, { paddingTop: Math.max(insets.top, 16) + 12 }]}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.backBtn}
+        >
+          <ChevronBackIcon size={24} color={colors.textPrimary} />
+        </TouchableOpacity>
+        <Text style={styles.headerShopName} numberOfLines={1}>
+          {shopName}
+        </Text>
       </View>
 
-      {/* Turn Approaching / Your Turn Notification Banner */}
-      {entry.alert?.active && !isAlertDismissed && (
-        <View
-          style={[
-            styles.notifAlertCard,
-            entry.alert.type === "YOUR_TURN"
-              ? styles.notifAlertCardYourTurn
-              : styles.notifAlertCardApproaching
-          ]}
-        >
-          <View style={styles.notifAlertHeader}>
-            <View
-              style={[
-                styles.notifAlertIconCircle,
-                entry.alert.type === "YOUR_TURN"
-                  ? styles.notifIconCircleYourTurn
-                  : styles.notifIconCircleApproaching
-              ]}
-            >
-              <Ionicons
-                name={entry.alert.type === "YOUR_TURN" ? "sparkles" : "notifications"}
-                size={18}
-                color={
-                  entry.alert.type === "YOUR_TURN"
-                    ? (isDark ? "#34D399" : "#15803D")
-                    : (isDark ? "#FBBF24" : "#B45309")
-                }
-              />
-            </View>
-            <View style={styles.notifAlertTextCol}>
-              <View style={styles.notifPillRow}>
-                <View
-                  style={[
-                    styles.notifBadgeTagPill,
-                    entry.alert.type === "YOUR_TURN"
-                      ? styles.notifBadgeTagPillYourTurn
-                      : styles.notifBadgeTagPillApproaching
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.notifBadgeTag,
-                      {
-                        color:
-                          entry.alert.type === "YOUR_TURN"
-                            ? (isDark ? "#34D399" : "#15803D")
-                            : (isDark ? "#FBBF24" : "#B45309")
-                      }
-                    ]}
-                  >
-                    {entry.alert.type === "YOUR_TURN" ? "COUNTER READY" : "YOUR TURN IS NEXT"}
-                  </Text>
-                </View>
-              </View>
-              <Text style={styles.notifAlertTitle}>{entry.alert.title}</Text>
-              <Text style={styles.notifAlertBody}>{entry.alert.message}</Text>
-            </View>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Alert Banner (entry.alert) */}
+        {entry.alert?.active && !isAlertDismissed && (
+          <View style={styles.alertBannerWrap}>
+            <AlertCard
+              type={entry.alert.type === "YOUR_TURN" ? "success" : "info"}
+              title={entry.alert.title}
+              message={entry.alert.message}
+            />
             <TouchableOpacity
               onPress={() => setIsAlertDismissed(true)}
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-              style={styles.notifDismissBtn}
-              accessibilityRole="button"
-              accessibilityLabel="Dismiss notification"
+              style={styles.dismissAlertTouch}
             >
-              <Ionicons name="close" size={16} color={colors.muted} />
+              <Ionicons name="close" size={18} color={colors.muted} />
             </TouchableOpacity>
           </View>
-        </View>
-      )}
+        )}
 
-      {/* Hero Boarding Pass Ticket Card */}
-      <Card variant="glow" style={styles.ticketCard}>
-        {/* Ticket Header */}
-        <View style={styles.ticketHeader}>
-          <View style={styles.storeCol}>
-            <Text style={styles.shopNameText} numberOfLines={1}>{shopName}</Text>
-            <Text style={styles.shopAddressText} numberOfLines={1}>📍 {shopAddress}</Text>
+        {/* Completed / Cancelled Status Card */}
+        {isCompleted && (
+          <View style={styles.statusResultCard}>
+            <AlertCard
+              type="success"
+              title="Service Completed"
+              message="Your visit has been completed. Thank you for using QueueLess!"
+            />
           </View>
-          <StatusBadge status={entry.status} />
-        </View>
+        )}
 
-        {/* Big Ticket Number Banner */}
-        <View style={styles.ticketNumberSection}>
-          <Text style={styles.ticketLabel}>YOUR TICKET NUMBER</Text>
-          <Text style={styles.ticketBigNumber}>{ticketCode}</Text>
-        </View>
-
-        {/* Progress Step Timeline */}
-        <View style={styles.timelineWrap}>
-          <View style={styles.stepItem}>
-            <View style={[styles.stepCircle, currentStep >= 1 && styles.stepCircleActive]}>
-              <Ionicons name="checkmark" size={12} color="#FFF" />
-            </View>
-            <Text style={[styles.stepLabel, currentStep >= 1 && styles.stepLabelActive]}>Booked</Text>
+        {isCancelled && (
+          <View style={styles.statusResultCard}>
+            <AlertCard
+              type="danger"
+              title="Ticket Cancelled"
+              message="This queue ticket has been cancelled."
+            />
           </View>
+        )}
 
-          <View style={[styles.stepLine, currentStep >= 2 && styles.stepLineActive]} />
-
-          <View style={styles.stepItem}>
-            <View style={[styles.stepCircle, currentStep >= 1 && !isCompleted && !isCancelled && styles.stepCirclePulse, currentStep >= 2 && styles.stepCircleActive]}>
-              {currentStep >= 2 ? (
-                <Ionicons name="checkmark" size={12} color="#FFF" />
-              ) : (
-                <View style={styles.innerDot} />
-              )}
-            </View>
-            <Text style={[styles.stepLabel, currentStep >= 1 && styles.stepLabelActive]}>Waiting</Text>
-          </View>
-
-          <View style={[styles.stepLine, currentStep >= 3 && styles.stepLineActive]} />
-
-          <View style={styles.stepItem}>
-            <View style={[styles.stepCircle, currentStep >= 2 && styles.stepCircleActive]}>
-              {currentStep >= 3 ? (
-                <Ionicons name="checkmark" size={12} color="#FFF" />
-              ) : (
-                <View style={styles.innerDot} />
-              )}
-            </View>
-            <Text style={[styles.stepLabel, currentStep >= 2 && styles.stepLabelActive]}>Serving</Text>
-          </View>
-
-          <View style={[styles.stepLine, currentStep === 3 && styles.stepLineActive]} />
-
-          <View style={styles.stepItem}>
-            <View style={[styles.stepCircle, currentStep === 3 && styles.stepCircleSuccess]}>
-              {currentStep === 3 ? (
-                <Ionicons name="checkmark" size={12} color="#FFF" />
-              ) : (
-                <View style={styles.innerDot} />
-              )}
-            </View>
-            <Text style={[styles.stepLabel, currentStep === 3 && styles.stepLabelActive]}>Done</Text>
-          </View>
-        </View>
-      </Card>
-
-      {/* Two Key Metrics Cards */}
-      <View style={styles.metricRow}>
-        <Card variant="elevated" style={styles.metricCard}>
-          <View style={[styles.metricIconWrap, { backgroundColor: colors.primarySubtle }]}>
-            <Ionicons name="people" size={20} color={colors.primary} />
-          </View>
-          <Text style={styles.metricBigVal}>{ahead}</Text>
-          <Text style={styles.metricLabelText}>
-            {ahead === 1 ? "Person Ahead" : "People Ahead"}
-          </Text>
-        </Card>
-
-        <Card variant="elevated" style={styles.metricCard}>
-          <View style={[styles.metricIconWrap, { backgroundColor: colors.warningSubtle }]}>
-            <Ionicons name="hourglass" size={20} color={colors.warning} />
-          </View>
-          <Text style={[styles.metricBigVal, { color: colors.warning }]}>
-            {entry.prediction?.rangeDisplay ? `~${entry.prediction.rangeDisplay}` : `~${wait}m`}
-          </Text>
-          <Text style={styles.metricLabelText}>Estimated Wait</Text>
-        </Card>
-      </View>
-
-      {/* Smart Prediction Telemetry Pill */}
-      {entry.prediction?.confidenceLabel && !isCompleted && !isCancelled && (
-        <View style={styles.predictionPill}>
-          <View style={styles.predictionPillLeft}>
-            <Ionicons name="sparkles" size={13} color={colors.warning} />
-            <Text style={styles.predictionPillText} numberOfLines={1}>
-              {entry.prediction.confidenceLabel}
-            </Text>
-          </View>
-          {entry.estimatedServiceStartTime && wait > 0 && (
-            <Text style={styles.estStartTimeText}>
-              Est. {new Date(entry.estimatedServiceStartTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-            </Text>
-          )}
-        </View>
-      )}
-
-      {/* Counter Verification Card */}
-      {!isCancelled && entry.verificationToken && (
-        <Card variant="elevated" style={styles.verificationCard}>
-          <View style={styles.verificationHeader}>
-            <View style={styles.verificationIconCircle}>
-              <Ionicons
-                name={entry.verifiedAt ? "checkmark-circle" : "qr-code"}
-                size={20}
-                color={entry.verifiedAt ? colors.success : colors.primary}
-              />
-            </View>
-            <View style={styles.flex1}>
-              <Text style={styles.verificationTitle}>
-                {entry.verifiedAt ? "Counter Verified" : "Counter Verification QR"}
-              </Text>
-              <Text style={styles.verificationSub}>
-                {entry.verifiedAt
-                  ? `Verified by counter at ${new Date(entry.verifiedAt).toLocaleTimeString()}`
-                  : "Show this code to counter staff when called to verify your spot"}
+        {/* Card 1: Your position, Progress track, Note box */}
+        {!isCompleted && !isCancelled && (
+          <View style={styles.cardBordered}>
+            {/* Top row */}
+            <View style={styles.card1TopRow}>
+              <Text style={styles.positionGreenText}>Your position</Text>
+              <Text style={styles.aheadMutedText}>
+                {peopleAhead} People Ahead
               </Text>
             </View>
-            {entry.verifiedAt ? (
-              <View style={styles.verifiedBadgePill}>
-                <Ionicons name="shield-checkmark" size={12} color={colors.success} />
-                <Text style={styles.verifiedBadgeText}>VERIFIED</Text>
-              </View>
-            ) : null}
-          </View>
 
-          {!entry.verifiedAt ? (
-            <View style={styles.verificationQrContainer}>
-              <View style={styles.verificationQrBox}>
-                <Image
-                  source={{
-                    uri: `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=8&data=${encodeURIComponent(
-                      `ql-ticket:${entry._id}:${entry.verificationToken}`
-                    )}`,
-                  }}
-                  style={styles.verificationQrImage}
-                  resizeMode="contain"
+            {/* Progress track */}
+            <View style={styles.trackContainer}>
+              <View style={styles.trackBackground}>
+                <View
+                  style={[
+                    styles.trackFill,
+                    { width: `${progressFraction * 100}%` },
+                  ]}
                 />
               </View>
-              <Text style={styles.verificationTokenText}>
-                Token: #{entry._id.slice(-6).toUpperCase()}
-              </Text>
+
+              {/* Left node (Wait time) */}
+              <View style={[styles.nodeCircle, styles.nodeLeft]}>
+                <View style={styles.innerDotGreen} />
+              </View>
+
+              {/* Right node (Status) */}
+              <View
+                style={[
+                  styles.nodeCircle,
+                  styles.nodeRight,
+                  isInProgress || isVerified
+                    ? styles.nodeCircleGreen
+                    : styles.nodeCircleMuted,
+                ]}
+              >
+                {(isInProgress || isVerified) && (
+                  <View style={styles.innerDotGreen} />
+                )}
+              </View>
             </View>
-          ) : null}
-        </Card>
-      )}
 
-      {/* Selected Services Breakdown Card */}
-      <Card variant="default" style={styles.servicesCard}>
-        <View style={styles.serviceHeaderRow}>
-          <View style={styles.serviceHeaderTitleWrap}>
-            <Ionicons name="list" size={18} color={colors.primary} />
-            <Text style={styles.sectionHeading}>Selected Services</Text>
+            {/* Under nodes row */}
+            <View style={styles.underNodesRow}>
+              <View style={styles.nodeLabelLeft}>
+                <Text style={styles.nodeWaitTime}>
+                  ~{waitMin} min
+                </Text>
+                <Text style={styles.nodeWaitLabel}>Wait</Text>
+              </View>
+
+              <View style={styles.nodeLabelRight}>
+                {isInProgress ? (
+                  <Text style={styles.statusGreenText}>Now serving</Text>
+                ) : isVerified ? (
+                  <Text style={styles.statusGreenText}>Checked in</Text>
+                ) : (
+                  <Text style={styles.statusRedText}>Waiting for check-in</Text>
+                )}
+              </View>
+            </View>
+
+            {/* Dotted divider: 1px dashed #CFCFCF */}
+            <View style={styles.dashedDivider} />
+
+            {/* Note box */}
+            <View style={styles.noteBox}>
+              <Text style={styles.noteHeading}>Note:</Text>
+              <View style={styles.noteItemRow}>
+                <BellIcon size={20} color={colors.textPrimary} />
+                <Text style={styles.noteItemText}>
+                  Keep this screen open to get an alert when your turn is near.
+                </Text>
+              </View>
+              <View style={styles.noteItemRow}>
+                <ClockIcon size={20} color={colors.textPrimary} />
+                <Text style={styles.noteItemText}>Please arrive on time.</Text>
+              </View>
+            </View>
           </View>
-          {entry.status === "waiting" && (
-            <TouchableOpacity
-              style={styles.editServicesBtn}
-              onPress={openEditModal}
-              activeOpacity={0.7}
-            >
-              <Ionicons name="create-outline" size={14} color={colors.primary} />
-              <Text style={styles.editServicesBtnText}>Edit Services</Text>
-            </TouchableOpacity>
-          )}
-        </View>
+        )}
 
-        {entry.selectedServices?.length ? (
-          <View style={styles.servicesList}>
-            {entry.selectedServices.map((service, idx) => {
-              const qty = service.quantity || 1;
-              const unitCost = Number(service.cost) || 0;
-              const unitDur = Number(service.durationMin) || 0;
+        {/* Card 2: Queue Token QR Code */}
+        {!isCancelled && (
+          <View style={[styles.cardBordered, styles.marginTop16]}>
+            <Text style={styles.tokenCardTitle}>Queue Token</Text>
+            <Text style={styles.tokenCardSubtitle}>
+              Show this QR code at reception to confirm your arrival.
+            </Text>
+
+            {isVerified ? (
+              <View style={styles.verifiedCardWrap}>
+                <AlertCard
+                  type="success"
+                  title="Counter Verified"
+                  message={`Arrival verified by staff at ${new Date(
+                    entry.verifiedAt!
+                  ).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`}
+                />
+              </View>
+            ) : (
+              <View style={styles.qrImageContainer}>
+                <Image
+                  source={{
+                    uri: `https://api.qrserver.com/v1/create-qr-code/?size=190x190&margin=8&data=${encodeURIComponent(
+                      `ql-ticket:${entry._id}:${entry.verificationToken || ""}`
+                    )}`,
+                  }}
+                  style={styles.qrImage}
+                  resizeMode="contain"
+                />
+                <Text style={styles.tokenIdText}>Token ID: #{ticketIdSuffix}</Text>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* Selected Services Card */}
+        <View style={[styles.cardBordered, styles.marginTop16]}>
+          <View style={styles.servicesCardHeader}>
+            <Text style={styles.servicesHeading}>Selected Services</Text>
+            {entry.status === "waiting" && (
+              <TouchableOpacity
+                onPress={openEditModal}
+                style={styles.editServicesOutlineBtn}
+              >
+                <Text style={styles.editServicesOutlineText}>Edit Services</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          <View style={styles.servicesListWrap}>
+            {entry.selectedServices?.map((s, idx) => {
+              const qty = s.quantity || 1;
+              const unitCost = Number(s.cost) || 0;
               return (
-                <View key={`${service.name}_${idx}`} style={styles.serviceItemRow}>
-                  <View style={styles.serviceLeftCol}>
-                    <Text style={styles.serviceNameText}>
-                      {service.name} <Text style={styles.qtyHighlight}>×{qty}</Text>
-                    </Text>
-                    {unitDur ? (
-                      <Text style={styles.serviceDurationText}>
-                        ⏱ {unitDur * qty} mins {qty > 1 ? `(${unitDur}m each)` : ""}
-                      </Text>
-                    ) : null}
-                  </View>
-                  <Text style={styles.serviceCostText}>${unitCost * qty}</Text>
+                <View key={idx} style={styles.serviceRowItem}>
+                  <Text style={styles.serviceItemName}>
+                    {s.name} <Text style={styles.qtyText}>×{qty}</Text>
+                  </Text>
+                  <Text style={styles.serviceItemCost}>
+                    ₹{unitCost * qty}
+                  </Text>
                 </View>
               );
             })}
-
-            <View style={styles.totalDivider} />
-            <View style={styles.totalRow}>
-              <Text style={styles.totalLabel}>Total Estimated Cost</Text>
-              <Text style={styles.totalValue}>${totalCost}</Text>
+            <View style={styles.serviceTotalDivider} />
+            <View style={styles.serviceTotalRow}>
+              <Text style={styles.serviceTotalLabel}>Total Amount</Text>
+              <Text style={styles.serviceTotalValue}>₹{totalCost}</Text>
             </View>
           </View>
-        ) : (
-          <Text style={styles.mutedText}>Standard general counter ticket.</Text>
-        )}
-      </Card>
+        </View>
 
-      {/* Action Buttons */}
-      <View style={styles.actionsWrap}>
-        {!isCancelled && (
-          <AppButton
-            title="Share Live Ticket"
-            size="md"
-            variant="secondary"
+        {/* Actions Section */}
+        <View style={styles.actionsContainer}>
+          {/* Share Live Ticket Outline Button */}
+          <TouchableOpacity
+            activeOpacity={0.8}
             onPress={handleShareTicket}
-            loading={sharing}
-            loadingText="Generating Link..."
-            icon="share-social-outline"
-          />
-        )}
+            disabled={sharing}
+            style={styles.shareOutlineButton}
+          >
+            <Ionicons name="share-outline" size={18} color="#000000" />
+            <Text style={styles.shareOutlineText}>
+              {sharing ? "Generating Link..." : "Share Live Ticket"}
+            </Text>
+          </TouchableOpacity>
 
-        {shareToken && !isCancelled && (
-          <View style={styles.shareActiveBanner}>
-            <View style={styles.shareActiveLeft}>
-              <Ionicons name="shield-checkmark" size={14} color={colors.primary} />
-              <Text style={styles.shareActiveText}>Public link active</Text>
+          {/* Revoke link row if active */}
+          {shareToken && (
+            <View style={styles.revokeRow}>
+              <Text style={styles.revokeText}>Public link active</Text>
+              <TouchableOpacity onPress={handleRevokeShare}>
+                <Text style={styles.revokeLink}>Revoke</Text>
+              </TouchableOpacity>
             </View>
-            <TouchableOpacity onPress={handleRevokeShare} activeOpacity={0.7}>
-              <Text style={styles.revokeText}>Revoke Link</Text>
+          )}
+
+          {/* Leave Queue Gradient Button (centered, width 286, height 43) */}
+          {!isCompleted && !isCancelled && (
+            <TouchableOpacity
+              activeOpacity={0.88}
+              onPress={handleCancelTicket}
+              disabled={cancelling}
+              style={[styles.leaveQueueTouch, shadows.primaryButton]}
+            >
+              <LinearGradient
+                colors={["#284D83", "#3E6BB2"]}
+                start={{ x: 0.5, y: 0 }}
+                end={{ x: 0.5, y: 1 }}
+                style={styles.leaveQueueGradient}
+              >
+                <Text style={styles.leaveQueueText}>
+                  {cancelling ? "Leaving..." : "Leave Queue"}
+                </Text>
+              </LinearGradient>
             </TouchableOpacity>
-          </View>
-        )}
+          )}
+        </View>
+      </ScrollView>
 
-        <AppButton
-          title="Refresh Status"
-          size="lg"
-          onPress={() => load(true)}
-          loading={refreshing}
-          loadingText="Refreshing..."
-          icon="refresh-outline"
-        />
-        {!isCompleted && !isCancelled && (
-          <AppButton
-            title="Leave Queue"
-            size="md"
-            variant="danger"
-            onPress={handleCancelTicket}
-            loading={cancelling}
-            loadingText="Leaving Queue..."
-            icon="close-circle-outline"
-          />
-        )}
-        <AppButton
-          title="Return to Home"
-          size="md"
-          variant="secondary"
-          onPress={() => navigation.goBack()}
-          icon="home-outline"
-        />
-      </View>
-
-      {/* Edit Services Modal */}
+      {/* Edit Services Bottom Sheet Modal */}
       <Modal
         visible={isEditModalOpen}
         animationType="slide"
-        transparent={true}
+        transparent
         onRequestClose={() => setIsEditModalOpen(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContainer}>
-            <View style={styles.modalHeader}>
-              <View style={styles.modalHeaderLeft}>
-                <View style={styles.editIconBadge}>
-                  <Ionicons name="create-outline" size={18} color={colors.primary} />
-                </View>
-                <Text style={styles.modalTitle}>Edit Requested Services</Text>
-              </View>
-              <TouchableOpacity
-                onPress={() => setIsEditModalOpen(false)}
-                style={styles.modalCloseBtn}
-              >
-                <Ionicons name="close" size={20} color={colors.text} />
+          <View
+            style={[
+              styles.modalSheet,
+              { paddingBottom: Math.max(insets.bottom, 16) + 16 },
+            ]}
+          >
+            <View style={styles.modalHeaderRow}>
+              <Text style={styles.modalTitle}>Edit Services</Text>
+              <TouchableOpacity onPress={() => setIsEditModalOpen(false)}>
+                <Ionicons name="close" size={24} color={colors.textPrimary} />
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
-              <Text style={styles.modalSub}>
-                Adjust the services or quantities needed. Your position in line is completely preserved.
-              </Text>
+            <ScrollView style={styles.modalScroll}>
+              {(
+                entry.businessId?.businessProfile?.services ||
+                entry.businessId?.services ||
+                entry.selectedServices ||
+                []
+              ).map((svc: any) => {
+                const qty = editQuantities[svc.name] || 0;
+                const isSelected = qty > 0;
 
-              <View style={styles.modalServicesList}>
-                {(
-                  entry.businessId?.businessProfile?.services ||
-                  entry.businessId?.services ||
-                  entry.selectedServices ||
-                  []
-                ).map((service: any, index: number) => {
-                  const qty = editQuantities[service.name] || 0;
-                  return (
-                    <View
-                      key={`${service.name}_${index}`}
-                      style={[styles.editServiceItem, qty > 0 && styles.editServiceItemActive]}
-                    >
+                return (
+                  <View
+                    key={svc.name}
+                    style={[
+                      styles.modalServiceRow,
+                      isSelected && styles.modalServiceRowSelected,
+                    ]}
+                  >
+                    <View style={styles.modalServiceInfo}>
+                      <Text style={styles.modalServiceName}>{svc.name}</Text>
+                      <Text style={styles.modalServiceMeta}>
+                        {svc.durationMin} min • ₹{svc.cost}
+                      </Text>
+                    </View>
+
+                    <View style={styles.modalStepper}>
                       <TouchableOpacity
-                        style={styles.editServiceTextCol}
-                        onPress={() => setEditQuantity(service.name, qty > 0 ? -qty : 1)}
-                        activeOpacity={0.7}
+                        onPress={() => setEditQuantity(svc.name, -1)}
+                        disabled={qty === 0}
+                        style={[
+                          styles.stepperCircle,
+                          qty === 0 && styles.stepperCircleDisabled,
+                        ]}
                       >
-                        <Text style={styles.editServiceName}>{service.name}</Text>
-                        <Text style={styles.editServiceMeta}>
-                          ⏱ {service.durationMin} mins • ${service.cost} each
-                        </Text>
-                        {qty > 1 ? (
-                          <Text style={styles.editServiceSubtotal}>
-                            Total: ${service.cost * qty} (~{service.durationMin * qty} mins)
-                          </Text>
-                        ) : null}
+                        <Ionicons
+                          name="remove"
+                          size={16}
+                          color={qty === 0 ? colors.borderLight : colors.primary}
+                        />
                       </TouchableOpacity>
 
-                      {/* Stepper Controls */}
-                      <View style={styles.stepperWrap}>
-                        <TouchableOpacity
-                          style={[styles.stepperBtn, qty === 0 && styles.stepperBtnDisabled]}
-                          onPress={() => setEditQuantity(service.name, -1)}
-                          disabled={qty === 0}
-                          activeOpacity={0.7}
-                        >
-                          <Ionicons name="remove" size={16} color={qty === 0 ? colors.muted : colors.text} />
-                        </TouchableOpacity>
+                      <Text style={styles.stepperCount}>{qty}</Text>
 
-                        <View style={[styles.countBadge, qty > 0 && styles.countBadgeActive]}>
-                          <Text style={[styles.countBadgeText, qty > 0 && styles.countBadgeTextActive]}>
-                            {qty}
-                          </Text>
-                        </View>
-
-                        <TouchableOpacity
-                          style={styles.stepperBtn}
-                          onPress={() => setEditQuantity(service.name, 1)}
-                          activeOpacity={0.7}
-                        >
-                          <Ionicons name="add" size={16} color={colors.primary} />
-                        </TouchableOpacity>
-                      </View>
+                      <TouchableOpacity
+                        onPress={() => setEditQuantity(svc.name, 1)}
+                        style={styles.stepperCircle}
+                      >
+                        <Ionicons name="add" size={16} color={colors.primary} />
+                      </TouchableOpacity>
                     </View>
-                  );
-                })}
-              </View>
-
-              {/* Edit Totals summary */}
-              <View style={styles.editTotalsBox}>
-                <View style={styles.editTotalRow}>
-                  <Text style={styles.editTotalLabel}>Total Est. Duration:</Text>
-                  <Text style={styles.editTotalVal}>
-                    ~
-                    {(
-                      entry.businessId?.businessProfile?.services ||
-                      entry.businessId?.services ||
-                      entry.selectedServices ||
-                      []
-                    ).reduce(
-                      (sum: number, s: any) =>
-                        sum + (s.durationMin || 0) * (editQuantities[s.name] || 0),
-                      0
-                    )}{" "}
-                    mins
-                  </Text>
-                </View>
-                <View style={styles.editTotalRow}>
-                  <Text style={styles.editTotalLabel}>Total Est. Cost:</Text>
-                  <Text style={[styles.editTotalVal, { color: colors.successLight }]}>
-                    $
-                    {(
-                      entry.businessId?.businessProfile?.services ||
-                      entry.businessId?.services ||
-                      entry.selectedServices ||
-                      []
-                    ).reduce(
-                      (sum: number, s: any) =>
-                        sum + (s.cost || 0) * (editQuantities[s.name] || 0),
-                      0
-                    )}
-                  </Text>
-                </View>
-              </View>
+                  </View>
+                );
+              })}
             </ScrollView>
 
-            <View style={styles.modalFooter}>
-              <TouchableOpacity
-                style={styles.modalSaveBtn}
+            <View style={styles.modalButtonWrap}>
+              <AppButton
+                title="Save Changes"
                 onPress={handleSaveEditedServices}
-                disabled={isSavingEdit}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="checkmark-circle-outline" size={16} color="#FFF" />
-                <Text style={styles.modalSaveBtnText}>
-                  {isSavingEdit ? "Saving Changes..." : "Save Changes (Keep Spot)"}
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.modalCancelBtn}
-                onPress={() => setIsEditModalOpen(false)}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.modalCancelBtnText}>Cancel</Text>
-              </TouchableOpacity>
+                loading={isSavingEdit}
+              />
             </View>
           </View>
         </View>
       </Modal>
-    </AppScreen>
+    </View>
   );
 }
 
-const createStyles = (colors: ThemeColors, isDark: boolean = false) =>
-  StyleSheet.create({
-  flex1: {
-    flex: 1,
-  },
-  topRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingBottom: spacing.xs,
-  },
-  backBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-  },
-  backIconCircle: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: colors.cardSoft,
-    borderColor: colors.border,
-    borderWidth: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  backText: {
-    color: colors.textSecondary,
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  liveSyncBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    backgroundColor: colors.successSubtle,
-    borderColor: colors.successBorder,
-    borderWidth: 1,
-    borderRadius: radii.full,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-  },
-  syncDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: colors.success,
-  },
-  syncText: {
-    color: colors.successLight,
-    fontSize: 10,
-    fontWeight: "800",
-    letterSpacing: 0.6,
-  },
-  ticketCard: {
-    padding: spacing.xl,
-    gap: spacing.lg,
-  },
-  ticketHeader: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-  },
-  storeCol: {
-    flex: 1,
-    minWidth: 0,
-    gap: 2,
-    marginRight: spacing.sm,
-  },
-  shopNameText: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: colors.text,
-    flexWrap: "wrap",
-  },
-  shopAddressText: {
-    fontSize: 13,
-    color: colors.muted,
-  },
-  ticketNumberSection: {
-    alignItems: "center",
-    backgroundColor: colors.bgSecondary,
-    borderColor: colors.borderLight,
-    borderWidth: 1,
-    borderRadius: radii.lg,
-    paddingVertical: spacing.lg,
-    gap: 4,
-  },
-  ticketLabel: {
-    fontSize: 11,
-    fontWeight: "800",
-    color: colors.muted,
-    letterSpacing: 1,
-  },
-  ticketBigNumber: {
-    fontSize: 34,
-    fontWeight: "900",
-    color: colors.primary,
-    letterSpacing: 1.5,
-  },
-  timelineWrap: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingTop: spacing.xs,
-    paddingHorizontal: spacing.sm,
-  },
-  stepItem: {
-    alignItems: "center",
-    gap: 5,
-  },
-  stepCircle: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: colors.cardSoft,
-    borderColor: colors.border,
-    borderWidth: 1.5,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  stepCircleActive: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  stepCirclePulse: {
-    borderColor: colors.primary,
-    backgroundColor: colors.primarySubtle,
-  },
-  stepCircleSuccess: {
-    backgroundColor: colors.success,
-    borderColor: colors.success,
-  },
-  innerDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: colors.muted,
-  },
-  stepLine: {
-    flex: 1,
-    height: 2,
-    backgroundColor: colors.border,
-    marginBottom: 16,
-    marginHorizontal: 4,
-  },
-  stepLineActive: {
-    backgroundColor: colors.primary,
-  },
-  stepLabel: {
-    fontSize: 10,
-    fontWeight: "600",
-    color: colors.muted,
-  },
-  stepLabelActive: {
-    color: colors.text,
-    fontWeight: "700",
-  },
-  metricRow: {
-    flexDirection: "row",
-    gap: spacing.md,
-  },
-  metricCard: {
-    flex: 1,
-    minWidth: 0,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: spacing.xl,
-    paddingHorizontal: spacing.md,
-    gap: 4,
-  },
-  metricIconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 4,
-  },
-  metricBigVal: {
-    fontSize: 28,
-    fontWeight: "900",
-    color: colors.primary,
-    letterSpacing: -0.5,
-  },
-  metricLabelText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: colors.muted,
-  },
-  servicesCard: {
-    padding: spacing.xl,
-    gap: spacing.md,
-  },
-  serviceHeaderRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-  },
-  sectionHeading: {
-    fontSize: 15,
-    fontWeight: "700",
-    color: colors.text,
-  },
-  servicesList: {
-    gap: spacing.md,
-  },
-  serviceItemRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  serviceLeftCol: {
-    flex: 1,
-    minWidth: 0,
-    gap: 2,
-    marginRight: spacing.sm,
-  },
-  serviceNameText: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: colors.text,
-    flexWrap: "wrap",
-  },
-  serviceDurationText: {
-    fontSize: 12,
-    color: colors.muted,
-  },
-  serviceCostText: {
-    fontSize: 14,
-    fontWeight: "800",
-    color: colors.text,
-    flexShrink: 0,
-  },
-  totalDivider: {
-    height: 1,
-    backgroundColor: colors.border,
-    marginVertical: spacing.xs,
-  },
-  totalRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  totalLabel: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: colors.textSecondary,
-  },
-  totalValue: {
-    fontSize: 17,
-    fontWeight: "900",
-    color: colors.successLight,
-  },
-  mutedText: {
-    color: colors.muted,
-    fontSize: 13,
-    fontStyle: "italic",
-  },
-  actionsWrap: {
-    gap: spacing.md,
-    paddingTop: spacing.xs,
-  },
-  errorCard: {
-    alignItems: "center",
-    padding: spacing.xxl,
-    gap: spacing.md,
-    marginTop: spacing.xl,
-  },
-  errorIconCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: colors.dangerSubtle,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  errorTitle: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: colors.text,
-  },
-  errorMuted: {
-    fontSize: 13,
-    color: colors.muted,
-    textAlign: "center",
-    lineHeight: 18,
-  },
-  predictionPill: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    backgroundColor: colors.cardElevated,
-    borderColor: colors.borderLight,
-    borderWidth: 1,
-    borderRadius: radii.md,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    marginTop: spacing.xs,
-  },
-  predictionPillLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    flex: 1,
-    marginRight: spacing.sm,
-  },
-  predictionPillText: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    fontWeight: "600",
-  },
-  estStartTimeText: {
-    fontSize: 12,
-    color: colors.primary,
-    fontWeight: "700",
-  },
-  notifAlertCard: {
-    padding: spacing.md,
-    borderRadius: radii.lg,
-    borderWidth: 1,
-    marginBottom: spacing.md,
-  },
-  notifAlertCardYourTurn: {
-    backgroundColor: isDark ? "rgba(16, 185, 129, 0.16)" : "#F0FDF4",
-    borderColor: isDark ? "rgba(16, 185, 129, 0.4)" : "#86EFAC",
-  },
-  notifAlertCardApproaching: {
-    backgroundColor: isDark ? "rgba(245, 158, 11, 0.16)" : "#FFFBEB",
-    borderColor: isDark ? "rgba(245, 158, 11, 0.4)" : "#FDE68A",
-  },
-  notifAlertHeader: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: spacing.sm,
-  },
-  notifAlertIconCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: radii.md,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  notifIconCircleYourTurn: {
-    backgroundColor: isDark ? "rgba(16, 185, 129, 0.25)" : "#FFFFFF",
-    borderColor: isDark ? "transparent" : "#BBF7D0",
-    borderWidth: isDark ? 0 : 1,
-  },
-  notifIconCircleApproaching: {
-    backgroundColor: isDark ? "rgba(245, 158, 11, 0.25)" : "#FFFFFF",
-    borderColor: isDark ? "transparent" : "#FDE68A",
-    borderWidth: isDark ? 0 : 1,
-  },
-  notifAlertTextCol: {
-    flex: 1,
-  },
-  notifPillRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 4,
-  },
-  notifBadgeTagPill: {
-    paddingHorizontal: 8,
-    paddingVertical: 2.5,
-    borderRadius: radii.full,
-  },
-  notifBadgeTagPillYourTurn: {
-    backgroundColor: isDark ? "rgba(16, 185, 129, 0.25)" : "#DCFCE7",
-  },
-  notifBadgeTagPillApproaching: {
-    backgroundColor: isDark ? "rgba(245, 158, 11, 0.25)" : "#FEF3C7",
-  },
-  notifBadgeTag: {
-    fontSize: 10,
-    fontWeight: "800",
-    letterSpacing: 0.8,
-  },
-  notifAlertTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: colors.text,
-  },
-  notifAlertBody: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    lineHeight: 16,
-    marginTop: 2,
-  },
-  notifDismissBtn: {
-    padding: 4,
-  },
-  shareActiveBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: colors.cardSoft,
-    borderColor: colors.border,
-    borderWidth: 1,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.md,
-  },
-  shareActiveLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.xs,
-  },
-  shareActiveText: {
-    fontSize: 12,
-    color: colors.textSecondary,
-    fontWeight: "600",
-  },
-  revokeText: {
-    fontSize: 12,
-    color: colors.danger,
-    fontWeight: "700",
-  },
-
-  /* Verification Card */
-  verificationCard: {
-    padding: spacing.md,
-    gap: spacing.sm,
-    backgroundColor: colors.cardElevated,
-    borderColor: colors.primaryBorder,
-    borderWidth: 1.5,
-  },
-  verificationHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-  },
-  verificationIconCircle: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: colors.primarySubtle,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  verificationTitle: {
-    fontSize: 14,
-    fontWeight: "800",
-    color: colors.text,
-  },
-  verificationSub: {
-    fontSize: 11,
-    color: colors.muted,
-    marginTop: 1,
-  },
-  verifiedBadgePill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 3,
-    backgroundColor: colors.successSubtle,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: radii.full,
-  },
-  verifiedBadgeText: {
-    fontSize: 10,
-    fontWeight: "800",
-    color: colors.success,
-  },
-  verificationQrContainer: {
-    alignItems: "center",
-    paddingTop: spacing.xs,
-    gap: spacing.xs,
-  },
-  verificationQrBox: {
-    backgroundColor: "#FFFFFF",
-    padding: 10,
-    borderRadius: radii.lg,
-    borderWidth: 3,
-    borderColor: colors.primarySubtle,
-    ...shadows.card,
-  },
-  verificationQrImage: {
-    width: 170,
-    height: 170,
-  },
-  verificationTokenText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: colors.muted,
-    fontFamily: Platform.OS === "ios" ? "Courier" : "monospace",
-  },
-
-  /* Service Header & Edit Button */
-  serviceHeaderTitleWrap: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.xs,
-  },
-  editServicesBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: colors.cardSoft,
-    borderColor: colors.primaryBorder,
-    borderWidth: 1,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: radii.sm,
-  },
-  editServicesBtnText: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: colors.primary,
-  },
-  qtyHighlight: {
-    fontWeight: "800",
-    color: colors.primary,
-  },
-
-  /* Modal Styles */
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.65)",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: spacing.md,
-  },
-  modalContainer: {
-    width: "100%",
-    maxWidth: 480,
-    maxHeight: "85%",
-    backgroundColor: colors.cardElevated,
-    borderRadius: radii.xl,
-    borderColor: colors.border,
-    borderWidth: 1,
-    overflow: "hidden",
-    ...shadows.card,
-  },
-  modalHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
-    borderBottomColor: colors.border,
-    borderBottomWidth: 1,
-  },
-  modalHeaderLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-  },
-  editIconBadge: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.primarySubtle,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  modalTitle: {
-    fontSize: 15,
-    fontWeight: "800",
-    color: colors.text,
-  },
-  modalCloseBtn: {
-    padding: spacing.xs,
-  },
-  modalBody: {
-    padding: spacing.lg,
-  },
-  modalSub: {
-    fontSize: 12,
-    color: colors.muted,
-    lineHeight: 17,
-    marginBottom: spacing.md,
-  },
-  modalServicesList: {
-    gap: spacing.sm,
-  },
-  editServiceItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    backgroundColor: colors.cardSoft,
-    borderColor: colors.border,
-    borderWidth: 1,
-    borderRadius: radii.md,
-    padding: spacing.md,
-    gap: spacing.sm,
-  },
-  editServiceItemActive: {
-    borderColor: colors.primaryBorder,
-    backgroundColor: colors.cardElevated,
-  },
-  editServiceTextCol: {
-    flex: 1,
-    minWidth: 0,
-    gap: 2,
-  },
-  editServiceName: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: colors.text,
-  },
-  editServiceMeta: {
-    fontSize: 11,
-    color: colors.muted,
-  },
-  editServiceSubtotal: {
-    fontSize: 11,
-    fontWeight: "700",
-    color: colors.primary,
-    marginTop: 2,
-  },
-  stepperWrap: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    backgroundColor: colors.cardSoft,
-    paddingHorizontal: 6,
-    paddingVertical: 4,
-    borderRadius: radii.full,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  stepperBtn: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: colors.cardElevated,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-  },
-  stepperBtnDisabled: {
-    opacity: 0.4,
-  },
-  countBadge: {
-    minWidth: 24,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  countBadgeActive: {
-    transform: [{ scale: 1.05 }],
-  },
-  countBadgeText: {
-    fontSize: 13,
-    fontWeight: "800",
-    color: colors.muted,
-  },
-  countBadgeTextActive: {
-    color: colors.primary,
-  },
-  editTotalsBox: {
-    backgroundColor: colors.cardSoft,
-    borderColor: colors.border,
-    borderWidth: 1,
-    borderRadius: radii.md,
-    padding: spacing.md,
-    gap: spacing.xs,
-    marginTop: spacing.md,
-  },
-  editTotalRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  editTotalLabel: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: colors.muted,
-  },
-  editTotalVal: {
-    fontSize: 13,
-    fontWeight: "800",
-    color: colors.text,
-  },
-  modalFooter: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.xs,
-    padding: spacing.md,
-    borderTopColor: colors.border,
-    borderTopWidth: 1,
-  },
-  modalSaveBtn: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 5,
-    backgroundColor: colors.primary,
-    paddingVertical: 10,
-    borderRadius: radii.md,
-  },
-  modalSaveBtnText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#FFFFFF",
-  },
-  modalCancelBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: radii.md,
-  },
-  modalCancelBtnText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: colors.muted,
-  },
-});
-
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.bg,
+    },
+    loadingContainer: {
+      flex: 1,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: colors.bg,
+    },
+    loadingText: {
+      fontSize: 15,
+      fontFamily: typography.families.interMedium,
+      color: colors.textSecondary,
+    },
+    entryNotFoundContainer: {
+      flex: 1,
+      padding: 24,
+      backgroundColor: colors.bg,
+    },
+    headerRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      paddingHorizontal: 16,
+      paddingBottom: 14,
+      backgroundColor: colors.bg,
+    },
+    backBtn: {
+      padding: 6,
+      marginRight: 10,
+    },
+    headerShopName: {
+      fontSize: 20,
+      fontFamily: typography.families.interMedium,
+      fontWeight: "500",
+      color: colors.textPrimary,
+      flex: 1,
+    },
+    scrollContent: {
+      paddingHorizontal: 16,
+      paddingBottom: 40,
+    },
+    alertBannerWrap: {
+      position: "relative",
+      marginBottom: 16,
+    },
+    dismissAlertTouch: {
+      position: "absolute",
+      top: 14,
+      right: 14,
+      padding: 4,
+    },
+    statusResultCard: {
+      marginBottom: 16,
+    },
+    cardBordered: {
+      backgroundColor: colors.card,
+      borderRadius: radii.borderedCard,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 16,
+    },
+    marginTop16: {
+      marginTop: 16,
+    },
+    card1TopRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 16,
+    },
+    positionGreenText: {
+      fontSize: 12,
+      fontFamily: typography.families.interMedium,
+      fontWeight: "500",
+      color: colors.successProgress,
+    },
+    aheadMutedText: {
+      fontSize: 12,
+      fontFamily: typography.families.interRegular,
+      color: colors.muted,
+    },
+    trackContainer: {
+      height: 24,
+      position: "relative",
+      justifyContent: "center",
+      marginBottom: 8,
+    },
+    trackBackground: {
+      height: 6,
+      backgroundColor: colors.border,
+      borderRadius: 3,
+      overflow: "hidden",
+    },
+    trackFill: {
+      height: 6,
+      backgroundColor: colors.successProgress,
+      borderRadius: 3,
+    },
+    nodeCircle: {
+      position: "absolute",
+      width: 20,
+      height: 20,
+      borderRadius: 10,
+      backgroundColor: colors.card,
+      borderWidth: 2,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    nodeLeft: {
+      left: "15%",
+      borderColor: colors.successProgress,
+    },
+    nodeRight: {
+      right: "15%",
+    },
+    nodeCircleGreen: {
+      borderColor: colors.successProgress,
+    },
+    nodeCircleMuted: {
+      borderColor: colors.border,
+    },
+    innerDotGreen: {
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      backgroundColor: colors.successProgress,
+    },
+    underNodesRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      marginBottom: 18,
+      paddingHorizontal: 8,
+    },
+    nodeLabelLeft: {
+      alignItems: "flex-start",
+    },
+    nodeWaitTime: {
+      fontSize: 13,
+      fontFamily: typography.families.interSemiBold,
+      fontWeight: "600",
+      color: colors.textPrimary,
+    },
+    nodeWaitLabel: {
+      fontSize: 10,
+      fontFamily: typography.families.interRegular,
+      color: colors.muted,
+    },
+    nodeLabelRight: {
+      alignItems: "flex-end",
+    },
+    statusGreenText: {
+      fontSize: 12,
+      fontFamily: typography.families.interMedium,
+      fontWeight: "500",
+      color: colors.successLight,
+    },
+    statusRedText: {
+      fontSize: 12,
+      fontFamily: typography.families.interMedium,
+      fontWeight: "500",
+      color: colors.danger,
+    },
+    dashedDivider: {
+      height: 1,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderStyle: "dashed",
+      marginVertical: 14,
+    },
+    noteBox: {
+      backgroundColor: colors.cardSoft,
+      borderRadius: radii.alert,
+      padding: 12,
+      gap: 8,
+    },
+    noteHeading: {
+      fontSize: 13,
+      fontFamily: typography.families.interMedium,
+      fontWeight: "500",
+      color: colors.textPrimary,
+      marginBottom: 2,
+    },
+    noteItemRow: {
+      flexDirection: "row",
+      alignItems: "flex-start",
+      gap: 10,
+    },
+    noteItemText: {
+      flex: 1,
+      fontSize: 12,
+      fontFamily: typography.families.interRegular,
+      color: colors.textSecondary,
+      lineHeight: 18,
+    },
+    tokenCardTitle: {
+      fontSize: 17,
+      fontFamily: typography.families.interMedium,
+      fontWeight: "500",
+      color: colors.textPrimary,
+      textAlign: "center",
+    },
+    tokenCardSubtitle: {
+      fontSize: 11,
+      fontFamily: typography.families.interRegular,
+      color: colors.muted,
+      textAlign: "center",
+      marginTop: 4,
+      marginBottom: 16,
+    },
+    qrImageContainer: {
+      alignItems: "center",
+      backgroundColor: "#FFFFFF",
+      padding: 12,
+      borderRadius: radii.md,
+    },
+    qrImage: {
+      width: 190,
+      height: 190,
+      backgroundColor: "#FFFFFF",
+    },
+    tokenIdText: {
+      fontSize: 12,
+      fontFamily: typography.families.interMedium,
+      color: "#000000",
+      marginTop: 8,
+    },
+    verifiedCardWrap: {
+      marginVertical: 8,
+    },
+    servicesCardHeader: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 14,
+    },
+    servicesHeading: {
+      fontSize: 16,
+      fontFamily: typography.families.interMedium,
+      fontWeight: "500",
+      color: colors.textPrimary,
+    },
+    editServicesOutlineBtn: {
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.cardSoft,
+    },
+    editServicesOutlineText: {
+      fontSize: 12,
+      fontFamily: typography.families.interMedium,
+      color: colors.primary,
+    },
+    servicesListWrap: {
+      gap: 8,
+    },
+    serviceRowItem: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      paddingVertical: 4,
+    },
+    serviceItemName: {
+      fontSize: 14,
+      fontFamily: typography.families.interRegular,
+      color: colors.textPrimary,
+    },
+    qtyText: {
+      color: colors.muted,
+    },
+    serviceItemCost: {
+      fontSize: 14,
+      fontFamily: typography.families.interMedium,
+      color: colors.textPrimary,
+    },
+    serviceTotalDivider: {
+      height: 1,
+      backgroundColor: colors.border,
+      marginVertical: 8,
+    },
+    serviceTotalRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+    },
+    serviceTotalLabel: {
+      fontSize: 14,
+      fontFamily: typography.families.interSemiBold,
+      fontWeight: "600",
+      color: colors.textPrimary,
+    },
+    serviceTotalValue: {
+      fontSize: 16,
+      fontFamily: typography.families.interSemiBold,
+      fontWeight: "600",
+      color: colors.primary,
+    },
+    actionsContainer: {
+      marginTop: 24,
+      alignItems: "center",
+      gap: 16,
+    },
+    shareOutlineButton: {
+      width: "100%",
+      height: 46,
+      borderRadius: radii.button,
+      borderWidth: 1,
+      borderColor: colors.border,
+      backgroundColor: colors.cardSoft,
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: 8,
+    },
+    shareOutlineText: {
+      fontSize: 15,
+      fontFamily: typography.families.interMedium,
+      fontWeight: "500",
+      color: colors.textPrimary,
+    },
+    revokeRow: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+    },
+    revokeText: {
+      fontSize: 12,
+      fontFamily: typography.families.interRegular,
+      color: colors.muted,
+    },
+    revokeLink: {
+      fontSize: 12,
+      fontFamily: typography.families.interMedium,
+      color: colors.danger,
+      textDecorationLine: "underline",
+    },
+    leaveQueueTouch: {
+      width: 286,
+      height: 43,
+      borderRadius: radii.button,
+    },
+    leaveQueueGradient: {
+      width: "100%",
+      height: "100%",
+      borderRadius: radii.button,
+      alignItems: "center",
+      justifyContent: "center",
+    },
+    leaveQueueText: {
+      color: "#FFFFFF",
+      fontSize: 15,
+      fontFamily: typography.families.interSemiBold,
+      fontWeight: "600",
+    },
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: colors.overlay,
+      justifyContent: "flex-end",
+    },
+    modalSheet: {
+      backgroundColor: colors.cardElevated,
+      borderTopLeftRadius: radii.heroCard,
+      borderTopRightRadius: radii.heroCard,
+      paddingTop: 24,
+      paddingHorizontal: 20,
+      maxHeight: "80%",
+    },
+    modalHeaderRow: {
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 16,
+    },
+    modalTitle: {
+      fontSize: 18,
+      fontFamily: typography.families.interMedium,
+      fontWeight: "500",
+      color: colors.textPrimary,
+    },
+    modalScroll: {
+      maxHeight: 320,
+      marginBottom: 20,
+    },
+    modalServiceRow: {
+      backgroundColor: colors.card,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 14,
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: 10,
+    },
+    modalServiceRowSelected: {
+      borderColor: colors.primary,
+      backgroundColor: colors.primarySubtle,
+    },
+    modalServiceInfo: {
+      flex: 1,
+    },
+    modalServiceName: {
+      fontSize: 15,
+      fontFamily: typography.families.interMedium,
+      fontWeight: "500",
+      color: colors.textPrimary,
+    },
+    modalServiceMeta: {
+      fontSize: 12,
+      fontFamily: typography.families.interRegular,
+      color: colors.muted,
+      marginTop: 4,
+    },
+    modalStepper: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 12,
+    },
+    stepperCircle: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.primary,
+      alignItems: "center",
+      justifyContent: "center",
+      backgroundColor: colors.card,
+    },
+    stepperCircleDisabled: {
+      borderColor: colors.border,
+    },
+    stepperCount: {
+      fontSize: 15,
+      fontFamily: typography.families.interSemiBold,
+      color: colors.textPrimary,
+      minWidth: 16,
+      textAlign: "center",
+    },
+    modalButtonWrap: {
+      marginTop: 8,
+    },
+  });
+}

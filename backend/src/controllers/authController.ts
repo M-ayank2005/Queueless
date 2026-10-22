@@ -10,6 +10,10 @@ import User, {
 import QueueEntry from "../models/QueueEntry";
 import { v4 as uuidv4 } from "uuid";
 import { AuthRequest, getJwtSecret } from "../middleware/authMiddleware";
+import {
+  registerPushTokenService,
+  removePushTokenService
+} from "../services/notificationService";
 
 const sendValidationError = (res: Response, req: Request, field: string, message: string) => {
   return res.status(400).json({
@@ -435,3 +439,29 @@ export const deleteProfile = async (req: AuthRequest, res: Response, next: NextF
     return next(error);
   }
 };
+
+// Register Expo Push Token (Protected)
+export const registerPushToken = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { token, platform } = req.body;
+    if (!token || typeof token !== "string" || !token.trim()) {
+      return sendValidationError(res, req, "token", "Push token is required");
+    }
+    const pushTokens = await registerPushTokenService(req.user!.id, token.trim(), platform);
+    return res.json({ success: true, pushTokens });
+  } catch (error) {
+    return next(error);
+  }
+};
+
+// Remove Expo Push Token (Protected - on logout or toggle)
+export const removePushToken = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const token = req.body?.token || (req.query?.token as string);
+    await removePushTokenService(req.user!.id, token);
+    return res.json({ success: true, message: "Push token removed" });
+  } catch (error) {
+    return next(error);
+  }
+};
+

@@ -21,6 +21,12 @@ import {
   editCustomerTicketService,
   revokeTicketVerificationTokenService
 } from "../services/queueService";
+import {
+  getCustomerNotificationsService,
+  getUnreadNotificationCountService,
+  markNotificationsReadService,
+  getCustomerUpdatesService
+} from "../services/notificationService";
 
 // Re-export timezone-aware open hours helper
 export { isStoreOpenNow };
@@ -418,4 +424,60 @@ export const revokeTicketVerificationToken = async (req: AuthRequest, res: Respo
     return handleQueueError(error, req, res, next, "Failed to update verification token");
   }
 };
+
+// Customer Notifications (Cursor-paginated, newest first)
+export const getNotifications = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const limit = parseInt(req.query.limit as string, 10) || 20;
+    const cursor = req.query.cursor as string | undefined;
+    const result = await getCustomerNotificationsService(req.user!.id, limit, cursor);
+
+    if (result.nextCursor) res.setHeader("X-Next-Cursor", result.nextCursor);
+    res.setHeader("X-Has-More", String(result.hasMore));
+
+    return res.json(result);
+  } catch (error: any) {
+    return handleQueueError(error, req, res, next, "Failed to fetch notifications");
+  }
+};
+
+// Customer Unread Notification Count
+export const getUnreadNotificationCount = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const result = await getUnreadNotificationCountService(req.user!.id);
+    return res.json(result);
+  } catch (error: any) {
+    return handleQueueError(error, req, res, next, "Failed to fetch unread notification count");
+  }
+};
+
+// Mark Notifications Read
+export const markNotificationsRead = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const { ids } = req.body || {};
+    const result = await markNotificationsReadService(req.user!.id, ids);
+    return res.json(result);
+  } catch (error: any) {
+    return handleQueueError(error, req, res, next, "Failed to mark notifications read");
+  }
+};
+
+// Customer Updates (Alert / Offer / Info from favorited or recently visited businesses)
+export const getCustomerUpdates = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const limit = parseInt(req.query.limit as string, 10) || 20;
+    const cursor = req.query.cursor as string | undefined;
+    const type = req.query.type as string | undefined;
+
+    const result = await getCustomerUpdatesService(req.user!.id, type, limit, cursor);
+
+    if (result.nextCursor) res.setHeader("X-Next-Cursor", result.nextCursor);
+    res.setHeader("X-Has-More", String(result.hasMore));
+
+    return res.json(result);
+  } catch (error: any) {
+    return handleQueueError(error, req, res, next, "Failed to fetch updates");
+  }
+};
+
 

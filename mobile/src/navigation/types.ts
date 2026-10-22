@@ -1,5 +1,6 @@
 export type AuthStackParamList = {
-  Welcome: undefined;
+  Splash: undefined;
+  Onboarding: undefined;
   Login: undefined;
   Register: undefined;
   PrivacyPolicy: undefined;
@@ -9,18 +10,23 @@ export type AuthStackParamList = {
 
 export type CustomerTabParamList = {
   Home: undefined;
-  ScanJoin: { qrCode?: string } | undefined;
+  Notifications: undefined;
+  Updates: undefined;
+  MyQueue: undefined;
   Profile: undefined;
 };
 
 export type BusinessTabParamList = {
   Dashboard: undefined;
+  Notifications: undefined;
   Profile: undefined;
 };
 
 export type RootStackParamList = {
   CustomerTabs: undefined;
   BusinessTabs: undefined;
+  ScanJoin: { qrCode?: string } | undefined;
+  Profile: undefined;
   QueueStatus: { id: string };
   PrivacyPolicy: undefined;
   Terms: undefined;
