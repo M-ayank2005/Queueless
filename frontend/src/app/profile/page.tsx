@@ -264,14 +264,24 @@ export default function ProfilePage() {
               </div>
             </div>
 
-            <Button
-              onClick={() => setIsEditOpen(true)}
-              variant="outline"
-              className="flex items-center gap-2"
-            >
-              <Edit3 className="w-4 h-4 text-primary" />
-              Edit Profile
-            </Button>
+            <div className="flex flex-row sm:flex-col items-center sm:items-stretch gap-2.5 w-full sm:w-auto shrink-0">
+              <Button
+                onClick={() => setIsEditOpen(true)}
+                variant="outline"
+                className="flex items-center justify-center gap-2 w-full sm:w-auto"
+              >
+                <Edit3 className="w-4 h-4 text-primary" />
+                Edit Profile
+              </Button>
+              <Button
+                onClick={handleLogout}
+                variant="outline"
+                className="flex items-center justify-center gap-2 w-full sm:w-auto text-destructive hover:text-destructive hover:bg-destructive/10 border-border hover:border-destructive/30 transition-colors"
+              >
+                <LogOut className="w-4 h-4" />
+                Log Out
+              </Button>
+            </div>
           </div>
         </div>
 
@@ -408,20 +418,22 @@ export default function ProfilePage() {
                   </p>
                 </CardContent>
               </div>
-              <div className="p-6 pt-0 flex flex-col sm:flex-row gap-2.5">
-                <Link href="/history" className="flex-1">
-                  <Button variant="outline" className="w-full flex items-center justify-center gap-1.5 border-border hover:border-primary/40 text-foreground font-medium">
-                    <FileText className="w-4 h-4 text-primary" />
-                    View Booking History
-                  </Button>
-                </Link>
-                <Link href="/" className="flex-1">
-                  <Button variant="outline" className="w-full">
-                    Active Queues
-                  </Button>
-                </Link>
-                <Link href="/scan" className="flex-1">
-                  <Button className="w-full flex items-center justify-center gap-1.5">
+              <div className="p-6 pt-0 space-y-2.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <Link href="/history" className="w-full">
+                    <Button variant="outline" className="w-full flex items-center justify-center gap-1.5 border-border hover:border-primary/40 text-foreground font-medium text-xs sm:text-sm">
+                      <FileText className="w-3.5 h-3.5 text-primary" />
+                      Booking History
+                    </Button>
+                  </Link>
+                  <Link href="/" className="w-full">
+                    <Button variant="outline" className="w-full flex items-center justify-center gap-1.5 border-border hover:border-primary/40 text-foreground font-medium text-xs sm:text-sm">
+                      Active Queues
+                    </Button>
+                  </Link>
+                </div>
+                <Link href="/scan" className="block w-full">
+                  <Button className="w-full flex items-center justify-center gap-2">
                     <QrCode className="w-4 h-4" />
                     Scan & Join
                   </Button>
@@ -606,28 +618,7 @@ export default function ProfilePage() {
           </CardContent>
         </Card>
 
-        {/* Danger Zone & Logout Section */}
-        <div className="rounded-2xl border border-destructive/30 bg-card p-6 shadow-xs">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-border">
-            <div>
-              <h3 className="text-base font-semibold text-foreground flex items-center gap-2">
-                <LogOut className="w-4 h-4 text-primary" />
-                Session Management
-              </h3>
-              <p className="text-xs text-muted-foreground mt-1">
-                Log out of your current session on this device.
-              </p>
-            </div>
-            <Button
-              onClick={handleLogout}
-              variant="outline"
-              className="flex items-center gap-2"
-            >
-              <LogOut className="w-4 h-4 text-primary" />
-              Sign Out
-            </Button>
-          </div>
-        </div>
+
       </main>
 
       {/* Edit Profile Modal */}
