@@ -58,16 +58,18 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
             </TouchableOpacity>
           </View>
         ) : (
-          <CameraView
-            style={StyleSheet.absoluteFill}
-            facing="back"
-            enableTorch={torch}
-            barcodeScannerSettings={{
-              barcodeTypes: ['qr'],
-            }}
-            onBarcodeScanned={scanned ? undefined : handleBarcodeScanned}
-          >
-            {/* Header controls */}
+          <View style={StyleSheet.absoluteFill}>
+            <CameraView
+              style={StyleSheet.absoluteFill}
+              facing="back"
+              enableTorch={torch}
+              barcodeScannerSettings={{
+                barcodeTypes: ['qr'],
+              }}
+              onBarcodeScanned={scanned ? undefined : handleBarcodeScanned}
+            />
+
+            {/* Header controls overlay */}
             <View style={[styles.topBar, { top: insets.top + 16 }]}>
               <TouchableOpacity
                 onPress={onClose}
@@ -88,8 +90,8 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
               </TouchableOpacity>
             </View>
 
-            {/* Target reticle */}
-            <View style={styles.reticleContainer}>
+            {/* Target reticle overlay */}
+            <View style={styles.reticleContainer} pointerEvents="none">
               <View style={styles.reticleBox}>
                 {/* White corner brackets */}
                 <View style={[styles.corner, styles.topLeft]} />
@@ -105,7 +107,7 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
               </Text>
             </View>
 
-            {/* Bottom manual entry link */}
+            {/* Bottom manual entry link overlay */}
             {onManualEntry && (
               <View style={[styles.bottomBar, { bottom: insets.bottom + 32 }]}>
                 <TouchableOpacity
@@ -120,7 +122,7 @@ export const QRScannerModal: React.FC<QRScannerModalProps> = ({
                 </TouchableOpacity>
               </View>
             )}
-          </CameraView>
+          </View>
         )}
       </View>
     </Modal>
@@ -202,7 +204,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#284D83',
   },
   reticleContainer: {
-    flex: 1,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     alignItems: 'center',
     justifyContent: 'center',
   },
