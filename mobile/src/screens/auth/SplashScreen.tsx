@@ -1,18 +1,11 @@
 import React, { useEffect, useRef } from "react";
-import { StyleSheet, Text, View, Animated, Dimensions } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useNavigation } from "@react-navigation/native";
-import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { StyleSheet, Text, View, Animated } from "react-native";
 import { LogoQ } from "../../components/LogoQ";
-import { useAuth } from "../../context/AuthContext";
 import { typography } from "../../theme/theme";
 
 export const ONBOARDING_SEEN_KEY = "ql_onboarding_seen";
 
 export default function SplashScreen() {
-  const navigation = useNavigation<NativeStackNavigationProp<any>>();
-  const { user, loading } = useAuth();
-
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.92)).current;
 
@@ -31,48 +24,7 @@ export default function SplashScreen() {
         useNativeDriver: true,
       }),
     ]).start();
-
-    let isMounted = true;
-
-    async function checkNavigation() {
-      // Minimum 1.2s splash display
-      await new Promise((resolve) => setTimeout(resolve, 1200));
-      if (!isMounted) return;
-
-      if (loading) {
-        // Wait until auth completes
-        return;
-      }
-
-      if (user) {
-        if (user.role === "business") {
-          navigation.replace("BusinessTabs");
-        } else {
-          navigation.replace("CustomerTabs");
-        }
-        return;
-      }
-
-      try {
-        const seen = await AsyncStorage.getItem(ONBOARDING_SEEN_KEY);
-        if (seen === "true") {
-          navigation.replace("Login");
-        } else {
-          navigation.replace("Onboarding");
-        }
-      } catch {
-        navigation.replace("Onboarding");
-      }
-    }
-
-    if (!loading) {
-      checkNavigation();
-    }
-
-    return () => {
-      isMounted = false;
-    };
-  }, [loading, user]);
+  }, [fadeAnim, scaleAnim]);
 
   return (
     <View style={styles.container}>
